@@ -44,16 +44,20 @@ function Get-ModelName    { try { (Get-WmiObject Win32_ComputerSystem).Model }  
 
 function Get-NetworkInfo {
     try {
-        $nic = Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -and $_.DefaultIPGateway } | Select-Object -First 1
+        $nic = Get-WmiObject Win32_NetworkAdapterConfiguration |
+               Where-Object { $_.IPEnabled -and $_.DefaultIPGateway } |
+               Select-Object -First 1
         if ($nic) {
+            # Force array with @() so [0] returns the first *element*, not first *character*
+            $ipv4 = @($nic.IPAddress | Where-Object { $_ -notmatch ":" }) | Select-Object -First 1
             return @{
-                ip_address      = ($nic.IPAddress | Where-Object { $_ -notmatch ":" })[0]
+                ip_address      = if ($ipv4) { $ipv4 } else { "" }
                 mac_address     = $nic.MACAddress
                 hostname        = $env:COMPUTERNAME
                 wifi_ssid       = ""
                 connection_type = "Ethernet"
-                dns_server      = ($nic.DNSServerSearchOrder -join ", ")
-                default_gateway = $nic.DefaultIPGateway[0]
+                dns_server      = if ($nic.DNSServerSearchOrder) { $nic.DNSServerSearchOrder -join ", " } else { "" }
+                default_gateway = if ($nic.DefaultIPGateway) { $nic.DefaultIPGateway[0] } else { "" }
             }
         }
     } catch {}
