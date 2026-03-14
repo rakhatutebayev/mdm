@@ -93,7 +93,7 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
         k: v for k, v in body.model_dump().items()
         if k not in ("network", "monitors", "enrollment_token")
     }
-    device_fields["status"] = "Enrolled"
+    device_fields["status"] = "Pending"
     device_fields["enrolled_at"] = datetime.utcnow()
     device = Device(**device_fields)
     db.add(device)

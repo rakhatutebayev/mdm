@@ -136,8 +136,8 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
         shared_device   = body.shared_device,
         enrollment_method = body.enrollment_method,
         agent_version   = body.agent_version,
-        status          = "Enrolled",
-        enrolled_at     = datetime.utcnow(),
+        status          = "Pending",
+        enrolled_at     = None,
         last_checkin    = datetime.utcnow(),
     )
     db.add(device)
