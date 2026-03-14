@@ -45,6 +45,31 @@ class MonitorInfoOut(BaseModel):
 
 
 # ── Device ────────────────────────────────────────────────────────────────────
+class NetworkCreateIn(BaseModel):
+    ip_address: str = ""
+    mac_address: str = ""
+    hostname: str = ""
+    wifi_ssid: str = ""
+    connection_type: str = "Ethernet"
+    dns_server: str = ""
+    dns_servers: str = ""  # alias sent by PS1
+    default_gateway: str = ""
+    gateway: str = ""      # alias sent by PS1
+    interface: str = ""    # alias sent by PS1
+
+class MonitorCreateIn(BaseModel):
+    display_index: int = 1
+    name: str = ""           # alias from PS1
+    model: str = ""
+    serial_number: str = ""
+    display_size: str = ""
+    resolution: str = ""
+    refresh_rate: str = ""
+    color_depth: str = ""
+    connection_type: str = ""
+    hdr_support: bool = False
+    is_external: bool = True  # alias from PS1
+
 class DeviceCreate(BaseModel):
     customer_id: str
     device_name: str
@@ -59,6 +84,10 @@ class DeviceCreate(BaseModel):
     owner: str = ""
     enrollment_method: str = "Agent"
     status: str = "Pending"
+    agent_version: str = ""
+    enrollment_token: Optional[str] = None   # validated on server but not stored as field
+    network: Optional[NetworkCreateIn] = None
+    monitors: Optional[list[MonitorCreateIn]] = None
 
 class DeviceListOut(BaseModel):
     id: str

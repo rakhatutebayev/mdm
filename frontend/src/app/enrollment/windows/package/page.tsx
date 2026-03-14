@@ -25,7 +25,7 @@ export default function DeploymentPackagePage() {
   }, [customerId]);
 
   const [form, setForm] = useState({
-    serverUrl: 'https://mdm.nocko.com',
+    serverUrl: 'https://mdm.it-uae.com',
     enrollmentToken: '',
     agentName: 'NOCKO MDM Agent',
     installMode: 'Silent' as (typeof INSTALL_MODES)[number],

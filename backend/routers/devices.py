@@ -74,10 +74,66 @@ async def get_device(device_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=DeviceDetailOut, status_code=201)
 async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
-    device = Device(**body.model_dump())
+    from models import NetworkInfo, MonitorInfo, EnrollmentToken
+    from schemas import NetworkCreateIn
+
+    # ── Validate enrollment token ─────────────────────────────────────────────
+    if body.enrollment_token:
+        tok_result = await db.execute(
+            select(EnrollmentToken).where(
+                EnrollmentToken.token == body.enrollment_token,
+                EnrollmentToken.revoked == False,  # noqa
+            )
+        )
+        if not tok_result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Invalid or revoked enrollment token")
+
+    # ── Create Device row ─────────────────────────────────────────────────────
+    device_fields = {
+        k: v for k, v in body.model_dump().items()
+        if k not in ("network", "monitors", "enrollment_token")
+    }
+    device_fields["status"] = "Enrolled"
+    device_fields["enrolled_at"] = datetime.now(timezone.utc)
+    device = Device(**device_fields)
     db.add(device)
+    await db.flush()  # get device.id before adding relations
+
+    # ── Persist NetworkInfo ───────────────────────────────────────────────────
+    if body.network:
+        net = body.network
+        # normalise PS1 alias fields
+        dns  = net.dns_server or net.dns_servers
+        gw   = net.default_gateway or net.gateway
+        host = net.hostname or net.interface or ""
+        db.add(NetworkInfo(
+            device_id      = device.id,
+            ip_address     = net.ip_address,
+            mac_address    = net.mac_address,
+            hostname       = host,
+            wifi_ssid      = net.wifi_ssid,
+            connection_type= net.connection_type,
+            dns_server     = dns,
+            default_gateway= gw,
+        ))
+
+    # ── Persist MonitorInfo ───────────────────────────────────────────────────
+    if body.monitors:
+        for idx, m in enumerate(body.monitors):
+            db.add(MonitorInfo(
+                device_id      = device.id,
+                display_index  = m.display_index or (idx + 1),
+                model          = m.model or m.name or "",
+                serial_number  = m.serial_number,
+                display_size   = m.display_size,
+                resolution     = m.resolution,
+                refresh_rate   = m.refresh_rate,
+                color_depth    = m.color_depth,
+                connection_type= m.connection_type,
+                hdr_support    = m.hdr_support,
+            ))
+
     await db.commit()
-    await db.refresh(device)
     return await get_device(device.id, db)
 
 
