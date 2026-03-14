@@ -442,14 +442,11 @@ async def download_windows_exe(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Build and download a real Windows .exe installer using NSIS.
-    Installs the MDM agent to C:\\ProgramData\\NOCKO-MDM and registers
-    a SYSTEM scheduled task. Includes proper uninstaller.
+    Build and download a pre-configured Windows .exe installer.
+    Token + server URL are baked into agent.ps1.
+    User just runs the .exe (UAC) → installs in one click, no config needed.
     """
-    import pathlib
-    import subprocess
-    import tempfile
-    import shutil
+    import pathlib, subprocess, tempfile, shutil, logging
 
     result = await db.execute(
         select(EnrollmentToken).where(EnrollmentToken.id == token_id)
@@ -459,37 +456,28 @@ async def download_windows_exe(
         raise HTTPException(status_code=404, detail="Package not found or expired")
 
     # Load org info
+    from app.models.user import Organization
     org_result = await db.execute(
-        select(__import__("app.models.user", fromlist=["Organization"]).Organization)
-        .where(__import__("app.models.user", fromlist=["Organization"]).Organization.id == token.org_id)
+        select(Organization).where(Organization.id == token.org_id)
     )
     org = org_result.scalar_one_or_none()
     org_name = org.name if org else "NOCKO"
     safe_name = re.sub(r"[^a-z0-9-]", "-", org_name.lower()).strip("-")
+    exe_name = f"nocko-agent-{safe_name}.exe"
 
-    # Load PS1 agent script
+    # Load PS1 agent script and bake in server URL + token
     base = pathlib.Path(__file__).parent.parent.parent
     ps1_path = base / "scripts" / "nocko-mdm-agent.ps1"
-    if ps1_path.exists():
-        ps1_content = ps1_path.read_text(encoding="utf-8")
-    else:
-        ps1_content = _minimal_agent_template()
-
-    # Bake in server URL and token
-    ps1_content = ps1_content.replace(
-        "PASTE_ENROLLMENT_TOKEN_HERE", token.token
-    ).replace(
-        "https://mdm.it-uae.com/api/v1", settings.MDM_SERVER_URL
-    ).replace(
-        "http://localhost:8000/api/v1", settings.MDM_SERVER_URL
+    ps1_content = ps1_path.read_text(encoding="utf-8") if ps1_path.exists() else _minimal_agent_template()
+    ps1_content = (
+        ps1_content
+        .replace("PASTE_ENROLLMENT_TOKEN_HERE", token.token)
+        .replace("https://mdm.it-uae.com/api/v1", settings.MDM_SERVER_URL)
+        .replace("http://localhost:8000/api/v1", settings.MDM_SERVER_URL)
     )
 
     # Check if makensis is available
-    nsis_available = shutil.which("makensis") is not None
-
-    if not nsis_available:
-        # Fallback: return a self-installing PowerShell script as .ps1
-        import logging
+    if not shutil.which("makensis"):
         logging.warning("makensis not found — falling back to .ps1 download")
         from fastapi.responses import Response as FastAPIResponse
         return FastAPIResponse(
@@ -498,49 +486,42 @@ async def download_windows_exe(
             headers={"Content-Disposition": f'attachment; filename="nocko-agent-{safe_name}.ps1"'},
         )
 
-    # Load NSIS template
-    nsi_template_path = base / "scripts" / "installer.nsi"
+    # Load dynamic NSIS template
+    nsi_template_path = base / "scripts" / "installer_dynamic.nsi"
     if not nsi_template_path.exists():
         raise HTTPException(status_code=500, detail="NSIS template not found")
 
     nsi_template = nsi_template_path.read_text(encoding="utf-8")
-
-    # Escape PS1 content for NSIS string embedding
-    # NSIS FileWrite requires special escaping
-    ps1_escaped = ps1_content.replace("\\", "\\\\").replace('"', '$\\"').replace("\r\n", "\\r\\n").replace("\n", "\\r\\n").replace("\t", "\\t")
-
-    # Build NSIS script with injected values
-    nsi_script = nsi_template.replace(
-        "__PS1_CONTENT__", ps1_escaped
-    ).replace(
-        "__SERVER__", settings.MDM_SERVER_URL
-    ).replace(
-        "__ORG_NAME__", org_name
-    ).replace(
-        'OutFile "nocko-mdm-installer.exe"',
-        f'OutFile "nocko-agent-{safe_name}.exe"'
+    nsi_script = (
+        nsi_template
+        .replace("__MDM_SERVER__", settings.MDM_SERVER_URL)
+        .replace("__ORG_NAME__", org_name)
+        .replace("__OUT_FILE__", exe_name)
     )
 
-    # Build in a temp directory
     with tempfile.TemporaryDirectory() as tmpdir:
-        nsi_file = pathlib.Path(tmpdir) / "installer.nsi"
+        tmp = pathlib.Path(tmpdir)
+
+        # Write pre-configured PS1 into tempdir as agent.ps1
+        (tmp / "agent.ps1").write_text(ps1_content, encoding="utf-8-sig")  # UTF-8 BOM for Windows
+
+        # Write NSIS script into tempdir
+        nsi_file = tmp / "installer.nsi"
         nsi_file.write_text(nsi_script, encoding="utf-8")
 
-        exe_name = f"nocko-agent-{safe_name}.exe"
-        exe_path = pathlib.Path(tmpdir) / exe_name
+        exe_path = tmp / exe_name
 
         try:
-            result = subprocess.run(
+            proc = subprocess.run(
                 ["makensis", str(nsi_file)],
                 capture_output=True,
                 text=True,
                 timeout=60,
                 cwd=tmpdir,
             )
-            if result.returncode != 0:
-                import logging
-                logging.error(f"makensis failed:\n{result.stdout}\n{result.stderr}")
-                raise HTTPException(status_code=500, detail=f"Build failed: {result.stderr[:500]}")
+            if proc.returncode != 0:
+                logging.error(f"makensis failed:\n{proc.stdout}\n{proc.stderr}")
+                raise HTTPException(status_code=500, detail=f"Build failed: {proc.stderr[:500] or proc.stdout[:500]}")
         except subprocess.TimeoutExpired:
             raise HTTPException(status_code=500, detail="Installer build timed out")
 
