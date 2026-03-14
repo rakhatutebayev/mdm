@@ -29,6 +29,7 @@ class DeviceOut(BaseModel):
     last_seen: Optional[datetime]
     enrolled_at: Optional[datetime]
     owner_id: Optional[str]
+    device_info: Optional[dict] = None
 
     class Config:
         from_attributes = True
