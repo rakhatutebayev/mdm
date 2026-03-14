@@ -5,10 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Suspense } from 'react';
 
-// Demo admin credentials — bypass backend for UI preview
+// Demo admin credentials shown in UI for convenience — but auth goes through real backend
 const DEMO_EMAIL = 'admin@nocko.ae';
 const DEMO_PASSWORD = 'Admin@MDM2024';
-const DEMO_TOKEN = 'demo-jwt-token-nocko-mdm-admin';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -21,28 +20,21 @@ export default function LoginPage() {
     const [error, setError] = useState('');
     const [entraEnabled, setEntraEnabled] = useState(false);
 
+    // Redirect to dashboard if already authenticated
     useEffect(() => {
-        api.entraStatus().then((r) => setEntraEnabled(r.enabled)).catch(() => { });
+        const token = localStorage.getItem('access_token');
+        if (token) {
+            fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+                .then((r) => { if (r.ok) router.replace('/dashboard'); })
+                .catch(() => {});
+        }
+        api.entraStatus().then((r) => setEntraEnabled(r.enabled)).catch(() => {});
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError('');
-
-        // Demo admin login — works without the backend running
-        if (tab === 'login' && email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-            localStorage.setItem('access_token', DEMO_TOKEN);
-            localStorage.setItem('demo_user', JSON.stringify({
-                id: 'demo-admin-id',
-                email: DEMO_EMAIL,
-                full_name: 'NOCKO Admin',
-                role: 'admin',
-                org_id: 'demo-org-id',
-            }));
-            router.push('/dashboard');
-            return;
-        }
 
         try {
             if (tab === 'login') {
@@ -52,7 +44,7 @@ export default function LoginPage() {
             }
             router.push('/dashboard');
         } catch (err: any) {
-            setError(err.message || 'An error occurred');
+            setError(err.message === 'UNAUTHORIZED' ? 'Invalid email or password' : (err.message || 'An error occurred'));
         } finally {
             setLoading(false);
         }
