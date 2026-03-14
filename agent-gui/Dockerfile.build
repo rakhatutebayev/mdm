@@ -1,0 +1,51 @@
+FROM cdrx/pyinstaller-windows:python3
+
+# ── System deps ────────────────────────────────────────────────────────────
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        zip unzip && \
+    rm -rf /var/lib/apt/lists/*
+USER user
+
+# ── Python deps (Windows Python via Wine) ─────────────────────────────────
+WORKDIR /src
+COPY requirements.txt .
+RUN wine pip install --quiet \
+        PyQt6 \
+        PyQt6-Qt6 \
+        PyQt6-sip \
+        requests \
+        psutil \
+        structlog \
+        pywin32 \
+        wmi
+
+# ── Copy sources ───────────────────────────────────────────────────────────
+COPY . .
+
+# ── Generate icons (Wine + Python) ────────────────────────────────────────
+RUN wine python make_icons.py 2>/dev/null || true
+
+# ── Build EXE with PyInstaller ─────────────────────────────────────────────
+# Output: /src/dist/NOCKO-Agent/NOCKO-Agent.exe
+RUN wine pyinstaller agent.spec --noconfirm --clean
+
+# ── The Inno Setup compiler (wine iscc) ────────────────────────────────────
+# Install Inno Setup 6 via Wine
+RUN curl -sSL "https://jrsoftware.org/download.php/is.exe" -o /tmp/innosetup.exe && \
+    wine /tmp/innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART && \
+    rm /tmp/innosetup.exe
+
+# Compile installer
+RUN wine "C:/Program Files (x86)/Inno Setup 6/ISCC.exe" installer/setup.iss || \
+    echo "Inno Setup compilation failed, using raw exe instead"
+
+# ── Copy result to /output so the host can extract it ─────────────────────
+# If installer succeeded, output Setup exe; otherwise raw exe
+RUN mkdir -p /output && \
+    ( cp installer/Output/NOCKO-Agent-Setup.exe /output/ 2>/dev/null && \
+      echo "Installer .exe copied" ) || \
+    ( cp dist/NOCKO-Agent/NOCKO-Agent.exe /output/NOCKO-Agent-Setup.exe && \
+      echo "Raw .exe copied (no installer)" )
+
+CMD ["echo", "Build complete. Collect /output/NOCKO-Agent-Setup.exe"]

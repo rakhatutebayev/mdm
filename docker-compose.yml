@@ -1,0 +1,111 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nocko-mdm-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mdm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mdm_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-nocko_mdm}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U mdm" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: nocko-mdm-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nocko-mdm-backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mdm}:${POSTGRES_PASSWORD:-mdm_secret}@postgres:5432/${POSTGRES_DB:-nocko_mdm}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./certs:/app/certs
+      - ./agent-gui:/app/../agent-gui:ro      # build script reads agent sources
+      - ./build-agent.sh:/app/../build-agent.sh:ro
+      - agent_binaries:/var/nocko/agent-binaries  # shared with agent-builder
+      - /var/run/docker.sock:/var/run/docker.sock  # allows triggering Docker builds
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Agent EXE Builder (run manually or via API) ─────────────────────────────
+  # Usage: docker compose run --rm agent-builder
+  # After build, the exe lands in the 'agent_binaries' volume automatically.
+  agent-builder:
+    build:
+      context: ./agent-gui
+      dockerfile: Dockerfile.build
+    container_name: nocko-agent-builder
+    profiles: ["build"]       # not started with 'docker compose up', only on demand
+    volumes:
+      - agent_binaries:/output   # output goes directly into the shared volume
+    environment:
+      DISPLAY: ""              # suppress Wine display warnings
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nocko-mdm-celery
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-mdm}:${POSTGRES_PASSWORD:-mdm_secret}@postgres:5432/${POSTGRES_DB:-nocko_mdm}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - ./certs:/app/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.tasks.worker worker --loglevel=info
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nocko-mdm-frontend
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      API_URL: http://backend:8000
+    ports:
+      - "3002:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    command: npm run dev
+
+volumes:
+  postgres_data:
+  agent_binaries:   # shared between backend (serve) and agent-builder (produce)
