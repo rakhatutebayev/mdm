@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getEnrollmentToken, regenerateToken as apiRegenerateToken, getCustomers } from '@/lib/api';
