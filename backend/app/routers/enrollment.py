@@ -261,10 +261,13 @@ async def download_windows_package(
         raise HTTPException(status_code=404, detail="Package not found or expired")
 
     # Load the agent template from scripts directory
-    template_path = pathlib.Path(__file__).parent.parent.parent.parent / "scripts" / "nocko-mdm-agent.ps1"
+    # __file__ = /app/app/routers/enrollment.py  → 3x parent = /app
+    template_path = pathlib.Path(__file__).parent.parent.parent / "scripts" / "nocko-mdm-agent.ps1"
     if template_path.exists():
         template = template_path.read_text(encoding="utf-8")
     else:
+        import logging
+        logging.warning(f"PS1 template not found at: {template_path}")
         # Minimal fallback template
         template = _minimal_agent_template()
 
