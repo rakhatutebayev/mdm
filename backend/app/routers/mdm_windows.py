@@ -157,7 +157,7 @@ async def windows_checkin(
     result = await db.execute(
         select(MDMCommand).where(
             MDMCommand.device_id == device.id,
-            MDMCommand.status == CommandStatus.PENDING,
+            MDMCommand.status == CommandStatus.QUEUED,
         )
     )
     pending_commands = result.scalars().all()
@@ -192,7 +192,7 @@ async def ack_command(
     if not cmd:
         raise HTTPException(status_code=404, detail="Command not found")
 
-    cmd.status = CommandStatus.ACKNOWLEDGED if ack.status == "success" else CommandStatus.FAILED
+    cmd.status = CommandStatus.SENT if ack.status == "success" else CommandStatus.FAILED
     cmd.response = {"output": ack.output, "reported_at": datetime.utcnow().isoformat()}
     await db.commit()
 
