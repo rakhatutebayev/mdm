@@ -127,12 +127,12 @@ async def windows_checkin(
     if not device:
         # First check-in — create device
         device = Device(
-            id=uuid.uuid4(),
+            id=str(uuid.uuid4()),
             name=payload.hostname,
             platform=DevicePlatform.WINDOWS,
             enrollment_type=EnrollmentType.AGENT,
             status=DeviceStatus.ENROLLED,
-            org_id=token.org_id,
+            org_id=str(token.org_id),
             enrolled_at=datetime.utcnow(),
             last_seen=datetime.utcnow(),
             os_version=payload.os_version,
