@@ -296,18 +296,17 @@ elseif ($Uninstall) { Uninstall-Agent }
 elseif ($CheckIn)   { Do-CheckIn }
 elseif ($Status)    { Show-Status }
 else {
-    Write-Host @"
-
-NOCKO MDM Windows Agent v2
-===========================
-  -Install      Install as scheduled task (requires Admin)
-  -Uninstall    Remove scheduled task
-  -CheckIn      Run one check-in now
-  -Status       Show task status + last log lines
-  -Server <url> Override MDM server URL
-  -Token  <tok> Override enrollment token
-
-Edit the top of this file to set permanent values
-for `$MDM_SERVER and `$ENROLLMENT_TOKEN before distributing.
-"@
+    Write-Host ""
+    Write-Host "NOCKO MDM Windows Agent v2" -ForegroundColor Cyan
+    Write-Host "===========================" -ForegroundColor Cyan
+    Write-Host "  -Install      Install as scheduled task (requires Admin)"
+    Write-Host "  -Uninstall    Remove scheduled task"
+    Write-Host "  -CheckIn      Run one check-in now"
+    Write-Host "  -Status       Show task status + last log lines"
+    Write-Host "  -Server URL   Override MDM server URL"
+    Write-Host "  -Token  TOK   Override enrollment token"
+    Write-Host ""
+    Write-Host "Edit the top of this file to set permanent values"
+    Write-Host "for MDM_SERVER and ENROLLMENT_TOKEN before distributing."
+    Write-Host ""
 }
