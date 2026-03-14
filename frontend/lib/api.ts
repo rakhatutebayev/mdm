@@ -11,9 +11,11 @@ function getToken(): string | null {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const token = getToken();
+    const orgId = typeof window !== 'undefined' ? localStorage.getItem('active_org_header') : null;
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(orgId ? { 'X-Org-ID': orgId } : {}),
         ...(options.headers as Record<string, string> || {}),
     };
 

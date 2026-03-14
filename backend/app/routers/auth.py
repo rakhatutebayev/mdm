@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +43,8 @@ class UserOut(BaseModel):
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_org_id: Optional[str] = Header(default=None),
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -62,6 +63,23 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise credentials_exception
+
+    # SUPER_ADMIN org switcher: honour X-Org-ID header
+    if x_org_id and user.role == UserRole.SUPER_ADMIN and str(user.org_id) != x_org_id:
+        # Verify org exists
+        org_result = await db.execute(
+            select(Organization).where(Organization.id == x_org_id)
+        )
+        if org_result.scalar_one_or_none():
+            # Return a lightweight proxy with overridden org_id
+            user = User(
+                id=user.id,
+                email=user.email,
+                full_name=user.full_name,
+                role=user.role,
+                org_id=x_org_id,
+                is_active=user.is_active,
+            )
     return user
 
 

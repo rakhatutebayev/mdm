@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
 const NAV = [
@@ -23,8 +24,67 @@ const NAV = [
     },
 ];
 
+interface OrgOption { id: string; name: string; }
+
 export default function Sidebar() {
     const pathname = usePathname();
+
+    const [orgs, setOrgs] = useState<OrgOption[]>([]);
+    const [activeOrg, setActiveOrgState] = useState<OrgOption | null>(null);
+    const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+    const [open, setOpen] = useState(false);
+    const dropRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const token = localStorage.getItem('access_token');
+        if (!token) return;
+
+        fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(me => {
+                const isSuper = me.role === 'super_admin';
+                setIsSuperAdmin(isSuper);
+
+                if (isSuper) {
+                    fetch('/api/v1/organizations', { headers: { Authorization: `Bearer ${token}` } })
+                        .then(r => r.json())
+                        .then((list: OrgOption[]) => {
+                            setOrgs(list);
+                            const saved = localStorage.getItem('active_org_id');
+                            const found = saved ? list.find(o => o.id === saved) : null;
+                            const active = found || list[0] || null;
+                            setActiveOrgState(active);
+                            if (active) {
+                                localStorage.setItem('active_org_id', active.id);
+                                localStorage.setItem('active_org_header', active.id);
+                            }
+                        })
+                        .catch(() => {});
+                } else {
+                    const myOrg: OrgOption = { id: me.org_id || '', name: me.org_name || 'My Organization' };
+                    setOrgs([myOrg]);
+                    setActiveOrgState(myOrg);
+                }
+            })
+            .catch(() => {});
+
+        // Close dropdown on outside click
+        const handleClick = (e: MouseEvent) => {
+            if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
+
+    const switchOrg = (org: OrgOption) => {
+        localStorage.setItem('active_org_id', org.id);
+        localStorage.setItem('active_org_header', org.id);
+        setActiveOrgState(org);
+        setOpen(false);
+        window.location.reload();
+    };
 
     return (
         <aside className="sidebar">
@@ -35,6 +95,114 @@ export default function Sidebar() {
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '-2px' }}>Device Management</div>
                 </div>
             </div>
+
+            {/* Org Switcher — only shown when org data loaded */}
+            {activeOrg && (
+                <div ref={dropRef} style={{ padding: '0 12px 8px', position: 'relative' }}>
+                    <button
+                        id="btn-org-switcher"
+                        onClick={() => isSuperAdmin && orgs.length > 1 && setOpen(o => !o)}
+                        style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 10px',
+                            background: 'var(--bg-hover)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '8px',
+                            cursor: isSuperAdmin && orgs.length > 1 ? 'pointer' : 'default',
+                            textAlign: 'left',
+                            color: 'var(--text)',
+                            transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={e => {
+                            if (isSuperAdmin && orgs.length > 1)
+                                (e.currentTarget as HTMLElement).style.background = 'var(--border)';
+                        }}
+                        onMouseLeave={e => {
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                        }}
+                    >
+                        {/* Org avatar */}
+                        <div style={{
+                            width: 28, height: 28, borderRadius: 6,
+                            background: 'var(--accent)', color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 700, fontSize: '0.8rem', flexShrink: 0,
+                        }}>
+                            {activeOrg.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {activeOrg.name}
+                            </div>
+                            {isSuperAdmin && orgs.length > 1 && (
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Switch organization</div>
+                            )}
+                        </div>
+                        {isSuperAdmin && orgs.length > 1 && (
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+                        )}
+                    </button>
+
+                    {/* Dropdown */}
+                    {open && (
+                        <div style={{
+                            position: 'absolute',
+                            top: 'calc(100% + 4px)',
+                            left: 12, right: 12,
+                            background: 'var(--bg-card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '10px',
+                            boxShadow: 'var(--shadow-md)',
+                            zIndex: 200,
+                            overflow: 'hidden',
+                        }}>
+                            <div style={{ padding: '6px 10px', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Organizations
+                            </div>
+                            {orgs.map(org => (
+                                <button
+                                    key={org.id}
+                                    id={`org-switch-${org.id}`}
+                                    onClick={() => switchOrg(org)}
+                                    style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 10px',
+                                        background: org.id === activeOrg.id ? 'var(--bg-hover)' : 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        color: 'var(--text)',
+                                        fontSize: '0.82rem',
+                                        transition: 'background 0.1s',
+                                    }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = org.id === activeOrg.id ? 'var(--bg-hover)' : 'transparent'; }}
+                                >
+                                    <div style={{
+                                        width: 24, height: 24, borderRadius: 5,
+                                        background: org.id === activeOrg.id ? 'var(--accent)' : 'var(--border)',
+                                        color: org.id === activeOrg.id ? '#fff' : 'var(--text-muted)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontWeight: 700, fontSize: '0.7rem', flexShrink: 0,
+                                    }}>
+                                        {org.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{org.name}</span>
+                                    {org.id === activeOrg.id && (
+                                        <span style={{ color: 'var(--accent)', fontSize: '0.75rem' }}>✓</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             <nav className="sidebar-nav">
                 {NAV.map((group) => (
