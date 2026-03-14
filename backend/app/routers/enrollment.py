@@ -240,6 +240,24 @@ async def create_windows_package(
     )
 
 
+@router.get("/package/windows/setup")
+async def download_setup_exe():
+    """
+    Download the pre-built static Windows .exe installer.
+    Generic (no token embedded) — IT admin enters token in the wizard.
+    """
+    import pathlib
+    from fastapi.responses import Response as FastAPIResponse
+    exe_path = pathlib.Path(__file__).parent.parent.parent / "scripts" / "NOCKO-MDM-Agent-Setup.exe"
+    if not exe_path.exists():
+        raise HTTPException(status_code=404, detail="Installer not found")
+    return FastAPIResponse(
+        content=exe_path.read_bytes(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": 'attachment; filename="NOCKO-MDM-Agent-Setup.exe"'},
+    )
+
+
 @router.get("/package/windows/{token_id}/download")
 async def download_windows_package(
     token_id: str,
