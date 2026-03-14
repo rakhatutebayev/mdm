@@ -157,3 +157,11 @@
   .statsGrid { grid-template-columns: repeat(2, 1fr); }
   .contentRow { grid-template-columns: 1fr; }
 }
+
+/* ── Empty state ── */
+.empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--page-text-sub);
+  font-size: 13px;
+}

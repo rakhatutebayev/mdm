@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 from routers import customers, devices, enrollment
 from routers.packages import router as packages_router
+from routers.dashboard import router as dashboard_router
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ app.include_router(customers.router)
 app.include_router(devices.router)
 app.include_router(enrollment.router)
 app.include_router(packages_router)
+app.include_router(dashboard_router)
 
 
 @app.get("/health")
