@@ -1,0 +1,17 @@
+.layout {
+  display: flex;
+  min-height: calc(100vh - var(--nav-height));
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+.sidebarSkeleton {
+  width: 220px;
+  flex-shrink: 0;
+  background: #f5f6fa;
+  border-right: 1px solid #e2e4ec;
+}

@@ -1,0 +1,175 @@
+/* Windows Enrollment Modal */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  width: 680px;
+  max-width: calc(100vw - 40px);
+  overflow: hidden;
+}
+
+/* Header */
+.step2Header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid #e2e4ec;
+}
+
+.step2Title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3d3f50;
+}
+
+.step2Links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.helpLink {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #4a7cff;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+.helpLink:hover { text-decoration: underline; }
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #8b90a4;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+.closeBtn:hover { color: #23252e; background: #f0f1f5; }
+
+/* Body */
+.step2Body {
+  padding: 28px 32px 32px;
+}
+
+.stepsTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #23252e;
+  margin-bottom: 22px;
+}
+
+.enrollStep {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 22px;
+  align-items: flex-start;
+}
+
+.enrollStepIcon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.enrollStepText {
+  font-size: 13px;
+  color: #3d3f50;
+  line-height: 1.5;
+  margin-bottom: 8px;
+  margin-top: 1px;
+}
+
+/* URL box */
+.urlBox {
+  display: flex;
+  align-items: center;
+  background: #f0f4ff;
+  border: 1px solid #c8d6ff;
+  border-radius: 5px;
+  padding: 8px 12px;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.urlText {
+  flex: 1;
+  font-size: 13px;
+  color: #4a7cff;
+  text-decoration: none;
+  word-break: break-all;
+}
+.urlText:hover { text-decoration: underline; }
+
+.copyBtn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7080;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 3px;
+  transition: color 0.1s;
+}
+.copyBtn:hover { color: #4a7cff; }
+
+/* Download button */
+.downloadBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 8px 16px;
+  background: #f0f4ff;
+  color: #4a7cff;
+  border: 1px solid #c8d6ff;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.downloadBtn:hover {
+  background: #e4eaff;
+  border-color: #4a7cff;
+}
+
+/* Finish button */
+.finishBtn {
+  margin-top: 8px;
+  padding: 8px 24px;
+  background: #4a7cff;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.finishBtn:hover { opacity: 0.85; }

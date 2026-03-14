@@ -1,0 +1,435 @@
+/* Enrollment Devices Page */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--nav-height));
+  background: #fff;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e2e4ec;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Active customer pill shown in toolbar */
+.customerBadge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: #eef1ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a7cff;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.toolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Enroll Device button */
+.enrollBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #f0f1f5;
+  border: 1px solid #d6d9e4;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #3d3f50;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.enrollBtn:hover { background: #e8eaf2; }
+
+.enrollPlus {
+  font-size: 15px;
+  line-height: 1;
+  color: #4a7cff;
+  font-weight: 600;
+}
+
+.btnChevron {
+  color: #8b90a4;
+  margin-left: 2px;
+}
+
+/* Icon button */
+.iconBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #6b7080;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.iconBtn:hover {
+  background: #f0f1f5;
+  color: #23252e;
+  border-color: #d6d9e4;
+}
+
+/* Total label */
+.totalLabel {
+  font-size: 12px;
+  color: #4a7cff;
+  font-weight: 500;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* Search */
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #f5f6fa;
+  border: 1px solid #d6d9e4;
+  border-radius: 5px;
+  padding: 0 8px;
+  height: 30px;
+  transition: border-color 0.15s;
+}
+.searchBox:focus-within { border-color: #4a7cff; }
+.searchInput {
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: #3d3f50;
+  width: 140px;
+  font-family: inherit;
+}
+.searchInput::placeholder { color: #aaa; }
+
+/* Dropdown */
+.dropdownWrap { position: relative; }
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid #d6d9e4;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdownRight { left: auto; right: 0; }
+
+.dropdownHeader {
+  padding: 8px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b90a4;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #e8eaf2;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: #3d3f50;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.dropdownItem:hover { background: #f5f6fa; }
+
+.dropdownIcon {
+  display: flex;
+  align-items: center;
+  color: #6b7080;
+}
+
+.excelIcon, .pdfIcon {
+  display: flex;
+  align-items: center;
+}
+
+/* Column toggles */
+.colToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: #3d3f50;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.colToggle:hover { background: #f5f6fa; }
+.colToggle input { cursor: pointer; }
+
+/* ── Table ── */
+.tableWrap {
+  flex: 1;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.thCheck, .tdCheck {
+  width: 36px;
+  padding: 10px 8px 10px 16px;
+  text-align: center;
+}
+
+.thIcon, .tdIcon {
+  width: 36px;
+  padding: 10px 4px;
+  text-align: center;
+}
+
+.th {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555870;
+  text-align: left;
+  background: #f8f9fc;
+  border-bottom: 1px solid #e2e4ec;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table thead tr {
+  border-bottom: 1px solid #e2e4ec;
+}
+.table thead th {
+  background: #f8f9fc;
+  border-bottom: 2px solid #e2e4ec;
+}
+
+.td {
+  padding: 10px 14px;
+  color: #3d3f50;
+  border-bottom: 1px solid #f0f1f5;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tr { transition: background 0.1s; }
+.tr:hover { background: #f8f9fc; }
+.trSelected { background: #eef1ff; }
+
+.empty {
+  padding: 40px;
+  text-align: center;
+  color: #aaa;
+  font-size: 13px;
+}
+
+/* Status badge */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badgeGreen  { background: #dcfce7; color: #16a34a; }
+.badgeOrange { background: #fef3c7; color: #d97706; }
+.badgeRed    { background: #fee2e2; color: #dc2626; }
+
+/* Clickable device name */
+.deviceLink {
+  color: #4a7cff;
+  font-weight: 500;
+  text-decoration: none;
+}
+.deviceLink:hover { text-decoration: underline; }
+
+/* Platform cell */
+.platformCell {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+
+/* Row action buttons */
+.rowActions { display: flex; gap: 4px; }
+.rowBtn {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  background: none; border: 1px solid transparent;
+  border-radius: 4px; cursor: pointer; color: #6b7080;
+  transition: all 0.1s;
+}
+.rowBtn:hover { background: #f0f1f5; border-color: #d6d9e4; }
+
+/* ── Three-dot action menu ── */
+.actionMenuWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.dotsBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #6b7080;
+  transition: all 0.1s;
+}
+.dotsBtn:hover {
+  background: #f0f1f5;
+  border-color: #d6d9e4;
+  color: #23252e;
+}
+
+.actionDropdown {
+  background: #fff;
+  border: 1px solid #e2e4ec;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  z-index: 9999;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.actionItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  font-size: 13px;
+  color: #3d3f50;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+  font-family: inherit;
+}
+.actionItem:hover { background: #f5f6fa; }
+
+/* Action link (legacy) */
+.actionLink {
+  background: none; border: none; cursor: pointer; color: #4a7cff;
+  display: flex; align-items: center; padding: 2px 4px;
+  border-radius: 3px; transition: background 0.1s;
+}
+.actionLink:hover { background: #eef1ff; }
+
+/* ── Pagination ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid #e2e4ec;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.paginationLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.paginationRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.paginationLabel {
+  font-size: 13px;
+  color: #6b7080;
+}
+
+.paginationSelect {
+  font-size: 13px;
+  color: #3d3f50;
+  border: 1px solid #d6d9e4;
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.paginationInfo {
+  font-size: 13px;
+  color: #6b7080;
+  padding: 0 8px;
+}
+
+.paginationTotal {
+  color: #4a7cff;
+  font-weight: 500;
+}
+
+.pageBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: 1px solid #d6d9e4;
+  border-radius: 4px;
+  color: #6b7080;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.pageBtn:hover:not(:disabled) {
+  background: #f0f1f5;
+  color: #23252e;
+}
+.pageBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

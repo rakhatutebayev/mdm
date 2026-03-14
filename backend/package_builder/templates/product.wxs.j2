@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+      Id="*"
+      Name="NOCKO MDM Agent ({{ customer_name }})"
+      Language="1033"
+      Version="1.0.0"
+      Manufacturer="NOCKO IT"
+      UpgradeCode="12345678-1234-1234-1234-{{ upgrade_guid }}">
+
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="ProductFeature" Title="NOCKO MDM Agent" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <!-- Enrollment CustomAction -->
+    <CustomAction
+        Id="EnrollDevice"
+        Directory="INSTALLFOLDER"
+        ExeCommand="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        Execute="deferred"
+        Impersonate="no"
+        Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="EnrollDevice" After="InstallFiles">NOT Installed</Custom>
+    </InstallExecuteSequence>
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="NOCKO MDM" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="InstallScript" Guid="*">
+        <File Id="InstallPS1" Source="install.ps1" KeyPath="yes" />
+      </Component>
+      <Component Id="ConfigFile" Guid="*">
+        <File Id="ConfigJSON" Source="config.json" />
+      </Component>
+      <Component Id="ReadmeFile" Guid="*">
+        <File Id="ReadmeTXT" Source="README.txt" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

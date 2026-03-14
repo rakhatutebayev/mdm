@@ -1,0 +1,192 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    NOCKO MDM Agent Enrollment Script
+.DESCRIPTION
+    Enrolls this Windows device into NOCKO MDM.
+    Run as Administrator.
+#>
+
+[CmdletBinding()]
+param(
+    [string]$ServerUrl  = "{{ server_url }}",
+    [string]$Token      = "{{ enrollment_token }}",
+    [string]$CustomerID = "{{ customer_id }}",
+    [string]$APIBase    = "{{ server_url }}/api/v1"
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+# ── Helpers ──────────────────────────────────────────────────────────────────
+function Write-Step($msg) { Write-Host "  >> $msg" -ForegroundColor Cyan }
+function Write-OK($msg)   { Write-Host "  OK $msg" -ForegroundColor Green }
+function Write-Fail($msg) { Write-Host "  !! $msg" -ForegroundColor Red; exit 1 }
+
+function Get-SerialNumber {
+    try { (Get-WmiObject Win32_BIOS).SerialNumber } catch { "UNKNOWN" }
+}
+
+function Get-UDID {
+    try {
+        $uuid = (Get-WmiObject Win32_ComputerSystemProduct).UUID
+        $uuid -replace '-', ''
+    } catch { [System.Guid]::NewGuid().ToString("N").ToUpper() }
+}
+
+function Get-OSVersion {
+    try {
+        $os = Get-WmiObject Win32_OperatingSystem
+        "$($os.Caption) $($os.Version)"
+    } catch { "Windows Unknown" }
+}
+
+function Get-Architecture {
+    if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+}
+
+function Get-Manufacturer {
+    try { (Get-WmiObject Win32_ComputerSystem).Manufacturer } catch { "Unknown" }
+}
+
+function Get-ModelName {
+    try { (Get-WmiObject Win32_ComputerSystem).Model } catch { "Unknown" }
+}
+
+function Get-NetworkInfo {
+    try {
+        $nic = Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -and $_.DefaultIPGateway }
+        if ($nic) {
+            return @{
+                ip_address  = ($nic.IPAddress    | Where-Object { $_ -notmatch ":" })[0]
+                mac_address = $nic.MACAddress
+                wifi_ssid   = ""
+                dns_servers = ($nic.DNSServerSearchOrder -join ", ")
+                gateway     = $nic.DefaultIPGateway[0]
+                interface   = $nic.Description
+            }
+        }
+    } catch {}
+    return @{ ip_address = ""; mac_address = ""; wifi_ssid = ""; dns_servers = ""; gateway = ""; interface = "" }
+}
+
+function Get-MonitorInfo {
+    $monitors = @()
+    try {
+        Get-WmiObject WmiMonitorID -Namespace root\wmi | ForEach-Object {
+            $name = ($_.UserFriendlyName | Where-Object {$_}) -join ""
+            $name = [System.Text.Encoding]::Unicode.GetString([byte[]](($_.UserFriendlyName | Where-Object {$_}) | ForEach-Object { $_, 0 })).Trim([char]0)
+            $serial = [System.Text.Encoding]::Unicode.GetString([byte[]](($_.SerialNumberID | Where-Object {$_}) | ForEach-Object { $_, 0 })).Trim([char]0)
+            $monitors += @{
+                name          = if ($name) { $name } else { "Unknown Monitor" }
+                manufacturer  = ""
+                serial_number = if ($serial) { $serial } else { "N/A" }
+                resolution    = ""
+                is_external   = $true
+            }
+        }
+    } catch {}
+    return $monitors
+}
+
+# ── Check Admin ───────────────────────────────────────────────────────────────
+Write-Step "Checking privileges..."
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) { Write-Fail "This script must be run as Administrator." }
+Write-OK "Running as Administrator"
+
+# ── Collect Device Info ───────────────────────────────────────────────────────
+Write-Step "Collecting device information..."
+$deviceName  = $env:COMPUTERNAME
+$serial      = Get-SerialNumber
+$udid        = Get-UDID
+$osVersion   = Get-OSVersion
+$arch        = Get-Architecture
+$manufacturer = Get-Manufacturer
+$model       = Get-ModelName
+$network     = Get-NetworkInfo
+$monitors    = Get-MonitorInfo
+Write-OK "Device: $deviceName | Serial: $serial | OS: $osVersion"
+
+# ── Register Device with MDM ──────────────────────────────────────────────────
+Write-Step "Registering device with NOCKO MDM server ($ServerUrl)..."
+
+$payload = @{
+    customer_id      = $CustomerID
+    device_name      = $deviceName
+    platform         = "Windows"
+    device_type      = "Desktop"
+    model            = $model
+    manufacturer     = $manufacturer
+    serial_number    = $serial
+    udid             = $udid
+    os_version       = $osVersion
+    architecture     = $arch
+    shared_device    = $false
+    owner            = ""
+    enrollment_method = "Agent"
+    agent_version    = "1.0.0"
+    enrollment_token = $Token
+    network          = $network
+    monitors         = $monitors
+} | ConvertTo-Json -Depth 10
+
+try {
+    $response = Invoke-RestMethod `
+        -Uri "$APIBase/devices" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body $payload
+    $deviceId = $response.id
+    Write-OK "Device registered. ID: $deviceId"
+} catch {
+    Write-Fail "Failed to register device: $_"
+}
+
+# ── Install Agent Config ──────────────────────────────────────────────────────
+Write-Step "Installing agent configuration..."
+$configDir = "$env:ProgramData\NOCKO MDM"
+if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir | Out-Null }
+
+$config = @{
+    server_url   = $ServerUrl
+    token        = $Token
+    customer_id  = $CustomerID
+    device_id    = $deviceId
+    agent_version = "1.0.0"
+    installed_at = (Get-Date -Format "o")
+} | ConvertTo-Json
+
+$config | Set-Content -Path "$configDir\config.json" -Encoding UTF8
+Write-OK "Config written to $configDir\config.json"
+
+# ── Register Scheduled Task (check-in every 15 min) ──────────────────────────
+Write-Step "Registering check-in scheduled task..."
+$taskScript = @"
+`$config = Get-Content '$configDir\config.json' | ConvertFrom-Json
+try {
+    Invoke-RestMethod -Uri "`$(`$config.server_url)/api/v1/devices/`$(`$config.device_id)/checkin" -Method POST -ContentType 'application/json' -Body ('{"agent_version":"1.0.0"}') | Out-Null
+} catch {}
+"@
+$taskScript | Set-Content -Path "$configDir\checkin.ps1" -Encoding UTF8
+
+$action  = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-NonInteractive -ExecutionPolicy Bypass -File `"$configDir\checkin.ps1`""
+$trigger = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Minutes 15) -Once -At (Get-Date)
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+$settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -RestartCount 3
+
+try {
+    Unregister-ScheduledTask -TaskName "NOCKO MDM Check-In" -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -TaskName "NOCKO MDM Check-In" -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+    Write-OK "Scheduled task registered (every 15 minutes)"
+} catch {
+    Write-Host "  WARN: Could not register scheduled task: $_" -ForegroundColor Yellow
+}
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+Write-Host ""
+Write-Host "  ============================================" -ForegroundColor Green
+Write-Host "  NOCKO MDM enrollment complete!" -ForegroundColor Green
+Write-Host "  Device '$deviceName' is now managed."       -ForegroundColor Green
+Write-Host "  ============================================" -ForegroundColor Green
+Write-Host ""

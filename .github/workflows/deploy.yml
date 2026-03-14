@@ -1,60 +1,40 @@
-name: 🚀 Deploy to Production
+name: Deploy to Production
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:   # allow manual trigger from GitHub UI
+    branches: [main, master]
 
 jobs:
   deploy:
-    name: Deploy to mdm.it-uae.com
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
     steps:
-      - name: 📦 Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🚀 Deploy to server via SSH
+      - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host:     ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key:      ${{ secrets.DEPLOY_KEY }}
-          port:     22
-          timeout:  25m
+          host:     ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key:      ${{ secrets.SSH_PRIVATE_KEY }}
+          port:     ${{ secrets.SSH_PORT || 22 }}
           script: |
             set -e
+            echo "==> Pulling latest code..."
             cd /opt/nocko-mdm
+            git pull origin main || git pull origin master
 
-            echo "=== Pulling latest code ==="
-            git fetch origin
-            git reset --hard origin/main
+            echo "==> Installing build tools (if missing)..."
+            which nsis   || (apt-get update -q && apt-get install -y nsis)
+            which wixl   || apt-get install -y msitools
 
-            echo "=== Building images (without stopping running containers) ==="
-            docker compose build backend frontend
+            echo "==> Restarting services with Docker Compose..."
+            docker compose pull
+            docker compose up -d --build --remove-orphans
 
-            echo "=== Rolling restart (backend first, then frontend) ==="
-            docker compose up -d --no-deps backend
+            echo "==> Running DB migrations (tables auto-created on startup)..."
             sleep 5
-            docker compose up -d --no-deps frontend
+            docker compose exec -T backend python seed.py || true
 
-            echo "=== Cleanup old images ==="
-            docker image prune -f --filter "dangling=true" || true
-
-            echo "=== Health check ==="
-            sleep 5
-            curl -sf http://localhost:8000/health | grep '"status":"ok"' && echo "✅ Backend healthy"
-
-            echo "=== Done ==="
+            echo "==> Done! Services:"
             docker compose ps
-
-      - name: ✅ Notify success
-        if: success()
-        run: |
-          echo "✅ Deployed to https://mdm.it-uae.com"
-
-      - name: ❌ Notify failure
-        if: failure()
-        run: |
-          echo "❌ Deployment failed! Check logs above."

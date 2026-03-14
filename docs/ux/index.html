@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>ManageEngine Mobile Device Manager Plus MSP</title>
+    <link rel="SHORTCUT ICON" href="/images/favicon.ico">
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+
+
+
+
+
+    <meta name="_uemsNonce" content="Jn2Ms4l4Vpbubq5qTmGS1w==">
+    <script src="https://static.zohocdn.com/mdmcloudstatic/112260204//js/jquery/jquery.min.js?"></script>
+
+    <script nonce="Jn2Ms4l4Vpbubq5qTmGS1w==">
+        var isZohoOneIframe = 'false';
+        var ticket = 'null';
+        var pname = 'null';
+        var MDMPSDPIntegrationMode = 'null';
+        var isUem = 'false'
+        var uemUrl = 'null'
+        var dcCloudRedirectUrl = 'null'
+        var isMdmUemIframe = 'false'
+    </script>
+
+
+
+
+
+
+    <script src="https://static.zohocdn.com/mdmcloudstatic/112260204//js/mdm/ember/index.js?112260204"> </script>
+</head>
+
+<body id="mdmapp">
+
+    <div id="loader">
+
+
+
+        <style>
+            .loader-wrapper {
+                width: 100%;
+                text-align: center;
+                min-height: 100vh;
+                display: grid;
+                place-content: center;
+            }
+
+            .loader-icons-wrapper {
+                width: 100%;
+            }
+
+            .loader-text {
+                margin: 12px;
+                font-size: 16px;
+                color: #686c79;
+                font-family: "Lato";
+            }
+
+            .loader-icons-wrapper .loader-icon {
+                --animation-duration: 1.5s;
+                --animation-delay: calc(var(--animation-duration) / 12);
+                width: 24px;
+                height: 24px;
+                margin: 10px;
+                fill: #C8CFDE;
+                animation: var(--animation-duration) loader-animation ease-in-out infinite;
+                transition: 0.1s ease;
+            }
+
+            .loader-icons-wrapper .loader-icon-2 {
+                animation-delay: calc(var(--animation-delay) * 1);
+            }
+
+            .loader-icons-wrapper .loader-icon-3 {
+                animation-delay: calc(var(--animation-delay) * 2);
+            }
+
+            .loader-icons-wrapper .loader-icon-4 {
+                animation-delay: calc(var(--animation-delay) * 3);
+            }
+
+            .loader-icons-wrapper .loader-icon-5 {
+                animation-delay: calc(var(--animation-delay) * 4);
+            }
+
+            .loader-icons-wrapper .loader-icon-6 {
+                animation-delay: calc(var(--animation-delay) * 5);
+            }
+
+            .dark-bg-body {
+                background-color: #17181C !important;
+            }
+
+            @keyframes loader-animation {
+                0% {
+                    fill: #C8CFDE;
+                    transform: scale(1);
+                }
+
+                20% {
+                    fill: #437AEE;
+                    transform: scale(1.1);
+                }
+
+                70% {
+                    fill: #C8CFDE;
+                    transform: scale(1);
+                }
+
+                100% {
+                    fill: #C8CFDE;
+                    transform: scale(1);
+                }
+            }
+        </style>
+        <script nonce="Jn2Ms4l4Vpbubq5qTmGS1w==">
+            var emsTheme = localStorage.getItem("ems-theme");
+            document.body.setAttribute("ems-theme", emsTheme ? emsTheme : "light");
+
+            if (emsTheme === "dark") {
+                document.body.classList.add("dark-bg-body");
+            }
+        </script>
+        <div id="loader-wrapper" class="loader-wrapper">
+            <div class="loader-icons-wrapper">
+                <svg id="Layer_1" data-name="Layer 1" xmlns="https://www.w3.org/2000/svg" viewBox="0 0 40 40"
+                    class="loader-icon loader-icon-1">
+                    <defs>
+                        <style>
+                            .cls-1 {
+                                stroke-width: 0px;
+                            }
+                        </style>
+                    </defs>
+                    <path class="cls-1"
+                        d="m32.29,5.72c-.17-1.29-.56-2.53-1.57-3.53-1-1-2.24-1.39-3.53-1.57-1.2-.16-2.71-.16-4.45-.16h-8.13c-1.74,0-3.25,0-4.45.16-1.29.17-2.53.56-3.53,1.57-1,1-1.39,2.24-1.57,3.53-.16,1.2-.16,2.71-.16,4.45v19.93c0,1.74,0,3.25.16,4.45.17,1.29.56,2.53,1.57,3.53,1,1,2.24,1.39,3.53,1.57,1.2.16,2.71.16,4.45.16h8.13c1.74,0,3.25,0,4.45-.16,1.29-.17,2.53-.56,3.53-1.57,1-1,1.39-2.24,1.57-3.53.16-1.2.16-2.71.16-4.45V10.17c0-1.74,0-3.25-.16-4.45Zm-22.17.21c.7-.7,1.82-.7,4.06-.7,1.5,0,2.24,0,2.71.46s.46,1.21.46,2.71v1.59c0,1.5,0,2.24-.46,2.71-.46.46-1.21.46-2.71.46h-1.59c-1.5,0-2.24,0-2.71-.46-.46-.46-.46-1.21-.46-2.71,0-2.24,0-3.36.7-4.06Zm4.06,17.81c-2.24,0-3.36,0-4.06-.7s-.7-1.82-.7-4.06c0-1.5,0-2.24.46-2.71s1.21-.46,2.71-.46h1.59c1.5,0,2.24,0,2.71.46s.46,1.21.46,2.71v1.59c0,1.5,0,2.24-.46,2.71s-1.21.46-2.71.46Zm5.48,10.17h-1.97c-1.09,0-1.97-.88-1.97-1.97s.88-1.97,1.97-1.97h1.97c1.09,0,1.97.88,1.97,1.97s-.88,1.97-1.97,1.97Zm7.57-10.87c-.7.7-1.82.7-4.06.7-1.49,0-2.24,0-2.71-.47s-.46-1.21-.46-2.71v-1.58c0-1.5,0-2.24.46-2.71s1.21-.46,2.71-.46h1.59c1.5,0,2.24,0,2.71.46s.46,1.21.46,2.71c0,2.24,0,3.37-.7,4.06Zm.24-10.34c-.46.46-1.21.46-2.71.46h-1.59c-1.5,0-2.24,0-2.71-.46-.46-.46-.46-1.21-.46-2.71v-1.59c0-1.5,0-2.24.46-2.71s1.21-.46,2.71-.46c2.24,0,3.37,0,4.06.7.7.7.7,1.82.7,4.06,0,1.5,0,2.24-.46,2.71Z" />
+                </svg>
+                <svg id="Layer_2" data-name="Layer 1" xmlns="https://www.w3.org/2000/svg" viewBox="0 0 40 40"
+                    class="loader-icon loader-icon-2">
+                    <defs>
+                        <style>
+                            .cls-1 {
+                                stroke-width: 0px;
+                            }
+                        </style>
+                    </defs>
+                    <path class="cls-1"
+                        d="m20.08,34.15c.56,0,2.34-.74,4.9-3.11,4.06-3.74,8.8-10.31,8.8-16.49,0-7.61-6.17-13.78-13.78-13.78-7.61,0-13.78,6.17-13.78,13.78h0c0,9.72,11.32,19.39,13.86,19.6h0Zm-.08-27.8c3.63,0,6.57,2.94,6.57,6.57s-2.94,6.57-6.57,6.57-6.57-2.94-6.57-6.57,2.94-6.57,6.57-6.57h0Zm14.98,29.1c0,1.28-5.28,3.78-14.98,3.78s-14.98-2.5-14.98-3.78c0-.86,2.47-2.45,7.98-3.28.1-.02.19-.05.27-.09,2.58,2.44,5.11,4.01,6.64,4.12h.19c2.06,0,5.06-2.53,6.27-3.65.15-.14.3-.29.45-.44.05.02.1.03.15.04,5.51.84,7.99,2.43,7.99,3.29Z" />
+                </svg>
+                <svg id="Layer_3" data-name="Layer 1" xmlns="https://www.w3.org/2000/svg" viewBox="0 0 40 40"
+                    class="loader-icon loader-icon-3">
+                    <defs>
+                        <style>
+                            .cls-1 {
+                                stroke-width: 0px;
+                            }
+                        </style>
+                    </defs>
+                    <path class="cls-1"
+                        d="m11.96,39.33c-5.93,0-9.23-3.42-9.23-9.27h0V10.24C2.72,4.29,6.02.95,11.95.95h16.09c5.84,0,9.23,3.34,9.23,9.29h0v19.83c0,5.85-3.4,9.27-9.23,9.27H11.96Zm15.57-26.37c.58.06,1.14-.22,1.44-.71.31-.49.31-1.12,0-1.61-.31-.49-.87-.76-1.44-.69h-15.05c-.83.1-1.43.85-1.33,1.68.08.7.63,1.25,1.33,1.33h15.05s0,0,0,0Zm-15.05,8.75h15.04c.83-.02,1.48-.7,1.46-1.53-.02-.8-.66-1.45-1.46-1.46h-15.05c-.83.02-1.48.7-1.46,1.53.02.8.66,1.45,1.46,1.46h0Zm9.31,8.69h5.74v-.02c.83,0,1.5-.67,1.5-1.5s-.67-1.5-1.5-1.5h-5.74c-.83,0-1.51.67-1.51,1.51s.67,1.51,1.51,1.51h0Z" />
+                </svg>
+                <svg id="Layer_4" data-name="Layer 1" xmlns="https://www.w3.org/2000/svg" viewBox="0 0 40 40"
+                    class="loader-icon loader-icon-4">
+                    <defs>
+                        <style>
+                            .cls-1 {
+                                stroke-width: 0px;
+                            }
+                        </style>
+                    </defs>
+                    <g id="Layer_2" data-name="Layer 2">
+                        <path id="Path_52" data-name="Path 52" class="cls-1"
+                            d="m35.19,12.49v-6.93c0-.38-.31-.69-.68-.69-.06,0-.13,0-.19.03l-20.15,5.66c.25.35.38.76.38,1.19v11.01c0,.47-.16.92-.45,1.29l20.18,6.97c.08,0,.15,0,.23,0,.14,0,.28-.04.4-.13.18-.13.29-.34.29-.56v-8.31c2.63-.4,4.44-2.86,4.04-5.49-.32-2.08-1.95-3.72-4.04-4.04h0Zm-22.71-1.43h-5.5c-3.42-.04-6.22,2.7-6.26,6.12-.04,3.42,2.7,6.22,6.12,6.26.05,0,.09,0,.14,0h5.51c.38,0,.69-.31.69-.69h0v-11.01c0-.38-.31-.69-.69-.69h0Zm-.69,13.76h-4.13v9.63c0,.38.31.69.69.69h4.13c.38,0,.69-.31.69-.69h0v-9.76c-.22.08-.45.13-.69.12h-.69Z" />
+                    </g>
+                </svg>
+                <svg id="Layer_5" data-name="Layer 1" xmlns="https://www.w3.org/2000/svg" viewBox="0 0 40 40"
+                    class="loader-icon loader-icon-5">
+                    <defs>
+                        <style>
+                            .cls-1 {
+                                stroke-width: 0px;
+                            }
+                        </style>
+                    </defs>
+                    <path id="Path_57" data-name="Path 57" class="cls-1"
+                        d="m19.08,38.91c.57.35,1.28.35,1.85,0l6.13-3.82c5.42-3.47,8.69-9.47,8.66-15.91v-10.84c0-.71-.43-1.34-1.08-1.61L20.67.91c-.43-.17-.91-.17-1.34,0L5.36,6.72c-.65.27-1.08.9-1.09,1.61v10.85c-.02,6.44,3.24,12.44,8.66,15.91l6.13,3.82h.02Zm-7.3-21.92c.68-.68,1.78-.68,2.46,0,0,0,0,0,0,0l3.89,3.89,7.51-9.01c.63-.73,1.73-.82,2.47-.2.72.62.82,1.69.22,2.43l-8.73,10.48c-.31.38-.77.61-1.26.63h-.07c-.46,0-.91-.18-1.24-.51l-5.24-5.24c-.68-.68-.68-1.78,0-2.46,0,0,0,0,0,0v-.02Z" />
+                </svg>
+                <svg id="Layer_6" data-name="Layer 1" xmlns="https://www.w3.org/2000/svg" viewBox="0 0 40 40"
+                    class="loader-icon loader-icon-6">
+                    <defs>
+                        <style>
+                            .cls-1 {
+                                stroke-width: 0px;
+                            }
+                        </style>
+                    </defs>
+                    <path class="cls-1"
+                        d="m33.61,5.72c-.17-1.29-.56-2.53-1.57-3.53-1-1-2.24-1.39-3.53-1.57-1.2-.16-2.71-.16-4.45-.16h-8.13c-1.74,0-3.25,0-4.45.16-1.29.17-2.53.56-3.53,1.57-1,1-1.39,2.24-1.57,3.53-.16,1.2-.16,2.71-.16,4.45v19.93c0,1.74,0,3.25.16,4.45.17,1.29.56,2.53,1.57,3.53,1,1,2.24,1.39,3.53,1.57,1.2.16,2.71.16,4.45.16h8.13c1.74,0,3.25,0,4.45-.16,1.29-.17,2.53-.56,3.53-1.57,1-1,1.39-2.24,1.57-3.53.16-1.2.16-2.71.16-4.45V10.17c0-1.74,0-3.25-.16-4.45Zm-12.63,28.19h-1.97c-1.09,0-1.97-.88-1.97-1.97s.88-1.97,1.97-1.97h1.97c1.09,0,1.97.88,1.97,1.97s-.88,1.97-1.97,1.97Zm6.84-9.84c-.65.65-1.7.65-2.35,0l-2.32-2.32c-1.15.73-2.52,1.15-3.98,1.15-4.13,0-7.48-3.35-7.48-7.48s3.35-7.48,7.48-7.48,7.48,3.35,7.48,7.48c0,1.46-.42,2.83-1.15,3.98l2.32,2.32c.65.65.65,1.7,0,2.35Z" />
+                    <circle class="cls-1" cx="19.17" cy="15.41" r="4.16" />
+                </svg>
+            </div>
+            <div class="loader-text">
+                Hold on! Loading...
+            </div>
+        </div>
+
+    </div>
+
+    <script nonce="Jn2Ms4l4Vpbubq5qTmGS1w==">
+        //replace remove if the url have last blackslash
+        var dmwebclient_url = 'https://static.zohocdn.com/mdmcloudstatic/client/'.replace(/\/+$/, '');
+        var staticLocation = '/ember/dcapp/dist';
+        var staticUrl = dmwebclient_url + staticLocation;
+
+        var androidEnterpriseToken = 'null';
+
+        csrfParamName = 'mdmaramcsr';//NO I18N
+        cookieName = 'mdmcookcsr';//NO I18N
+        isSAS = 'true';//NO I18N
+        mdmUrl = 'http://www.manageengine.com/mobile-device-management-msp';//NO I18N
+
+        //csrf allowed sites and CORS cookies allowed sites
+        var csrfAllowedSites, allowedCookieCORSsites;
+        if (isSAS) {
+            csrfAllowedSites = 'https://mdm.manageengine.com,https://mdm.zoho.com'.split(",") //No I18N
+            allowedCookieCORSsites = 'https://upload.zoho.com,https://preupload.zoho.com'.split(",") //No I18N
+        }
+
+        window.onload = function () {
+            jQuery = $;
+            if (window.location.pathname.startsWith('/gac') && !window.location.hash.startsWith("#/internal")) {
+                window.location.href = "gac#/internal";
+            }
+        };
+
+        function getSubstring(str, start, end) {
+            let startIndex = str.indexOf(start) + start.length;
+            let endIndex = str.indexOf(end);
+            return str.substring(startIndex, endIndex);
+        }
+
+        function stringToHTML(string) {
+            var dom = document.createElement('div');
+            dom.innerHTML = string;
+            return dom.firstChild;
+        }
+
+        function loadScript(jsScript) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                Array.from(jsScript.attributes).forEach(attr => {
+                    script.setAttribute([attr.name], attr.value);
+                })
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
+            });
+        }
+
+        async function loadJsFiles(data) {
+            data = data.replaceAll(staticLocation, staticUrl);//NO I18N
+            var js = getSubstring(data, '<!-- Content: js-start -->', '<!-- Content: js-end -->');
+            var css = getSubstring(data, '<!-- Content: css-start -->', '<!-- Content: css-end -->');
+            var meta = getSubstring(data, '<!-- Content: meta-start -->', '<!-- Content: meta-end -->');
+            $(css).appendTo('head');//NO I18N
+            $(meta).appendTo('head');//NO I18N
+            var jsArr = js.trim().split(`\n`);
+            for (var i = 0; i < jsArr.length; i++) {
+                var jsScript = stringToHTML(jsArr[i].trim());
+                await loadScript(jsScript);
+            }
+        }
+
+        $.ajax({
+            type: "GET",
+            url: staticUrl + '/index-112260205.html',//index_html_placeholder -> It will be replaced by fingerprinted html file at build time in ant
+            beforeSend: function (request) {
+                request.setRequestHeader("Cache-Control", "no-cache, no-store, must-revalidate");//NO I18N
+                request.setRequestHeader("Pragma", "no-cache");//NO I18N
+                request.setRequestHeader("Expires", 0);//NO I18N
+            },
+            success: loadJsFiles
+        });
+    </script>
+
+</body>
+
+</html>

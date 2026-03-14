@@ -1,0 +1,181 @@
+.nav {
+  background: var(--nav-bg);
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  border-bottom: 1px solid var(--nav-border);
+  user-select: none;
+}
+
+/* ── Logo ── */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  height: 100%;
+  border-right: 1px solid var(--nav-border);
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.logoIcon { width: 22px; height: 22px; fill: var(--nav-accent); }
+.logoText { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: 0.3px; }
+.logoBadge {
+  font-size: 9px; font-weight: 600;
+  background: var(--nav-accent); color: #fff;
+  padding: 1px 5px; border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Menu ── */
+.menu {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  flex: 1;
+  list-style: none;
+  gap: 0;
+}
+
+.menuItem {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+
+.menuLink {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--nav-height);
+  padding: 0 15px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--nav-text);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+  background: none;
+  border: none;
+  outline: none;
+  position: relative;
+}
+.menuLink:hover { background: var(--nav-bg-hover); color: var(--nav-text-active); }
+.menuLink.active { background: var(--nav-active); color: var(--nav-text-active); }
+.menuLink.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--nav-accent);
+  border-radius: 2px 2px 0 0;
+}
+
+/* ── Arrow ── */
+.arrow {
+  width: 10px; height: 10px;
+  fill: var(--nav-icon);
+  transition: transform 0.2s, fill 0.2s;
+  flex-shrink: 0;
+}
+.arrowOpen { transform: rotate(180deg); fill: var(--nav-text-active); }
+
+/* ── Dropdown ── */
+.dropdown {
+  position: absolute;
+  top: 100%; left: 0;
+  min-width: 210px;
+  background: var(--nav-bg);
+  border: 1px solid var(--nav-border);
+  border-top: 2px solid var(--nav-accent);
+  border-radius: 0 0 6px 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--nav-text);
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+.dropdownItem:hover { background: var(--nav-bg-hover); color: var(--nav-text-active); }
+.dropdownItem.dropdownActive { color: var(--nav-accent); }
+.dropdownIcon { font-size: 14px; width: 18px; text-align: center; }
+
+/* ── Right ── */
+.right {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 2px;
+  padding: 0 8px;
+  border-left: 1px solid var(--nav-border);
+  flex-shrink: 0;
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  background: #1a1c24;
+  border: 1px solid var(--nav-border);
+  border-radius: 5px;
+  padding: 0 10px;
+  height: 28px;
+  gap: 6px;
+  margin-right: 6px;
+  transition: border-color 0.15s;
+}
+.searchBox:focus-within { border-color: var(--nav-accent); }
+.searchBox svg { width: 13px; height: 13px; fill: var(--nav-icon); flex-shrink: 0; }
+.searchBox input {
+  background: none; border: none; outline: none;
+  font-size: 12px; color: var(--nav-text); width: 160px;
+}
+.searchBox input::placeholder { color: var(--nav-icon); }
+
+.iconBtn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 5px;
+  background: none; border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.iconBtn:hover { background: var(--nav-bg-hover); }
+.iconBtn svg { width: 16px; height: 16px; fill: var(--nav-icon); transition: fill 0.15s; }
+.iconBtn:hover svg { fill: var(--nav-icon-hover); }
+
+.badge {
+  position: absolute;
+  top: 5px; right: 5px;
+  width: 7px; height: 7px;
+  background: #ff4d4f;
+  border-radius: 50%;
+  border: 1.5px solid var(--nav-bg);
+}
+
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--nav-accent), #7c54ff);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; color: #fff;
+  cursor: pointer; margin-left: 4px;
+  flex-shrink: 0; text-decoration: none;
+  transition: opacity 0.15s;
+}
+.avatar:hover { opacity: 0.85; }

@@ -1,0 +1,9 @@
+.container {
+  display: flex;
+  height: calc(100vh - var(--nav-height));
+}
+
+.content {
+  flex: 1;
+  overflow: auto;
+}

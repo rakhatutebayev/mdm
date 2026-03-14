@@ -1,71 +1,41 @@
-# ── Python ────────────────────────────────────────────
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .Python
-*.egg
 *.egg-info/
 dist/
 build/
 .eggs/
-.mypy_cache/
-.pytest_cache/
-.coverage
-htmlcov/
+*.so
 
-# ── Virtual environments ──────────────────────────────
+# Virtual environments
 .venv/
 venv/
 env/
-ENV/
 
-# ── Node / Next.js ────────────────────────────────────
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Node
 node_modules/
 .next/
 out/
-.npm
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# ── Environment / secrets ─────────────────────────────
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*.crt
-*.p12
-
-# ── macOS ─────────────────────────────────────────────
+# OS
 .DS_Store
-.AppleDouble
-.LSOverride
+Thumbs.db
 
-# ── Docker build artifacts ────────────────────────────
-dist-win/
-*.exe
-
-# ── PyInstaller ───────────────────────────────────────
-agent-gui/dist/
-agent-gui/build/
-agent-gui/*.spec.bak
-
-# ── IDE ───────────────────────────────────────────────
+# IDEs
 .idea/
 .vscode/
 *.swp
-*.swo
 
-# ── Logs ─────────────────────────────────────────────
+# Generated packages (temporary)
+/tmp/
+
+# Logs
 *.log
-logs/
-
-# ── Certificates ──────────────────────────────────────
-certs/
-
-# ── DB ────────────────────────────────────────────────
-*.sqlite
-*.sqlite3
-*.db

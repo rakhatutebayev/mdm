@@ -1,0 +1,247 @@
+/* Enrollment Left Sidebar */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #f5f6fa;
+  border-right: 1px solid #e2e4ec;
+  min-height: calc(100vh - var(--nav-height));
+  padding: 8px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Customer Selector ── */
+.customerWrap {
+  padding: 10px 14px 14px;
+  position: relative;
+}
+
+.customerLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b90a4;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.customerBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 10px;
+  background: #fff;
+  border: 1px solid #d6d9e4;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.customerBtn:hover { border-color: #4a7cff; }
+
+.customerName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #23252e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 148px;
+}
+
+.custChevron {
+  color: #8b90a4;
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.custChevronOpen { transform: rotate(180deg); }
+
+/* Dropdown */
+.custDropdown {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 14px;
+  right: 14px;
+  background: #fff;
+  border: 1px solid #d6d9e4;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.custSearchWrap {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e8eaf2;
+  gap: 6px;
+}
+
+.custSearch {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: #3d3f50;
+  background: none;
+  font-family: inherit;
+}
+.custSearch::placeholder { color: #aaa; }
+
+.custSearchIcon { flex-shrink: 0; }
+
+.custOptions {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.custOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #3d3f50;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+.custOption:hover { background: #f5f6fa; }
+.custOptionActive { color: #4a7cff; }
+
+.custNoResults {
+  padding: 12px;
+  font-size: 12px;
+  color: #aaa;
+  text-align: center;
+}
+
+.divider {
+  height: 1px;
+  background: #e2e4ec;
+  margin: 0 0 6px;
+}
+
+.section {
+  margin-bottom: 2px;
+}
+
+/* Group header button (collapsible) */
+.groupBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3d3f50;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.1px;
+  transition: background 0.12s;
+}
+.groupBtn:hover { background: #ebebf3; }
+
+.chevron {
+  color: #8b90a4;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.chevronCollapsed { transform: rotate(-90deg); }
+
+/* Nav items */
+.items { display: flex; flex-direction: column; }
+
+.item {
+  display: block;
+  padding: 9px 16px 9px 32px;
+  font-size: 13px;
+  color: #555870;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item:hover { background: #eaebf5; color: #23252e; }
+
+.itemActive {
+  background: #e8eaf7;
+  color: #4a7cff;
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 #4a7cff;
+}
+
+
+.section {
+  margin-bottom: 2px;
+}
+
+/* Group header button (collapsible) */
+.groupBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3d3f50;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.1px;
+  transition: background 0.12s;
+}
+.groupBtn:hover {
+  background: #ebebf3;
+}
+
+.chevron {
+  color: #8b90a4;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  transform: rotate(0deg); /* ▼ expanded */
+}
+.chevronCollapsed {
+  transform: rotate(-90deg); /* ▶ collapsed (right-pointing) */
+}
+
+/* Nav items */
+.items {
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  display: block;
+  padding: 9px 16px 9px 32px;
+  font-size: 13px;
+  color: #555870;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+  border-radius: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item:hover {
+  background: #eaebf5;
+  color: #23252e;
+}
+
+.itemActive {
+  background: #e8eaf7;
+  color: #4a7cff;
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 #4a7cff;
+}

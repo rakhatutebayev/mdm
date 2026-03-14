@@ -1,0 +1,60 @@
+/* Admin Left Sidebar */
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: #f5f6fa;
+  border-right: 1px solid #e2e4ec;
+  min-height: calc(100vh - var(--nav-height));
+  padding: 8px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.section { margin-bottom: 2px; }
+
+.groupBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3d3f50;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.1px;
+  transition: background 0.12s;
+}
+.groupBtn:hover { background: #ebebf3; }
+
+.chevron {
+  color: #8b90a4;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.chevronCollapsed { transform: rotate(-90deg); }
+
+.items { display: flex; flex-direction: column; }
+
+.item {
+  display: block;
+  padding: 9px 16px 9px 32px;
+  font-size: 13px;
+  color: #555870;
+  text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item:hover { background: #eaebf5; color: #23252e; }
+
+.itemActive {
+  background: #e8eaf7;
+  color: #4a7cff;
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 #4a7cff;
+}
