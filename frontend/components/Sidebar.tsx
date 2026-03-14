@@ -61,12 +61,14 @@ export default function Sidebar() {
                         .then((list: OrgOption[]) => {
                             setOrgs(list);
                             const saved = localStorage.getItem('active_org_id');
-                            const found = saved ? list.find(o => o.id === saved) : null;
-                            const active = found || list[0] || null;
+                            // Only restore explicitly saved org — don't auto-select first org
+                            // so that "Global View" (no saved org) is preserved after exitToGlobal()
+                            const active = saved ? (list.find(o => o.id === saved) || null) : null;
                             setActiveOrgState(active);
                             if (active) {
-                                localStorage.setItem('active_org_id', active.id);
                                 localStorage.setItem('active_org_header', active.id);
+                            } else {
+                                localStorage.removeItem('active_org_header');
                             }
                         })
                         .catch(() => {});
