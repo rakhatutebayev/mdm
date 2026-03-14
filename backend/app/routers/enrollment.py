@@ -2,6 +2,7 @@
 Enrollment Router — generates and validates enrollment tokens for BYOD and managed devices.
 """
 import io
+import re
 import uuid
 import qrcode
 from datetime import datetime, timedelta
