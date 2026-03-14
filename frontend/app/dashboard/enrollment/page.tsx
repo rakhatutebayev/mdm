@@ -282,23 +282,32 @@ export default function EnrollmentPage() {
                                         </div>
                                         <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                                             <a
-                                                id="btn-download-bat"
-                                                href={winScript.script_url.replace('/download', '/download-bat')}
+                                                id="btn-download-exe"
+                                                href={winScript.script_url.replace('/download', '/download-exe')}
                                                 download
                                                 className="btn btn-primary btn-sm"
                                                 style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
                                             >
-                                                ⬇️ Download .bat Installer
+                                                🪟 Download .exe Installer
+                                            </a>
+                                            <a
+                                                id="btn-download-bat"
+                                                href={winScript.script_url.replace('/download', '/download-bat')}
+                                                download
+                                                className="btn btn-ghost btn-sm"
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                                            >
+                                                ⬇️ .bat Installer
                                             </a>
                                             <a id="btn-download-ps1" href={winScript.script_url} download
                                                 className="btn btn-ghost btn-sm">
-                                                📄 Download .ps1 Script
+                                                📄 .ps1 Script
                                             </a>
-                                            <CopyBtn text={winScript.one_liner} id="one-liner" />
                                         </div>
                                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.5rem', lineHeight: 1.5 }}>
-                                            💡 <strong>.bat installer</strong> = double-click as Admin, no PowerShell policy issues.<br />
-                                            💡 <strong>.ps1 script</strong> = run manually with{' '}
+                                            🪟 <strong>.exe installer</strong> = профессиональный установщик, создаёт деинсталлятор, появляется в "Программы и компоненты"<br />
+                                            💡 <strong>.bat</strong> = double-click as Admin, обходит политику PowerShell.<br />
+                                            📄 <strong>.ps1</strong> = ручная установка:{' '}
                                             <code style={{ background: 'var(--bg-hover)', padding: '1px 4px', borderRadius: 3 }}>
                                                 powershell -ExecutionPolicy Bypass -File .\nocko-agent.ps1 -Install
                                             </code>
