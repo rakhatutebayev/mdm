@@ -136,6 +136,17 @@ export const api = {
     async entraStatus(): Promise<{ enabled: boolean }> {
         return request<{ enabled: boolean }>('/auth/entra-status');
     },
+    async entraConfig(): Promise<any> {
+        return request<any>('/windows-enrollment/entra-config');
+    },
+
+    // Windows enrollment — generate one-liner + script URL for a token
+    async windowsScript(tokenId: string): Promise<{ one_liner: string; script_url: string }> {
+        const token = getToken();
+        const script_url = `${BASE}/enrollment/package/windows/${tokenId}/download`;
+        const one_liner = `powershell -ExecutionPolicy Bypass -Command "Invoke-WebRequest '${script_url}' -OutFile $env:TEMP\\nocko-agent.ps1; powershell -ExecutionPolicy Bypass -File $env:TEMP\\nocko-agent.ps1 -Install"`;
+        return { one_liner, script_url };
+    },
 
     // ── Generic HTTP helpers ──────────────────────────────────────────────
     async get<T = any>(path: string): Promise<T> {

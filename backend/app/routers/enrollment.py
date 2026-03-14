@@ -307,6 +307,92 @@ async def download_windows_package(
     )
 
 
+@router.get("/package/windows/{token_id}/download-bat")
+async def download_windows_bat(
+    token_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Download a .bat launcher that:
+    1. Downloads the PS1 agent script from this server
+    2. Runs it with -ExecutionPolicy Bypass (bypasses Windows script restrictions)
+    3. Passes -Install flag to register as a Scheduled Task
+    No prerequisites needed — just double-click as Administrator.
+    """
+    result = await db.execute(
+        select(EnrollmentToken).where(EnrollmentToken.id == token_id)
+    )
+    token = result.scalar_one_or_none()
+    if not token:
+        raise HTTPException(status_code=404, detail="Token not found")
+
+    org_result = await db.execute(
+        select(__import__("app.models.user", fromlist=["Organization"]).Organization)
+        .where(__import__("app.models.user", fromlist=["Organization"]).Organization.id == token.org_id)
+    )
+    org = org_result.scalar_one_or_none()
+    org_name = org.name if org else "Unknown"
+    safe_name = re.sub(r"[^a-z0-9-]", "-", org_name.lower()).strip("-")
+
+    ps1_url = f"{settings.MDM_SERVER_URL}/api/v1/enrollment/package/windows/{token_id}/download"
+    ps1_name = f"nocko-agent-{safe_name}.ps1"
+    bat_name = f"install-nocko-{safe_name}.bat"
+
+    bat_content = f"""@echo off
+:: ============================================================
+:: NOCKO MDM Agent Installer
+:: Organization : {org_name}
+:: MDM Server   : {settings.MDM_SERVER_URL}
+:: ============================================================
+:: Run this file as Administrator to install the NOCKO MDM agent.
+:: It will download and execute the agent script automatically.
+
+NET SESSION >nul 2>&1
+IF %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] Please run this file as Administrator.
+    echo Right-click ^> Run as administrator
+    pause
+    exit /b 1
+)
+
+echo.
+echo  NOCKO MDM Agent Installer
+echo  Organization: {org_name}
+echo  Server: {settings.MDM_SERVER_URL}
+echo.
+
+:: Download the PS1 script
+set "PS1_URL={ps1_url}"
+set "PS1_PATH=%TEMP%\\{ps1_name}"
+
+echo [1/3] Downloading agent script...
+powershell.exe -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri '%PS1_URL%' -OutFile '%PS1_PATH%' -UseBasicParsing"
+
+if not exist "%PS1_PATH%" (
+    echo [ERROR] Download failed. Check your internet connection.
+    pause
+    exit /b 1
+)
+
+echo [2/3] Installing NOCKO MDM agent...
+powershell.exe -ExecutionPolicy Bypass -File "%PS1_PATH%" -Install
+
+echo [3/3] Done!
+echo.
+echo The NOCKO MDM agent has been installed and will run automatically.
+echo Device will appear in the MDM dashboard within 1-2 minutes.
+echo.
+pause
+"""
+
+    from fastapi.responses import Response as FastAPIResponse
+    return FastAPIResponse(
+        content=bat_content.encode("utf-8"),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{bat_name}"'},
+    )
+
+
 def _minimal_agent_template() -> str:
     """Minimal agent template when the full .ps1 is not found."""
     return '''#Requires -Version 5.1
@@ -325,3 +411,4 @@ Write-Host "Server: $MDM_SERVER"
 Write-Host "Token: $ENROLLMENT_TOKEN"
 Write-Host "Run with -Install to register as a scheduled task."
 '''
+

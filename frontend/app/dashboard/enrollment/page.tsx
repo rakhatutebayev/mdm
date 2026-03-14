@@ -281,11 +281,27 @@ export default function EnrollmentPage() {
                                             </div>
                                         </div>
                                         <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                            <a id="btn-download-ps1" href={winScript.script_url} target="_blank" rel="noopener noreferrer"
-                                                className="btn btn-ghost btn-sm">
-                                                ⬇️ Download .ps1 Script
+                                            <a
+                                                id="btn-download-bat"
+                                                href={winScript.script_url.replace('/download', '/download-bat')}
+                                                download
+                                                className="btn btn-primary btn-sm"
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                                            >
+                                                ⬇️ Download .bat Installer
                                             </a>
-                                            <CopyBtn text={winScript.script_url} id="script-url" />
+                                            <a id="btn-download-ps1" href={winScript.script_url} download
+                                                className="btn btn-ghost btn-sm">
+                                                📄 Download .ps1 Script
+                                            </a>
+                                            <CopyBtn text={winScript.one_liner} id="one-liner" />
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.5rem', lineHeight: 1.5 }}>
+                                            💡 <strong>.bat installer</strong> = double-click as Admin, no PowerShell policy issues.<br />
+                                            💡 <strong>.ps1 script</strong> = run manually with{' '}
+                                            <code style={{ background: 'var(--bg-hover)', padding: '1px 4px', borderRadius: 3 }}>
+                                                powershell -ExecutionPolicy Bypass -File .\nocko-agent.ps1 -Install
+                                            </code>
                                         </div>
                                     </div>
                                 )}
