@@ -262,14 +262,14 @@ function Install-Agent {
         -Description "NOCKO MDM Device Management Agent" | Out-Null
 
     Write-Host ""
-    Write-Host "  ✅  NOCKO MDM Agent installed successfully" -ForegroundColor Green
-    Write-Host "  🖥️   Server : $MDM_SERVER"                   -ForegroundColor Cyan
-    Write-Host "  🔑  Token  : $ENROLLMENT_TOKEN"             -ForegroundColor Cyan
-    Write-Host "  ⏱️   Check-in every $CHECK_IN_MINUTES minutes (SYSTEM account)" -ForegroundColor Cyan
+    Write-Host "  [OK] NOCKO MDM Agent installed successfully" -ForegroundColor Green
+    Write-Host "  [>]  Server : $MDM_SERVER"                   -ForegroundColor Cyan
+    Write-Host "  [>]  Token  : $ENROLLMENT_TOKEN"             -ForegroundColor Cyan
+    Write-Host "  [>]  Check-in every $CHECK_IN_MINUTES minutes (SYSTEM account)" -ForegroundColor Cyan
     Write-Host ""
 
     Start-ScheduledTask -TaskName $TASK_NAME
-    Write-Host "  ▶  Agent started. Device will appear in NOCKO MDM within 60 seconds." -ForegroundColor Green
+    Write-Host "  [>>] Agent started. Device will appear in NOCKO MDM within 60 seconds." -ForegroundColor Green
 }
 
 function Uninstall-Agent {
