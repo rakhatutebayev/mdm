@@ -94,7 +94,7 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
         if k not in ("network", "monitors", "enrollment_token")
     }
     device_fields["status"] = "Enrolled"
-    device_fields["enrolled_at"] = datetime.now(timezone.utc)
+    device_fields["enrolled_at"] = datetime.utcnow()
     device = Device(**device_fields)
     db.add(device)
     await db.flush()  # get device.id before adding relations
