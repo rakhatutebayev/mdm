@@ -32,6 +32,12 @@ async function proxy(req: NextRequest, context: Context) {
       body,
     });
 
+    // Next.js 15+ cannot create NextResponse with status 204 (no body allowed).
+    // Return 200 with empty body instead — clients only check ok/!ok anyway.
+    if (res.status === 204) {
+      return new NextResponse(null, { status: 200 });
+    }
+
     const data = await res.text();
     return new NextResponse(data, {
       status: res.status,
