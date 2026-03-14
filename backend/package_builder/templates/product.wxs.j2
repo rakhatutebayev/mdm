@@ -16,11 +16,18 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
-    <!-- Enrollment CustomAction -->
+    <!--
+      CustomAction: run install.ps1 via cmd.exe so it works in both
+      32-bit and 64-bit MSI contexts on all Windows versions.
+      Return="ignore" keeps installer from rolling back if PS fails,
+      but the PS1 itself exits 1 on error and writes to Event Log.
+    -->
+    <Property Id="PS_EXEC" Value="[System64Folder]WindowsPowerShell\v1.0\powershell.exe" />
+
     <CustomAction
         Id="EnrollDevice"
-        Directory="INSTALLFOLDER"
-        ExeCommand="[System64Folder]WindowsPowerShell\v1.0\powershell.exe -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        Property="PS_EXEC"
+        ExeCommand="-NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]install.ps1&quot; 2&gt;&amp;1 | Out-File -FilePath &quot;[CommonAppDataFolder]NOCKO MDM\enroll.log&quot; -Encoding UTF8"
         Execute="deferred"
         Impersonate="no"
         Return="ignore" />
