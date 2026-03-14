@@ -133,11 +133,11 @@ $payload = @{
 
 try {
     $response = Invoke-RestMethod `
-        -Uri "$APIBase/devices" `
+        -Uri "$APIBase/mdm/windows/enroll" `
         -Method POST `
         -ContentType "application/json" `
         -Body $payload
-    $deviceId = $response.id
+    $deviceId = $response.device_id
     Write-OK "Device registered. ID: $deviceId"
 } catch {
     Write-Fail "Failed to register device: $_"
@@ -165,7 +165,7 @@ Write-Step "Registering check-in scheduled task..."
 $taskScript = @"
 `$config = Get-Content '$configDir\config.json' | ConvertFrom-Json
 try {
-    Invoke-RestMethod -Uri "`$(`$config.server_url)/api/v1/devices/`$(`$config.device_id)/checkin" -Method POST -ContentType 'application/json' -Body ('{"agent_version":"1.0.0"}') | Out-Null
+    Invoke-RestMethod -Uri "`$(`$config.server_url)/api/v1/mdm/windows/checkin" -Method POST -ContentType 'application/json' -Body (ConvertTo-Json @{device_id = `$config.device_id; agent_version = '1.0.0'; ip_address = (Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object {`$_.IPEnabled} | Select-Object -First 1).IPAddress[0]}) | Out-Null
 } catch {}
 "@
 $taskScript | Set-Content -Path "$configDir\checkin.ps1" -Encoding UTF8
