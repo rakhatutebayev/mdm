@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
-const NAV = [
+// Nav shown when INSIDE an org context
+const ORG_NAV = [
     {
         section: 'Management',
         items: [
@@ -18,8 +19,17 @@ const NAV = [
     {
         section: 'Administration',
         items: [
-            { href: '/dashboard/organizations', label: 'Organizations', icon: '🏢' },
             { href: '/dashboard/users', label: 'Users & Roles', icon: '👥' },
+        ],
+    },
+];
+
+// Nav shown in GLOBAL view (no org selected)
+const GLOBAL_NAV = [
+    {
+        section: 'Global',
+        items: [
+            { href: '/dashboard/organizations', label: 'Organizations', icon: '🏢' },
         ],
     },
 ];
@@ -83,8 +93,20 @@ export default function Sidebar() {
         localStorage.setItem('active_org_header', org.id);
         setActiveOrgState(org);
         setOpen(false);
-        window.location.reload();
+        window.location.href = '/dashboard';
     };
+
+    const exitToGlobal = () => {
+        localStorage.removeItem('active_org_id');
+        localStorage.removeItem('active_org_header');
+        setActiveOrgState(null);
+        setOpen(false);
+        window.location.href = '/dashboard/organizations';
+    };
+
+    // Determine if in global mode (super admin with no org selected)
+    const isGlobalMode = isSuperAdmin && !activeOrg;
+    const nav = isGlobalMode ? GLOBAL_NAV : ORG_NAV;
 
     return (
         <aside className="sidebar">
@@ -96,12 +118,12 @@ export default function Sidebar() {
                 </div>
             </div>
 
-            {/* Org Switcher — only shown when org data loaded */}
-            {activeOrg && (
+            {/* Org Switcher */}
+            {(activeOrg || isSuperAdmin) && (
                 <div ref={dropRef} style={{ padding: '0 12px 8px', position: 'relative' }}>
                     <button
                         id="btn-org-switcher"
-                        onClick={() => isSuperAdmin && orgs.length > 1 && setOpen(o => !o)}
+                        onClick={() => isSuperAdmin && setOpen(o => !o)}
                         style={{
                             width: '100%',
                             display: 'flex',
@@ -111,37 +133,32 @@ export default function Sidebar() {
                             background: 'var(--bg-hover)',
                             border: '1px solid var(--border)',
                             borderRadius: '8px',
-                            cursor: isSuperAdmin && orgs.length > 1 ? 'pointer' : 'default',
+                            cursor: isSuperAdmin ? 'pointer' : 'default',
                             textAlign: 'left',
                             color: 'var(--text)',
-                            transition: 'background 0.15s',
-                        }}
-                        onMouseEnter={e => {
-                            if (isSuperAdmin && orgs.length > 1)
-                                (e.currentTarget as HTMLElement).style.background = 'var(--border)';
-                        }}
-                        onMouseLeave={e => {
-                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
                         }}
                     >
-                        {/* Org avatar */}
+                        {/* Avatar */}
                         <div style={{
                             width: 28, height: 28, borderRadius: 6,
-                            background: 'var(--accent)', color: '#fff',
+                            background: isGlobalMode ? 'var(--text-muted)' : 'var(--accent)',
+                            color: '#fff',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontWeight: 700, fontSize: '0.8rem', flexShrink: 0,
                         }}>
-                            {activeOrg.name.charAt(0).toUpperCase()}
+                            {isGlobalMode ? '🌐' : activeOrg!.name.charAt(0).toUpperCase()}
                         </div>
                         <div style={{ flex: 1, overflow: 'hidden' }}>
                             <div style={{ fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {activeOrg.name}
+                                {isGlobalMode ? 'Global View' : activeOrg!.name}
                             </div>
-                            {isSuperAdmin && orgs.length > 1 && (
-                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Switch organization</div>
+                            {isSuperAdmin && (
+                                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                                    {isGlobalMode ? 'Select an organization' : 'Click to switch'}
+                                </div>
                             )}
                         </div>
-                        {isSuperAdmin && orgs.length > 1 && (
+                        {isSuperAdmin && (
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
                         )}
                     </button>
@@ -159,9 +176,34 @@ export default function Sidebar() {
                             zIndex: 200,
                             overflow: 'hidden',
                         }}>
-                            <div style={{ padding: '6px 10px', fontSize: '0.65rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Organizations
-                            </div>
+                            {/* Global View option */}
+                            <button
+                                id="btn-global-view"
+                                onClick={exitToGlobal}
+                                style={{
+                                    width: '100%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 10px',
+                                    background: isGlobalMode ? 'var(--bg-hover)' : 'transparent',
+                                    border: 'none',
+                                    borderBottom: '1px solid var(--border)',
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    color: 'var(--text)',
+                                    fontSize: '0.82rem',
+                                }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = isGlobalMode ? 'var(--bg-hover)' : 'transparent'; }}
+                            >
+                                <div style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--bg)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem' }}>🌐</div>
+                                <span style={{ flex: 1 }}>Global View</span>
+                                {isGlobalMode && <span style={{ color: 'var(--accent)', fontSize: '0.75rem' }}>✓</span>}
+                            </button>
+
+                            {/* Orgs list */}
+                            <div style={{ padding: '4px 10px', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Organizations</div>
                             {orgs.map(org => (
                                 <button
                                     key={org.id}
@@ -173,28 +215,27 @@ export default function Sidebar() {
                                         alignItems: 'center',
                                         gap: '8px',
                                         padding: '8px 10px',
-                                        background: org.id === activeOrg.id ? 'var(--bg-hover)' : 'transparent',
+                                        background: (!isGlobalMode && activeOrg?.id === org.id) ? 'var(--bg-hover)' : 'transparent',
                                         border: 'none',
                                         cursor: 'pointer',
                                         textAlign: 'left',
                                         color: 'var(--text)',
                                         fontSize: '0.82rem',
-                                        transition: 'background 0.1s',
                                     }}
                                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = org.id === activeOrg.id ? 'var(--bg-hover)' : 'transparent'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = (!isGlobalMode && activeOrg?.id === org.id) ? 'var(--bg-hover)' : 'transparent'; }}
                                 >
                                     <div style={{
                                         width: 24, height: 24, borderRadius: 5,
-                                        background: org.id === activeOrg.id ? 'var(--accent)' : 'var(--border)',
-                                        color: org.id === activeOrg.id ? '#fff' : 'var(--text-muted)',
+                                        background: (!isGlobalMode && activeOrg?.id === org.id) ? 'var(--accent)' : 'var(--border)',
+                                        color: (!isGlobalMode && activeOrg?.id === org.id) ? '#fff' : 'var(--text-muted)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         fontWeight: 700, fontSize: '0.7rem', flexShrink: 0,
                                     }}>
                                         {org.name.charAt(0).toUpperCase()}
                                     </div>
                                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{org.name}</span>
-                                    {org.id === activeOrg.id && (
+                                    {(!isGlobalMode && activeOrg?.id === org.id) && (
                                         <span style={{ color: 'var(--accent)', fontSize: '0.75rem' }}>✓</span>
                                     )}
                                 </button>
@@ -205,7 +246,7 @@ export default function Sidebar() {
             )}
 
             <nav className="sidebar-nav">
-                {NAV.map((group) => (
+                {nav.map((group) => (
                     <div key={group.section}>
                         <div className="nav-section-title">{group.section}</div>
                         {group.items.map((item) => {

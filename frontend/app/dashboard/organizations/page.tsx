@@ -25,6 +25,11 @@ export default function OrganizationsPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
+  // Hide "Create org" when inside an org context (only available from Global View)
+  const isGlobalView = typeof window !== 'undefined'
+    ? !localStorage.getItem('active_org_header')
+    : true;
+
   const load = async () => {
     try {
       const data = await api.get('/organizations');
@@ -72,8 +77,11 @@ export default function OrganizationsPage() {
             Manage organizations and their device access
           </p>
         </div>
-        <button className="btn btn-primary" id="btn-new-org" onClick={() => setShowCreate(true)}>
-          ➕ New Organization
+        <button className="btn btn-primary" id="btn-new-org"
+          onClick={() => setShowCreate(true)}
+          style={{ display: isGlobalView ? undefined : 'none' }}
+        >
+          + New Organization
         </button>
       </div>
 
