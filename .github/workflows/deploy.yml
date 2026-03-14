@@ -1,0 +1,55 @@
+name: 🚀 Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # allow manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    name: Deploy to mdm.it-uae.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📦 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key:      ${{ secrets.DEPLOY_KEY }}
+          port:     22
+          timeout:  25m
+          script: |
+            set -e
+            cd /opt/nocko-mdm
+
+            echo "=== Pulling latest code from main ==="
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "=== Building Docker images ==="
+            docker compose build --no-cache backend frontend
+
+            echo "=== Restarting services ==="
+            docker compose up -d --remove-orphans
+
+            echo "=== Waiting for backend health ==="
+            sleep 8
+            curl -sf http://localhost:8000/health | grep '"status":"ok"' && echo "Backend healthy ✓"
+
+            echo "=== Deploy complete ==="
+            docker compose ps
+
+      - name: ✅ Notify success
+        if: success()
+        run: |
+          echo "✅ Deployed to https://mdm.it-uae.com"
+
+      - name: ❌ Notify failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed! Check logs above."
