@@ -11,7 +11,7 @@
       <Directory Id="INSTALLFOLDER" Name="NOCKO MDM Agent" />
     </StandardDirectory>
 
-    <StandardDirectory Id="ProgramDataFolder">
+    <StandardDirectory Id="CommonAppDataFolder">
       <Directory Id="CONFIGDIR" Name="NOCKO-Agent" />
     </StandardDirectory>
 

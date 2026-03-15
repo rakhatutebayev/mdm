@@ -106,8 +106,13 @@ jobs:
             dotnet build $candidate.FullName -c Release
             $msi = Get-ChildItem -Recurse -Filter *.msi | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           } else {
-            wix build $candidate.FullName -bindpath $PWD -arch x64 -o "..\${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64.msi"
-            $msi = Get-Item "..\${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64.msi"
+            try {
+              wix build $candidate.FullName -bindpath $PWD -arch x64 -o "..\${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64.msi"
+              $msi = Get-Item "..\${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64.msi"
+            } catch {
+              Write-Warning "WiX MSI build failed. Continuing because single-file EXE is the primary delivery path."
+              exit 0
+            }
           }
 
           if (-not $msi) {
