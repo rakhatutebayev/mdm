@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   getEnrollmentToken,
@@ -17,9 +17,11 @@ const ARCH_OPTIONS = ['x64 (64-bit)', 'x86 (32-bit)', 'Both'] as const;
 const PACKAGE_FORMATS = ['Single EXE Installer'] as const;
 
 export default function DeploymentPackagePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const customerId = searchParams.get('customer') || 'default';
-  const [customerName, setCustomerName] = useState(customerId);
+  const customerParam = searchParams.get('customer');
+  const [customerId, setCustomerId] = useState(customerParam || '');
+  const [customerName, setCustomerName] = useState(customerParam || 'Select customer');
   const [catalog, setCatalog] = useState<PackageCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
@@ -27,11 +29,23 @@ export default function DeploymentPackagePage() {
   useEffect(() => {
     getCustomers()
       .then((list) => {
-        const match = list.find((c) => c.slug === customerId || c.id === customerId);
-        if (match) setCustomerName(match.name);
+        if (!customerParam && list.length > 0) {
+          const fallback = list[0];
+          const nextCustomerId = fallback.slug || fallback.id;
+          setCustomerId(nextCustomerId);
+          setCustomerName(fallback.name);
+          router.replace(`/enrollment/windows/package?customer=${nextCustomerId}`);
+          return;
+        }
+        const activeCustomerId = customerParam || customerId;
+        const match = list.find((c) => c.slug === activeCustomerId || c.id === activeCustomerId);
+        if (match) {
+          setCustomerId(match.slug || match.id);
+          setCustomerName(match.name);
+        }
       })
       .catch(() => {/* backend not available yet */});
-  }, [customerId]);
+  }, [customerParam, customerId, router]);
 
   const [form, setForm] = useState({
     serverUrl: '',
@@ -48,6 +62,7 @@ export default function DeploymentPackagePage() {
 
   // Fetch token from API for the active customer
   const fetchToken = useCallback(async () => {
+    if (!customerId) return;
     try {
       const data = await getEnrollmentToken(customerId);
       setForm((f) => ({ ...f, enrollmentToken: data.token }));
@@ -59,6 +74,7 @@ export default function DeploymentPackagePage() {
   useEffect(() => { fetchToken(); }, [fetchToken]);
 
   const fetchCatalog = useCallback(async () => {
+    if (!customerId) return;
     try {
       const data = await getPackageCatalog(customerId);
       setCatalog(data);
@@ -108,6 +124,9 @@ export default function DeploymentPackagePage() {
     setGenerating(true);
     setGenerateError(null);
     try {
+      if (!customerId) {
+        throw new Error('Select a valid customer before generating a package.');
+      }
       if (!selectedArtifact) {
         throw new Error(
           `No prebuilt ${selectedFormat.toUpperCase()} release is available for ${selectedArch}. ` +
@@ -145,7 +164,12 @@ export default function DeploymentPackagePage() {
       URL.revokeObjectURL(url);
       setGenerated(true);
     } catch (e: unknown) {
-      setGenerateError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      setGenerateError(
+        message === 'Failed to fetch'
+          ? 'Could not reach the package generation endpoint. Check that a valid customer is selected and try again.'
+          : message,
+      );
     } finally {
       setGenerating(false);
     }
@@ -159,6 +183,7 @@ export default function DeploymentPackagePage() {
   };
 
   const regenerateToken = async () => {
+    if (!customerId) return;
     try {
       const data = await apiRegenerateToken(customerId);
       set('enrollmentToken', data.token);
@@ -317,7 +342,7 @@ export default function DeploymentPackagePage() {
             <button
               className={styles.generateBtn}
               onClick={handleGenerate}
-              disabled={generating || !form.enrollmentToken || !selectedFormatAvailable}
+              disabled={generating || !customerId || !form.enrollmentToken || !selectedFormatAvailable}
             >
               {generating ? (
                 <>⏳ Generating…</>
