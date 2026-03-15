@@ -16,6 +16,15 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
+    <!-- Find exact path to PowerShell.exe -->
+    <Property Id="POWERSHELLEXE">
+      <RegistrySearch Id="POWERSHELLEXE"
+                      Type="raw"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell"
+                      Name="Path" />
+    </Property>
+
     <!--
       INSTALL: Run the PowerShell script directly without cmd.exe redirection.
       Redirection to [CommonAppDataFolder]NOCKO MDM\enroll.log would fail because
@@ -23,16 +32,16 @@
     -->
     <CustomAction
         Id="EnrollDevice"
-        Directory="INSTALLFOLDER"
-        ExeCommand="powershell.exe -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        Property="POWERSHELLEXE"
+        ExeCommand="-NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
         Execute="deferred"
         Impersonate="no"
         Return="ignore" />
 
     <CustomAction
         Id="NotifyUninstall"
-        Directory="INSTALLFOLDER"
-        ExeCommand="powershell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
+        Property="POWERSHELLEXE"
+        ExeCommand="-NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
         Execute="deferred"
         Impersonate="no"
         Return="ignore" />
