@@ -72,17 +72,19 @@ class EnrollPayload(BaseModel):
 
 class CheckinPayload(BaseModel):
     """Periodic heartbeat payload with optional telemetry."""
+    model_config = {"coerce_numbers_to_str": False, "extra": "ignore"}
+
     device_id: str
     agent_version: str = ""
     os_version: str = ""
     ip_address: str = ""
-    # Telemetry
+    # Telemetry — all optional, accept float for robustness (PowerShell quirks)
     cpu_pct: Optional[float] = None         # 0–100
     ram_used_gb: Optional[float] = None
     ram_total_gb: Optional[float] = None
     disk_used_gb: Optional[float] = None
     disk_total_gb: Optional[float] = None
-    uptime_seconds: Optional[int] = None
+    uptime_seconds: Optional[float] = None  # float to accept PS decimal output
     extra: Optional[dict[str, Any]] = None
 
 
@@ -286,3 +288,30 @@ async def get_commands(device_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Device not found")
     # No commands implemented yet
     return {"device_id": device_id, "commands": []}
+
+
+# ── Decommission ──────────────────────────────────────────────────────────────
+
+class DecommissionPayload(BaseModel):
+    device_id: str
+    reason: str = "Agent uninstalled"
+
+
+@router.post("/decommission")
+async def decommission(body: DecommissionPayload, db: AsyncSession = Depends(get_db)):
+    """Called by uninstall.ps1 when the MSI agent is removed from the device."""
+    result = await db.execute(select(Device).where(Device.id == body.device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        # Don't error — device might have been deleted from MDM already
+        return {"status": "ok", "message": "Device not found, nothing to decommission"}
+
+    device.status = "Deprovisioned"
+    device.last_checkin = datetime.utcnow()
+    await db.commit()
+
+    return {
+        "status": "ok",
+        "device_id": body.device_id,
+        "message": f"Device decommissioned: {body.reason}",
+    }
