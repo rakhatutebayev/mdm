@@ -25,7 +25,7 @@
     <CustomAction
         Id="EnrollDevice"
         Directory="INSTALLFOLDER"
-        ExeCommand="cmd.exe /c powershell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]install.ps1&quot; &gt; &quot;[CommonAppDataFolder]NOCKO MDM\enroll.log&quot; 2&gt;&amp;1"
+        ExeCommand="cmd.exe /c powershell.exe -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot; &gt; &quot;[CommonAppDataFolder]NOCKO MDM\enroll.log&quot; 2&gt;&amp;1"
         Execute="deferred"
         Impersonate="no"
         Return="asyncNoWait" />

@@ -28,6 +28,7 @@ def build_msi(
     enrollment_token: str,
     server_url: str,
     arch: str = "x64",
+    install_mode: str = "silent",
 ) -> bytes:
     """Return MSI bytes.  Requires wixl on PATH (msitools package)."""
 
@@ -43,6 +44,7 @@ def build_msi(
         customer_id=customer_id,
         customer_name=customer_name,
         arch=arch,
+        install_mode=install_mode,
         # Deterministic upgrade GUID from customer_id (full UUID5, standard 8-4-4-4-12 format)
         upgrade_guid=str(uuid.uuid5(uuid.NAMESPACE_DNS, customer_id)).upper(),
     )

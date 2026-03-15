@@ -26,6 +26,7 @@ class PackageRequest(BaseModel):
     format: str               # "zip" | "exe" | "msi"
     arch: str = "x64"         # "x64" | "x86"
     server_url: Optional[str] = None   # override if needed
+    install_mode: str = "silent"       # "silent" | "interactive"
 
 
 @router.post("/generate")
@@ -63,6 +64,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         enrollment_token=token_row.token,
         server_url=server_url,
         arch=body.arch,
+        install_mode=body.install_mode.lower(),
     )
 
     fmt = body.format.lower()

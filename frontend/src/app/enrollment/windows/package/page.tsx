@@ -80,10 +80,11 @@ export default function DeploymentPackagePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer_id:  customerId,
-          format:       formatToAPI(form.format),
-          arch:         archToAPI(form.arch),
-          server_url:   form.serverUrl || undefined,
+          customer_id:   customerId,
+          format:        formatToAPI(form.format),
+          arch:          archToAPI(form.arch),
+          server_url:    form.serverUrl || undefined,
+          install_mode:  form.installMode.toLowerCase(), // "silent" | "interactive"
         }),
       });
       if (!res.ok) {

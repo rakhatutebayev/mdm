@@ -37,18 +37,27 @@ Unicode true
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
-; ── Auto-remove previous installation before installing ───────────────────────
+; ── Silent / Interactive mode ────────────────────────────────────────────────
+{% if install_mode == 'interactive' %}
 Function .onInit
-    ; Check if already installed
+    ; Interactive: show MUI wizard — auto-remove previous version first
     ReadRegStr $R0 HKLM "${REG_KEY}" "UninstallString"
     StrCmp $R0 "" done_uninstall
-
-    ; Silently uninstall previous version first
     ExecWait '"$R0" /S'
     Sleep 1000
-
     done_uninstall:
 FunctionEnd
+{% else %}
+Function .onInit
+    SetSilent silent
+    ; Silent: also auto-remove previous version
+    ReadRegStr $R0 HKLM "${REG_KEY}" "UninstallString"
+    StrCmp $R0 "" done_uninstall
+    ExecWait '"$R0" /S'
+    Sleep 1000
+    done_uninstall:
+FunctionEnd
+{% endif %}
 
 ; ── Installer ─────────────────────────────────────────────────────────────────
 Section "MainSection" SEC01
@@ -67,7 +76,7 @@ Section "MainSection" SEC01
     ; Run enrollment PowerShell script
     ; Use cmd /c to handle paths with spaces correctly
     DetailPrint "Enrolling device with NOCKO MDM..."
-    nsExec::ExecToLog 'cmd.exe /C "PowerShell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$INSTDIR\install.ps1"" >> ""$COMMONAPPDATA\NOCKO MDM\enroll.log"" 2>&1"'
+    nsExec::ExecToLog 'cmd.exe /C "PowerShell.exe -NonInteractive -ExecutionPolicy Bypass {% if install_mode == "interactive" %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File ""$INSTDIR\install.ps1"" >> ""$COMMONAPPDATA\NOCKO MDM\enroll.log"" 2>&1"'
     Pop $0
     ${If} $0 != 0
         MessageBox MB_ICONEXCLAMATION "Enrollment encountered an issue (exit code: $0).$\nCheck $COMMONAPPDATA\NOCKO MDM\enroll.log for details."

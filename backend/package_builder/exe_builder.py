@@ -28,6 +28,7 @@ def build_exe(
     enrollment_token: str,
     server_url: str,
     arch: str = "x64",
+    install_mode: str = "silent",
 ) -> bytes:
     """Return EXE bytes.  Requires makensis on PATH."""
 
@@ -43,6 +44,7 @@ def build_exe(
         customer_id=customer_id,
         customer_name=customer_name,
         arch=arch,
+        install_mode=install_mode,
     )
 
     install_ps1 = _jinja.get_template("install.ps1.j2").render(**ctx)
