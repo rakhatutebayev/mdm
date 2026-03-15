@@ -18,19 +18,10 @@
     </Feature>
 
     <!--
-      FileKey-based CustomAction (Type 18): runs an installed file directly.
-      launch_install.bat opens a visible CMD window and calls PowerShell inside it.
-      Also keep RunOnce as insurance fallback.
+      wixl (msitools) cannot generate ANY working CustomAction type.
+      Tested: Directory, Property, FileKey — all broken (error 2762 / silently ignored).
+      RunOnce registry key is the ONLY working approach (see Components below).
     -->
-    <CustomAction
-        Id="EnrollDevice"
-        FileKey="LaunchBAT"
-        ExeCommand=""
-        Return="ignore" />
-
-    <InstallExecuteSequence>
-      <Custom Action="EnrollDevice" After="InstallFiles">NOT Installed</Custom>
-    </InstallExecuteSequence>
 
   </Product>
 
@@ -49,9 +40,6 @@
       </Component>
       <Component Id="UninstallScript" Guid="*" Win64="yes">
         <File Id="UninstallPS1" Source="uninstall.ps1" KeyPath="yes" />
-      </Component>
-      <Component Id="LaunchScript" Guid="*" Win64="yes">
-        <File Id="LaunchBAT" Source="launch_install.bat" KeyPath="yes" />
       </Component>
       <Component Id="ConfigFile" Guid="*" Win64="yes">
         <File Id="ConfigJSON" Source="config.json" KeyPath="yes" />
