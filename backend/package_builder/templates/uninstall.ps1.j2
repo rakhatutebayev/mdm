@@ -8,19 +8,19 @@
 #>
 
 $ErrorActionPreference = "SilentlyContinue"
-$LogFile = "$env:ProgramData\NOCKO MDM\uninstall.log"
+$LogFile = "{{ log_dir }}\uninstall.log"
 
 function Write-Log($msg) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     "$ts  $msg" | Tee-Object -FilePath $LogFile -Append | Write-Host
 }
 
-Write-Log "=== NOCKO MDM Uninstall Starting ==="
+Write-Log "=== {{ agent_display_name }} Uninstall Starting ==="
 
-# Read config
-$configFile = "$env:ProgramData\NOCKO MDM\config.json"
+# 1. Read config to get device id
+$configFile = "{{ log_dir }}\config.json"
 if (-not (Test-Path $configFile)) {
-    Write-Log "Config not found — skipping server notification"
+    Write-Log "Config not found at $configFile. Cannot notify server."
     exit 0
 }
 
@@ -46,12 +46,12 @@ try {
     Write-Log "WARN: Could not notify server (non-fatal): $_"
 }
 
-# Remove scheduled task
+# 3. Clean up scheduled task
 try {
-    Unregister-ScheduledTask -TaskName "NOCKO MDM Check-In" -Confirm:$false -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName "{{ agent_display_name }} Check-In" -Confirm:$false -ErrorAction SilentlyContinue
     Write-Log "Scheduled task removed"
-} catch {
-    Write-Log "WARN: Could not remove scheduled task"
-}
+} catch {}
 
-Write-Log "=== Uninstall notification complete ==="
+# Provide a small delay
+Start-Sleep -Seconds 1
+Write-Log "=== Uninstall complete ==="

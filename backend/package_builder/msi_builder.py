@@ -29,6 +29,11 @@ def build_msi(
     server_url: str,
     arch: str = "x64",
     install_mode: str = "silent",
+    agent_display_name: str = "NOCKO MDM Agent",
+    install_dir: str = r"C:\Program Files\NOCKO MDM\Agent",
+    log_dir: str = r"C:\ProgramData\NOCKO MDM\logs",
+    register_scheduled_task: bool = True,
+    start_immediately: bool = True,
 ) -> bytes:
     """Return MSI bytes.  Requires wixl on PATH (msitools package)."""
 
@@ -45,6 +50,11 @@ def build_msi(
         customer_name=customer_name,
         arch=arch,
         install_mode=install_mode,
+        agent_display_name=agent_display_name,
+        install_dir=install_dir,
+        log_dir=log_dir,
+        register_scheduled_task=register_scheduled_task,
+        start_immediately=start_immediately,
         # Deterministic upgrade GUID from customer_id (full UUID5, standard 8-4-4-4-12 format)
         upgrade_guid=str(uuid.uuid5(uuid.NAMESPACE_DNS, customer_id)).upper(),
     )

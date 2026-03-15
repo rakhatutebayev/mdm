@@ -17,7 +17,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$LogFile = "$env:ProgramData\NOCKO MDM\enroll.log"
+$LogFile = "{{ log_dir }}\enroll.log"
 
 function Write-Log($msg) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
@@ -64,9 +64,9 @@ function Get-NetworkInfo {
     return @{ ip_address = ""; mac_address = ""; hostname = $env:COMPUTERNAME; wifi_ssid = ""; connection_type = ""; dns_server = ""; default_gateway = "" }
 }
 
-# ── Setup log dir ─────────────────────────────────────────────────────────────
-$configDir = "$env:ProgramData\NOCKO MDM"
-if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Path $configDir | Out-Null }
+# ── Ensure persistent config and log folder ───────────────────────────────────
+$configDir = "{{ log_dir }}"
+if (-not (Test-Path $configDir)) { New-Item -ItemType Directory -Force -Path $configDir | Out-Null }
 
 Write-Log "=== NOCKO MDM Enrollment Starting ==="
 Write-Log "ServerUrl : $ServerUrl"
@@ -207,17 +207,30 @@ try {
 
 $checkinScript | Set-Content -Path "$configDir\checkin.ps1" -Encoding UTF8
 
-$action    = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$configDir\checkin.ps1`""
-$trigger   = New-ScheduledTaskTrigger -RepetitionInterval (New-TimeSpan -Minutes 15) -Once -At (Get-Date)
-$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-$settings  = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -RestartCount 3
-
 try {
-    Unregister-ScheduledTask -TaskName "NOCKO MDM Check-In" -Confirm:$false -ErrorAction SilentlyContinue
-    Register-ScheduledTask -TaskName "NOCKO MDM Check-In" -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
+{% if register_scheduled_task %}
+    $action    = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$configDir\checkin.ps1"""
+    $trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 15)
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $settings  = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -MissingOpportunity Automatic -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+
+    Unregister-ScheduledTask -TaskName "{{ agent_display_name }} Check-In" -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask -TaskName "{{ agent_display_name }} Check-In" -Action $action -Trigger $trigger -Principal $principal -Settings $settings | Out-Null
     Write-Log "Scheduled task registered (every 15 min)"
+{% else %}
+    Write-Log "Scheduled task registration skipped as per package configuration."
+{% endif %}
 } catch {
     Write-Log "WARN: Could not register scheduled task: $_"
 }
 
-Write-Log "=== Enrollment complete! Device '$deviceName' is now managed. ==="
+Write-Log "=== Enrollment complete! Device '$($env:COMPUTERNAME)' is now managed. ==="
+
+{% if start_immediately %}
+Write-Log "Start Immediately flag is set. Triggering initial check-in now..."
+try {
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$configDir\checkin.ps1""" -WindowStyle Hidden
+} catch {
+    Write-Log "WARN: Failed to start initial check-in: $_"
+}
+{% endif %}

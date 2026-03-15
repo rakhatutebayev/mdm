@@ -13,7 +13,7 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <Feature Id="ProductFeature" Title="NOCKO MDM Agent" Level="1">
+    <Feature Id="ProductFeature" Title="{{ agent_display_name }}" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
@@ -48,10 +48,10 @@
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="NOCKO MDM" />
-      </Directory>
+      <Directory Id="INSTALLFOLDER" Name="Temp" />
     </Directory>
+    
+    <SetDirectory Id="INSTALLFOLDER" Value="{{ install_dir }}" />
   </Fragment>
 
   <Fragment>

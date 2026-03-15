@@ -28,6 +28,11 @@ class PackageRequest(BaseModel):
     arch: str = "x64"         # "x64" | "x86"
     server_url: Optional[str] = None   # override if needed
     install_mode: str = "silent"       # "silent" | "interactive"
+    agent_display_name: str = "NOCKO MDM Agent"
+    install_dir: str = r"C:\Program Files\NOCKO MDM\Agent"
+    log_dir: str = r"C:\ProgramData\NOCKO MDM\logs"
+    register_scheduled_task: bool = True
+    start_immediately: bool = True
 
 
 @router.post("/generate")
@@ -66,6 +71,11 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         server_url=server_url,
         arch=body.arch,
         install_mode=body.install_mode.lower(),
+        agent_display_name=body.agent_display_name,
+        install_dir=body.install_dir,
+        log_dir=body.log_dir,
+        register_scheduled_task=body.register_scheduled_task,
+        start_immediately=body.start_immediately,
     )
 
     fmt = body.format.lower()

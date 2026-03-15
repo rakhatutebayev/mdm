@@ -22,6 +22,11 @@ def build_zip(
     server_url: str,
     arch: str = "x64",
     install_mode: str = "silent",  # accepted but unused for ZIP (no installer UI)
+    agent_display_name: str = "NOCKO MDM Agent",
+    install_dir: str = r"C:\Program Files\NOCKO MDM\Agent",
+    log_dir: str = r"C:\ProgramData\NOCKO MDM\logs",
+    register_scheduled_task: bool = True,
+    start_immediately: bool = True,
 ) -> bytes:
     """Return ZIP file bytes containing install.ps1, config.json, README.txt."""
 
@@ -31,6 +36,12 @@ def build_zip(
         customer_id=customer_id,
         customer_name=customer_name,
         arch=arch,
+        install_mode=install_mode,
+        agent_display_name=agent_display_name,
+        install_dir=install_dir,
+        log_dir=log_dir,
+        register_scheduled_task=register_scheduled_task,
+        start_immediately=start_immediately,
     )
 
     install_ps1 = _jinja.get_template("install.ps1.j2").render(**ctx)
