@@ -206,7 +206,6 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     )
 
     fmt = body.format.lower()
-    ts = datetime.utcnow().strftime("%H%M")
 
     # Resolve artifact version up-front so bootstrap_config carries it
     _catalog_release, _catalog_artifact = find_artifact(fmt if fmt in {"exe", "msi"} else "exe", body.arch)
@@ -238,7 +237,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         if fmt == "zip":
             data      = build_zip(**kwargs)
             mime      = "application/zip"
-            filename  = f"nocko-mdm-bootstrap-{customer.slug}-{ts}.zip"
+            filename  = f"nocko-mdm-bootstrap-{customer.slug}-{_agent_version or 'latest'}.zip"
 
         elif fmt in {"exe", "msi"}:
             release, artifact = find_artifact(fmt, body.arch)
@@ -260,7 +259,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
 
             if fmt == "exe":
                 data = embed_bootstrap_config(data, bootstrap_config)
-                filename = f"nocko-mdm-agent-{customer.slug}-{ts}.exe"
+                filename = f"nocko-mdm-agent-{customer.slug}-{_agent_version or release.get('version', 'latest')}.exe"
             else:
                 filename = str(artifact.get("filename") or f"nocko-mdm-agent.{fmt}")
 
