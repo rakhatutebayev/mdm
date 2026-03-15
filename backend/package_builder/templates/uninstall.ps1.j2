@@ -1,0 +1,57 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    NOCKO MDM Agent Uninstall Notification Script
+.DESCRIPTION
+    Notifies the MDM server that this device is being decommissioned.
+    Called automatically by the MSI uninstaller before files are removed.
+#>
+
+$ErrorActionPreference = "SilentlyContinue"
+$LogFile = "$env:ProgramData\NOCKO MDM\uninstall.log"
+
+function Write-Log($msg) {
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    "$ts  $msg" | Tee-Object -FilePath $LogFile -Append | Write-Host
+}
+
+Write-Log "=== NOCKO MDM Uninstall Starting ==="
+
+# Read config
+$configFile = "$env:ProgramData\NOCKO MDM\config.json"
+if (-not (Test-Path $configFile)) {
+    Write-Log "Config not found — skipping server notification"
+    exit 0
+}
+
+$config = Get-Content $configFile | ConvertFrom-Json
+if (-not $config.device_id -or -not $config.server_url) {
+    Write-Log "Invalid config — skipping server notification"
+    exit 0
+}
+
+# Notify MDM server
+Write-Log "Notifying MDM server: device_id=$($config.device_id)"
+try {
+    $response = Invoke-RestMethod `
+        -Uri "$($config.server_url)/api/v1/mdm/windows/decommission" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body (ConvertTo-Json @{
+            device_id = $config.device_id
+            reason    = "Agent uninstalled via MSI"
+        })
+    Write-Log "Decommission OK: $($response.message)"
+} catch {
+    Write-Log "WARN: Could not notify server (non-fatal): $_"
+}
+
+# Remove scheduled task
+try {
+    Unregister-ScheduledTask -TaskName "NOCKO MDM Check-In" -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Log "Scheduled task removed"
+} catch {
+    Write-Log "WARN: Could not remove scheduled task"
+}
+
+Write-Log "=== Uninstall notification complete ==="
