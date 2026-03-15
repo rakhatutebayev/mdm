@@ -2,13 +2,13 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product
       Id="*"
-      Name="NOCKO MDM Agent ({{ customer_name }})"
+      Name="{{ agent_display_name }} ({{ customer_name }})"
       Language="1033"
       Version="1.0.0"
       Manufacturer="NOCKO IT"
       UpgradeCode="{{ upgrade_guid }}">
 
-    <!-- wixl does not support Platform="x64" on Package via XML, only via -a switch -->
+    <!-- wixl does not support Platform="x64" on Package; use -a x64 CLI flag -->
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -17,23 +17,28 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
-
-
     <!--
-      INSTALL: Run native 64-bit PowerShell directly using System64Folder.
-      It runs in Session 0 as SYSTEM, so no visible black window will appear.
+      Property-based CustomAction (Type 50).
+      wixl does NOT support Directory= on CustomAction, but supports Property=.
+      We set POWERSHELLEXE to the full path of powershell.exe.
+      Execute="commit" runs AFTER the install transaction commits (files on disk).
+      Impersonate="yes" runs in the user's interactive desktop session (visible).
     -->
+    <Property Id="POWERSHELLEXE" Value="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" />
+
     <CustomAction
         Id="EnrollDevice"
-        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
-        Execute="deferred"
+        Property="POWERSHELLEXE"
+        ExeCommand="-NoProfile -ExecutionPolicy Bypass -WindowStyle Normal -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        Execute="commit"
         Impersonate="yes"
         Return="ignore" />
 
     <CustomAction
         Id="NotifyUninstall"
-        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
-        Execute="deferred"
+        Property="POWERSHELLEXE"
+        ExeCommand="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
+        Execute="commit"
         Impersonate="yes"
         Return="ignore" />
 
@@ -54,7 +59,6 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <!-- ALL components must be marked Win64="yes" for a 64-bit MSI -->
       <Component Id="InstallScript" Guid="*" Win64="yes">
         <File Id="InstallPS1" Source="install.ps1" KeyPath="yes" />
       </Component>
@@ -68,7 +72,7 @@
         <File Id="ReadmeTXT" Source="README.txt" KeyPath="yes" />
       </Component>
 
-      <!-- App metadata in strictly 64-bit registry (not WOW6432Node) -->
+      <!-- App metadata in 64-bit registry -->
       <Component Id="RegistryExtras" Guid="*" Win64="yes">
         <RegistryValue Root="HKLM"
             Key="SOFTWARE\NOCKO IT\NOCKO MDM Agent"
@@ -80,3 +84,4 @@
     </ComponentGroup>
   </Fragment>
 </Wix>
+
