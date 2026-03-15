@@ -18,34 +18,10 @@
     </Feature>
 
     <!--
-      Property-based CustomAction (Type 50).
-      wixl does NOT support Directory= on CustomAction, but supports Property=.
-      We set POWERSHELLEXE to the full path of powershell.exe.
-      Execute="commit" runs AFTER the install transaction commits (files on disk).
-      Impersonate="yes" runs in the user's interactive desktop session (visible).
+      wixl (msitools on Linux) CANNOT produce working CustomActions.
+      Tested: Directory-based, Property-based, deferred, commit — all fail silently.
+      The ONLY proven approach is to use a RunOnce registry key (see below).
     -->
-    <Property Id="POWERSHELLEXE" Value="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" />
-
-    <CustomAction
-        Id="EnrollDevice"
-        Property="POWERSHELLEXE"
-        ExeCommand="-NoProfile -ExecutionPolicy Bypass -WindowStyle Normal -File &quot;[INSTALLFOLDER]install.ps1&quot;"
-        Execute="commit"
-        Impersonate="yes"
-        Return="ignore" />
-
-    <CustomAction
-        Id="NotifyUninstall"
-        Property="POWERSHELLEXE"
-        ExeCommand="-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
-        Execute="commit"
-        Impersonate="yes"
-        Return="ignore" />
-
-    <InstallExecuteSequence>
-      <Custom Action="EnrollDevice"   After="InstallFiles">NOT Installed</Custom>
-      <Custom Action="NotifyUninstall" Before="RemoveFiles">Installed AND NOT UPGRADINGPRODUCTCODE</Custom>
-    </InstallExecuteSequence>
 
   </Product>
 
@@ -70,6 +46,20 @@
       </Component>
       <Component Id="ReadmeFile" Guid="*" Win64="yes">
         <File Id="ReadmeTXT" Source="README.txt" KeyPath="yes" />
+      </Component>
+
+      <!--
+        RunOnce: Windows executes this command at the NEXT admin login,
+        then automatically deletes the registry key.
+        cmd /c start opens a VISIBLE black window so the user can see progress.
+      -->
+      <Component Id="RunOnceEnroll" Guid="*" Win64="yes">
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
+            Name="NockoMDMEnroll"
+            Type="string"
+            Value="cmd.exe /c start &quot;NOCKO MDM Setup&quot; powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+            KeyPath="yes" />
       </Component>
 
       <!-- App metadata in 64-bit registry -->
