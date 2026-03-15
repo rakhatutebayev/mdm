@@ -65,7 +65,7 @@
         <File Id="InstallPS1" Source="install.ps1" KeyPath="yes" />
       </Component>
       <Component Id="UninstallScript" Guid="*">
-        <File Id="UninstallPS1" Source="uninstall.ps1" />
+        <File Id="UninstallPS1" Source="uninstall.ps1" KeyPath="yes" />
       </Component>
       <Component Id="ConfigFile" Guid="*">
         <File Id="ConfigJSON" Source="config.json" />
@@ -73,23 +73,15 @@
       <Component Id="ReadmeFile" Guid="*">
         <File Id="ReadmeTXT" Source="README.txt" />
       </Component>
-      <!-- Add/Remove Programs — extra info shown in Windows Settings -->
-      <Component Id="RegistryEntries" Guid="*">
+      <!-- WiX auto-creates Add/Remove Programs entry from Product/@Name + Manufacturer -->
+      <!-- Only add supplementary keys like URLInfoAbout and Comments -->
+      <Component Id="RegistryExtras" Guid="*">
         <RegistryValue Root="HKLM"
-            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
-            Name="DisplayName"    Type="string" Value="NOCKO MDM Agent ({{ customer_name }})" />
+            Key="SOFTWARE\NOCKO IT\NOCKO MDM Agent"
+            Name="MDMServer"     Type="string" Value="{{ server_url }}" KeyPath="yes" />
         <RegistryValue Root="HKLM"
-            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
-            Name="Publisher"      Type="string" Value="NOCKO IT" />
-        <RegistryValue Root="HKLM"
-            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
-            Name="DisplayVersion" Type="string" Value="1.0.0" />
-        <RegistryValue Root="HKLM"
-            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
-            Name="URLInfoAbout"   Type="string" Value="{{ server_url }}" />
-        <RegistryValue Root="HKLM"
-            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
-            Name="Comments"       Type="string" Value="MDM enrollment for {{ customer_name }}" />
+            Key="SOFTWARE\NOCKO IT\NOCKO MDM Agent"
+            Name="CustomerName"  Type="string" Value="{{ customer_name }}" />
       </Component>
     </ComponentGroup>
   </Fragment>

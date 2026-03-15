@@ -21,6 +21,7 @@ def build_zip(
     enrollment_token: str,
     server_url: str,
     arch: str = "x64",
+    install_mode: str = "silent",  # accepted but unused for ZIP (no installer UI)
 ) -> bytes:
     """Return ZIP file bytes containing install.ps1, config.json, README.txt."""
 
