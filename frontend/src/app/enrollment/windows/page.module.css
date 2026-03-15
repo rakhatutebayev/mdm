@@ -33,3 +33,56 @@
 .stepTitle { font-size: 14px; font-weight: 600; color: #23252e; margin-bottom: 4px; }
 .stepDesc { font-size: 13px; color: #555870; line-height: 1.5; }
 .stepDesc code { font-size: 12px; background: #f0f1f7; padding: 1px 5px; border-radius: 3px; color: #23252e; }
+
+/* Method selection cards */
+.methodGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 680px;
+  margin-bottom: 28px;
+}
+
+.methodCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  background: #fff;
+  border: 2px solid #e2e4ec;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.methodCard:hover {
+  border-color: #4a7cff;
+  box-shadow: 0 2px 12px rgba(74, 124, 255, 0.1);
+}
+
+.methodIcon { font-size: 24px; line-height: 1; }
+
+.methodTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: #23252e;
+}
+
+.methodDesc {
+  font-size: 12px;
+  color: #6b7080;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.methodBadge {
+  display: inline-block;
+  padding: 3px 8px;
+  background: #eef1ff;
+  color: #4a7cff;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  align-self: flex-start;
+  margin-top: 4px;
+}
