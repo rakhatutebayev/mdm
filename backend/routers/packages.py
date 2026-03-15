@@ -1,10 +1,10 @@
-"""Packages router — serves prebuilt agent artifacts and ZIP bootstrap packages."""
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
-from urllib.error import URLError
 from urllib.request import urlopen
+import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -20,6 +20,49 @@ from package_builder.release_catalog import find_artifact, load_release_catalog
 from routers.settings import get_agent_package_settings, get_server_url
 
 router = APIRouter(prefix="/api/v1/packages", tags=["packages"])
+
+# ── Artifact cache ───────────────────────────────────────────────────────────
+_CACHE_DIR = Path("/tmp/nocko_agent_cache")
+_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _download_or_cache(url: str, sha256_expected: str | None, fmt: str) -> bytes:
+    """Download artifact from URL, caching by SHA256 on disk.
+
+    First call downloads 13 MB; subsequent calls read from /tmp cache.
+    Cache entry is keyed by url-derived hash to avoid collisions.
+    """
+    url_key = hashlib.md5(url.encode()).hexdigest()[:16]
+    cache_file = _CACHE_DIR / f"{url_key}.bin"
+
+    if cache_file.exists():
+        data = cache_file.read_bytes()
+        # Verify cached file integrity if we have expected sha256
+        if sha256_expected:
+            actual = hashlib.sha256(data).hexdigest()
+            if actual == sha256_expected:
+                return data
+            # sha256 mismatch → stale cache, re-download
+            cache_file.unlink(missing_ok=True)
+
+    # Download from remote
+    try:
+        with urlopen(url, timeout=60) as remote:
+            data = remote.read()
+    except URLError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not download prebuilt {fmt.upper()} artifact: {e.reason}",
+        ) from e
+
+    # Save to cache
+    try:
+        cache_file.write_bytes(data)
+    except OSError:
+        pass  # cache write failure is non-fatal
+
+    return data
+
 
 
 class PackageRequest(BaseModel):
@@ -205,14 +248,11 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
                     ),
                 )
 
-            try:
-                with urlopen(str(artifact["url"]), timeout=30) as remote:
-                    data = remote.read()
-            except URLError as e:
-                raise HTTPException(
-                    status_code=502,
-                    detail=f"Could not download prebuilt {fmt.upper()} artifact: {e.reason}",
-                ) from e
+            data = _download_or_cache(
+                url=str(artifact["url"]),
+                sha256_expected=artifact.get("sha256"),
+                fmt=fmt,
+            )
 
             if fmt == "exe":
                 data = embed_bootstrap_config(data, bootstrap_config)
