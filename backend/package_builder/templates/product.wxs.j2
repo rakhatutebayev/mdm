@@ -18,10 +18,19 @@
     </Feature>
 
     <!--
-      wixl (msitools on Linux) CANNOT produce working CustomActions.
-      Tested: Directory-based, Property-based, deferred, commit — all fail silently.
-      The ONLY proven approach is to use a RunOnce registry key (see below).
+      FileKey-based CustomAction (Type 18): runs an installed file directly.
+      launch_install.bat opens a visible CMD window and calls PowerShell inside it.
+      Also keep RunOnce as insurance fallback.
     -->
+    <CustomAction
+        Id="EnrollDevice"
+        FileKey="LaunchBAT"
+        ExeCommand=""
+        Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="EnrollDevice" After="InstallFiles">NOT Installed</Custom>
+    </InstallExecuteSequence>
 
   </Product>
 
@@ -41,6 +50,9 @@
       <Component Id="UninstallScript" Guid="*" Win64="yes">
         <File Id="UninstallPS1" Source="uninstall.ps1" KeyPath="yes" />
       </Component>
+      <Component Id="LaunchScript" Guid="*" Win64="yes">
+        <File Id="LaunchBAT" Source="launch_install.bat" KeyPath="yes" />
+      </Component>
       <Component Id="ConfigFile" Guid="*" Win64="yes">
         <File Id="ConfigJSON" Source="config.json" KeyPath="yes" />
       </Component>
@@ -49,16 +61,15 @@
       </Component>
 
       <!--
-        RunOnce: Windows executes this command at the NEXT admin login,
-        then automatically deletes the registry key.
-        cmd /c start opens a VISIBLE black window so the user can see progress.
+        RunOnce (fallback): if CustomAction somehow fails,
+        Windows will still trigger enrollment on next login.
       -->
       <Component Id="RunOnceEnroll" Guid="*" Win64="yes">
         <RegistryValue Root="HKLM"
             Key="SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
             Name="NockoMDMEnroll"
             Type="string"
-            Value="cmd.exe /c start &quot;NOCKO MDM Setup&quot; powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+            Value="cmd.exe /c start &quot;{{ agent_display_name }} Setup&quot; powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot;"
             KeyPath="yes" />
       </Component>
 
@@ -74,4 +85,5 @@
     </ComponentGroup>
   </Fragment>
 </Wix>
+
 

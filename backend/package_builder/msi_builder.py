@@ -61,6 +61,7 @@ def build_msi(
 
     install_ps1   = _jinja.get_template("install.ps1.j2").render(**ctx)
     uninstall_ps1 = _jinja.get_template("uninstall.ps1.j2").render(**ctx)
+    launch_bat    = _jinja.get_template("launch_install.bat.j2").render(**ctx)
     wxs_content   = _jinja.get_template("product.wxs.j2").render(**ctx)
     config_json  = json.dumps(
         {"server_url": server_url, "enrollment_token": enrollment_token,
@@ -78,6 +79,7 @@ def build_msi(
         tmpdir = Path(tmp)
         (tmpdir / "install.ps1").write_text(install_ps1,   encoding="utf-8")
         (tmpdir / "uninstall.ps1").write_text(uninstall_ps1, encoding="utf-8")
+        (tmpdir / "launch_install.bat").write_text(launch_bat, encoding="utf-8")
         (tmpdir / "config.json").write_text(config_json,   encoding="utf-8")
         (tmpdir / "README.txt").write_text(readme,         encoding="utf-8")
 
