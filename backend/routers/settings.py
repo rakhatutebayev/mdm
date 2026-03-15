@@ -33,7 +33,7 @@ async def _get_all(db: AsyncSession) -> dict[str, str]:
     result = await db.execute(select(SystemSettings))
     rows = {r.key: r.value for r in result.scalars().all()}
     # Merge with defaults so we always return every key
-    merged = {k: rows.get(k, v[0]) for k, (v, *_) in DEFAULTS.items()}
+    merged = {k: rows.get(k, default) for k, (default, _) in DEFAULTS.items()}
     return merged
 
 
