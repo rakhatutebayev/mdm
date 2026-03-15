@@ -24,15 +24,11 @@ jobs:
             cd /opt/nocko-mdm
             git pull origin main || git pull origin master
 
-            echo "==> Installing build tools (if missing)..."
-            which nsis   || (apt-get update -q && apt-get install -y nsis)
-            which wixl   || apt-get install -y msitools
-
-            echo "==> Restarting services with Docker Compose..."
+            echo "==> Restarting application services with Docker Compose..."
             docker compose pull
             docker compose up -d --build --remove-orphans
 
-            echo "==> Running DB migrations (tables auto-created on startup)..."
+            echo "==> Refreshing seed data (tables auto-created on startup)..."
             sleep 5
             docker compose exec -T backend python seed.py || true
 

@@ -20,6 +20,9 @@ env/
 .env.local
 .env.*.local
 
+# Credentials and server config (passwords, SSH keys, connections.md)
+arc/
+
 # Node
 node_modules/
 .next/

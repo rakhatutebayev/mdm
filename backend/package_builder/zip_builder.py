@@ -27,6 +27,9 @@ def build_zip(
     log_dir: str = r"C:\ProgramData\NOCKO MDM\logs",
     register_scheduled_task: bool = True,
     start_immediately: bool = True,
+    checkin_interval: int = 300,
+    log_level: str = "INFO",
+    siem_enabled: bool = False,
 ) -> bytes:
     """Return ZIP file bytes containing install.ps1, config.json, README.txt."""
 
@@ -52,6 +55,18 @@ def build_zip(
             "enrollment_token": enrollment_token,
             "customer_id": customer_id,
             "customer_name": customer_name,
+            "checkin_interval": checkin_interval,
+            "mdm_enabled": True,
+            "siem_enabled": siem_enabled,
+            "backup_enabled": False,
+            "remote_enabled": False,
+            "log_level": log_level,
+            "agent_version": "",
+            "device_id": "",
+            "install_dir": install_dir,
+            "log_dir": log_dir,
+            "start_immediately": start_immediately,
+            "agent_display_name": agent_display_name,
         },
         indent=2,
     )

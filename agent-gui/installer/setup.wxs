@@ -1,0 +1,53 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+      Name="NOCKO MDM Agent"
+      Manufacturer="NOCKO IT"
+      Version="1.0.0"
+      UpgradeCode="0FA9D776-64E5-4F7A-A6EF-C4E761B15318">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of NOCKO MDM Agent is already installed." />
+    <MediaTemplate />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="NOCKO MDM Agent" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramDataFolder">
+      <Directory Id="CONFIGDIR" Name="NOCKO-Agent" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="InstallComponents" Directory="INSTALLFOLDER">
+      <Component Id="AgentBinary" Guid="7B7D0500-395F-4333-8A6B-6997C16A87D8">
+        <File Id="AgentExe" Source="dist\NOCKO-Agent.exe" KeyPath="yes" />
+        <ServiceInstall
+            Id="InstallAgentService"
+            Name="NOCKOAgent"
+            DisplayName="NOCKO MDM Agent"
+            Description="NOCKO MDM Windows service"
+            Start="auto"
+            Type="ownProcess"
+            ErrorControl="normal" />
+        <ServiceControl
+            Id="ControlAgentService"
+            Name="NOCKOAgent"
+            Start="install"
+            Stop="both"
+            Remove="uninstall"
+            Wait="yes" />
+      </Component>
+      <Component Id="ReadmeFile" Guid="92F8896F-A4DD-48F4-8A31-445B54B0F401">
+        <File Source="README.md" Name="README.txt" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="ConfigComponents" Directory="CONFIGDIR">
+      <Component Id="ExampleConfig" Guid="0284CA56-E69D-4846-9C49-9D296E853975">
+        <File Source="config.example.json" Name="config.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="MainFeature" Title="NOCKO MDM Agent" Level="1">
+      <ComponentGroupRef Id="InstallComponents" />
+      <ComponentGroupRef Id="ConfigComponents" />
+    </Feature>
+  </Package>
+</Wix>

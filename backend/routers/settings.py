@@ -47,6 +47,17 @@ async def get_server_url(db: AsyncSession) -> str:
     return (row.value if row else None) or os.getenv("MDM_SERVER_URL", "https://mdm.nocko.com")
 
 
+async def get_agent_package_settings(db: AsyncSession) -> dict[str, str]:
+    """Return the subset of settings used to build tenant bootstrap config."""
+    data = await _get_all(db)
+    return {
+        "server_url": data["mdm_server_url"].rstrip("/"),
+        "checkin_interval": data["agent_checkin_interval"],
+        "log_level": data["agent_log_level"],
+        "siem_enabled": data["siem_enabled"],
+    }
+
+
 class SettingsOut(BaseModel):
     mdm_server_url: str
     agent_checkin_interval: str

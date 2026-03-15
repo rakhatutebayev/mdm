@@ -3,17 +3,25 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getEnrollmentToken, regenerateToken as apiRegenerateToken, getCustomers } from '@/lib/api';
+import {
+  getEnrollmentToken,
+  getPackageCatalog,
+  regenerateToken as apiRegenerateToken,
+  getCustomers,
+  type PackageCatalog,
+} from '@/lib/api';
 import styles from './page.module.css';
 
 const INSTALL_MODES = ['Silent', 'Interactive'] as const;
 const ARCH_OPTIONS = ['x64 (64-bit)', 'x86 (32-bit)', 'Both'] as const;
-const PACKAGE_FORMATS = ['ZIP (Scripts + Agent)', 'MSI Installer', 'EXE Installer'] as const;
+const PACKAGE_FORMATS = ['Single EXE Installer'] as const;
 
 export default function DeploymentPackagePage() {
   const searchParams = useSearchParams();
   const customerId = searchParams.get('customer') || 'default';
   const [customerName, setCustomerName] = useState(customerId);
+  const [catalog, setCatalog] = useState<PackageCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   // Load customer name from API
   useEffect(() => {
@@ -26,12 +34,12 @@ export default function DeploymentPackagePage() {
   }, [customerId]);
 
   const [form, setForm] = useState({
-    serverUrl: 'https://mdm.nocko.com',
+    serverUrl: '',
     enrollmentToken: '',
     agentName: 'NOCKO MDM Agent',
     installMode: 'Silent' as (typeof INSTALL_MODES)[number],
     arch: 'x64 (64-bit)' as (typeof ARCH_OPTIONS)[number],
-    format: 'ZIP (Scripts + Agent)' as (typeof PACKAGE_FORMATS)[number],
+    format: 'Single EXE Installer' as (typeof PACKAGE_FORMATS)[number],
     scheduleTask: true,
     autoStart: true,
     installPath: 'C:\\Program Files\\NOCKO MDM\\Agent',
@@ -50,6 +58,25 @@ export default function DeploymentPackagePage() {
 
   useEffect(() => { fetchToken(); }, [fetchToken]);
 
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const data = await getPackageCatalog(customerId);
+      setCatalog(data);
+      setCatalogError(null);
+      setCustomerName(data.customer_name);
+      setForm((f) => ({
+        ...f,
+        serverUrl: data.server_url || f.serverUrl,
+        enrollmentToken: data.enrollment_token || f.enrollmentToken,
+      }));
+    } catch (err) {
+      setCatalog(null);
+      setCatalogError(err instanceof Error ? err.message : String(err));
+    }
+  }, [customerId]);
+
+  useEffect(() => { fetchCatalog(); }, [fetchCatalog]);
+
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
@@ -61,10 +88,8 @@ export default function DeploymentPackagePage() {
 
   // Map UI label → API format value
   const formatToAPI = (label: string): string => {
-    if (label.startsWith('ZIP')) return 'zip';
-    if (label.startsWith('MSI')) return 'msi';
-    if (label.startsWith('EXE')) return 'exe';
-    return 'zip';
+    if (label.startsWith('Single')) return 'exe';
+    return 'exe';
   };
 
   const archToAPI = (label: string): string => {
@@ -72,19 +97,38 @@ export default function DeploymentPackagePage() {
     return 'x64';
   };
 
+  const selectedFormat = formatToAPI(form.format);
+  const selectedArch = archToAPI(form.arch);
+  const selectedArtifact = catalog?.artifacts.find(
+    (artifact) => artifact.format === selectedFormat && artifact.arch === selectedArch,
+  );
+  const selectedFormatAvailable = Boolean(selectedArtifact);
+
   const handleGenerate = async () => {
     setGenerating(true);
     setGenerateError(null);
     try {
+      if (!selectedArtifact) {
+        throw new Error(
+          `No prebuilt ${selectedFormat.toUpperCase()} release is available for ${selectedArch}. ` +
+          'Publish the Windows agent from GitHub Actions first.',
+        );
+      }
+
       const res = await fetch('/api/mdm/packages/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id:   customerId,
-          format:        formatToAPI(form.format),
-          arch:          archToAPI(form.arch),
+          format:        selectedFormat,
+          arch:          selectedArch,
           server_url:    form.serverUrl || undefined,
           install_mode:  form.installMode.toLowerCase(), // "silent" | "interactive"
+          agent_display_name: form.agentName,
+          install_dir: form.installPath,
+          log_dir: form.logPath,
+          register_scheduled_task: form.scheduleTask,
+          start_immediately: form.autoStart,
         }),
       });
       if (!res.ok) {
@@ -132,7 +176,7 @@ export default function DeploymentPackagePage() {
         <div>
           <h1 className={styles.pageTitle}>Windows Enrollment</h1>
           <p className={styles.pageSubtitle}>
-            Configure and generate a Windows MDM agent installation package for distribution to client machines.
+            Generate one Windows installer EXE with embedded cloud connection settings for this customer.
           </p>
         </div>
       </div>
@@ -230,6 +274,9 @@ export default function DeploymentPackagePage() {
                   </label>
                 ))}
               </div>
+              <div style={{ marginTop: 10, fontSize: 12, color: '#94a3b8' }}>
+                The portal personalizes one prebuilt Windows EXE by embedding the customer bootstrap config directly into the file.
+              </div>
             </div>
           </div>
 
@@ -246,6 +293,9 @@ export default function DeploymentPackagePage() {
               <label className={styles.label}>Log Directory</label>
               <input className={styles.input} type="text" value={form.logPath} onChange={(e) => set('logPath', e.target.value)} />
             </div>
+            <div style={{ marginTop: 10, fontSize: 12, color: '#94a3b8' }}>
+              These values are embedded into the generated EXE bootstrap config and used during the self-install flow.
+            </div>
           </div>
 
           {/* Section: Options */}
@@ -255,11 +305,11 @@ export default function DeploymentPackagePage() {
             </h2>
             <label className={styles.checkRow}>
               <input type="checkbox" checked={form.scheduleTask} onChange={(e) => set('scheduleTask', e.target.checked)} />
-              <span>Register as Windows Scheduled Task (auto-run on startup)</span>
+              <span>Reserved for legacy ZIP flow</span>
             </label>
             <label className={styles.checkRow}>
               <input type="checkbox" checked={form.autoStart} onChange={(e) => set('autoStart', e.target.checked)} />
-              <span>Start agent immediately after installation</span>
+              <span>Start the Windows service immediately after installation</span>
             </label>
           </div>
 
@@ -267,7 +317,7 @@ export default function DeploymentPackagePage() {
             <button
               className={styles.generateBtn}
               onClick={handleGenerate}
-              disabled={generating || !form.enrollmentToken}
+              disabled={generating || !form.enrollmentToken || !selectedFormatAvailable}
             >
               {generating ? (
                 <>⏳ Generating…</>
@@ -283,6 +333,11 @@ export default function DeploymentPackagePage() {
                 ⚠️ {generateError}
               </div>
             )}
+            {!generateError && !selectedFormatAvailable && (
+              <div style={{ marginTop: 8, color: '#f59e0b', fontSize: 13 }}>
+                ⚠️ No base EXE release artifact is configured yet for this architecture.
+              </div>
+            )}
           </div>
         </div>
 
@@ -295,10 +350,13 @@ export default function DeploymentPackagePage() {
             <dd className={styles.summaryCustomer}>{customerName}</dd>
             <dt>Server</dt><dd>{form.serverUrl || '—'}</dd>
             <dt>Token</dt><dd className={styles.mono}>{form.enrollmentToken}</dd>
+            <dt>Release Channel</dt><dd>{catalog?.release_channel ?? 'stable'}</dd>
+            <dt>Release Version</dt><dd>{catalog?.release_version ?? 'Not published yet'}</dd>
             <dt>Agent Name</dt><dd>{form.agentName}</dd>
             <dt>Install Mode</dt><dd>{form.installMode}</dd>
             <dt>Architecture</dt><dd>{form.arch}</dd>
             <dt>Format</dt><dd>{form.format}</dd>
+            <dt>Selected Artifact</dt><dd>{selectedArtifact?.filename ?? 'Unavailable'}</dd>
             <dt>Scheduled Task</dt><dd>{form.scheduleTask ? '✅ Yes' : '❌ No'}</dd>
             <dt>Auto-Start</dt><dd>{form.autoStart ? '✅ Yes' : '❌ No'}</dd>
           </dl>
@@ -313,13 +371,19 @@ export default function DeploymentPackagePage() {
             </div>
           )}
 
+          {catalogError && (
+            <div className={styles.infoBox} style={{ marginTop: 16, color: '#fca5a5' }}>
+              <strong>Catalog status:</strong> {catalogError}
+            </div>
+          )}
+
           <div className={styles.infoBox}>
             <strong>How to deploy:</strong>
             <ol className={styles.stepList}>
-              <li>Download the generated package</li>
-              <li>Copy to the target machine (or shared drive / GPO)</li>
-              <li>Run <code>setup.bat</code> as Administrator</li>
-              <li>The agent will auto-enroll &amp; appear in Enrollment → Devices</li>
+              <li>Generate the customer-specific EXE from this page.</li>
+              <li>Copy the EXE to the target Windows machine.</li>
+              <li>Run the EXE as Administrator. It installs the agent service and writes the embedded config automatically.</li>
+              <li>The device should auto-enroll and appear under Enrollment → Devices.</li>
             </ol>
           </div>
         </div>

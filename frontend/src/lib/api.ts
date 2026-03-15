@@ -81,6 +81,29 @@ export interface EnrollmentToken {
   created_at: string;
 }
 
+export interface PackageArtifact {
+  format: "zip" | "msi" | "exe";
+  arch: "x64" | "x86";
+  version: string;
+  filename: string;
+  download_url: string;
+  sha256: string | null;
+  size_bytes: number | null;
+  notes: string | null;
+}
+
+export interface PackageCatalog {
+  customer_id: string;
+  customer_name: string;
+  server_url: string;
+  enrollment_token: string;
+  release_channel: string;
+  release_version: string | null;
+  generated_at: string | null;
+  artifacts: PackageArtifact[];
+  bootstrap_formats: string[];
+}
+
 // ── Customers ─────────────────────────────────────────────────────────────────
 
 export const getCustomers = () => req<Customer[]>("/customers");
@@ -120,3 +143,8 @@ export const getEnrollmentToken = (customerId: string) =>
 
 export const regenerateToken = (customerId: string) =>
   req<EnrollmentToken>(`/enrollment/token/${customerId}/regenerate`, { method: "POST" });
+
+// ── Agent Packages ────────────────────────────────────────────────────────────
+
+export const getPackageCatalog = (customerId: string) =>
+  req<PackageCatalog>(`/packages/catalog?customer_id=${customerId}`);

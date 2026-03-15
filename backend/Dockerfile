@@ -1,10 +1,7 @@
 FROM python:3.12-slim
 
-# Install system packages needed for EXE/MSI building
+# Production backend serves prebuilt agent artifacts and only needs curl
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nsis \
-    msitools \
-    wixl \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
