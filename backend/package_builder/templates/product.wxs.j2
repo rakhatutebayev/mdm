@@ -8,7 +8,8 @@
       Manufacturer="NOCKO IT"
       UpgradeCode="{{ upgrade_guid }}">
 
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+    <!-- FORCE 64-bit installer to prevent WOW6432Node registry redirection -->
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Platform="x64" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
@@ -16,35 +17,26 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
-    <!-- Find exact path to PowerShell.exe -->
-    <Property Id="POWERSHELLEXE">
-      <RegistrySearch Id="POWERSHELLEXE"
-                      Type="raw"
-                      Root="HKLM"
-                      Key="SOFTWARE\Microsoft\PowerShell\1\ShellIds\Microsoft.PowerShell"
-                      Name="Path" />
-    </Property>
-
     <!--
-      INSTALL: Run the PowerShell script directly without cmd.exe redirection.
-      Redirection to [CommonAppDataFolder]NOCKO MDM\enroll.log would fail because
-      the directory doesn't exist yet (the PS1 script creates it itself).
+      INSTALL: Run native 64-bit PowerShell directly using System64Folder.
+      Return="check" ensures the MSI waits for the script to finish and fails
+      if the script throws an unhandled error.
     -->
     <CustomAction
         Id="EnrollDevice"
-        Property="POWERSHELLEXE"
-        ExeCommand="-NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        Directory="INSTALLFOLDER"
+        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
         Execute="deferred"
         Impersonate="no"
-        Return="ignore" />
+        Return="check" />
 
     <CustomAction
         Id="NotifyUninstall"
-        Property="POWERSHELLEXE"
-        ExeCommand="-NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
+        Directory="INSTALLFOLDER"
+        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
         Execute="deferred"
         Impersonate="no"
-        Return="ignore" />
+        Return="check" />
 
     <InstallExecuteSequence>
       <!-- Enroll on fresh install only -->
@@ -65,21 +57,22 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-      <Component Id="InstallScript" Guid="*">
+      <!-- ALL components must be marked Win64="yes" for a 64-bit MSI -->
+      <Component Id="InstallScript" Guid="*" Win64="yes">
         <File Id="InstallPS1" Source="install.ps1" KeyPath="yes" />
       </Component>
-      <Component Id="UninstallScript" Guid="*">
+      <Component Id="UninstallScript" Guid="*" Win64="yes">
         <File Id="UninstallPS1" Source="uninstall.ps1" KeyPath="yes" />
       </Component>
-      <Component Id="ConfigFile" Guid="*">
+      <Component Id="ConfigFile" Guid="*" Win64="yes">
         <File Id="ConfigJSON" Source="config.json" KeyPath="yes" />
       </Component>
-      <Component Id="ReadmeFile" Guid="*">
+      <Component Id="ReadmeFile" Guid="*" Win64="yes">
         <File Id="ReadmeTXT" Source="README.txt" KeyPath="yes" />
       </Component>
 
-      <!-- App metadata in our own registry key -->
-      <Component Id="RegistryExtras" Guid="*">
+      <!-- App metadata in strictly 64-bit registry (not WOW6432Node) -->
+      <Component Id="RegistryExtras" Guid="*" Win64="yes">
         <RegistryValue Root="HKLM"
             Key="SOFTWARE\NOCKO IT\NOCKO MDM Agent"
             Name="MDMServer"     Type="string" Value="{{ server_url }}" KeyPath="yes" />
@@ -87,7 +80,6 @@
             Key="SOFTWARE\NOCKO IT\NOCKO MDM Agent"
             Name="CustomerName"  Type="string" Value="{{ customer_name }}" />
       </Component>
-
     </ComponentGroup>
   </Fragment>
 </Wix>
