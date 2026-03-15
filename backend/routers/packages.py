@@ -206,8 +206,12 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     )
 
     fmt = body.format.lower()
-
     ts = datetime.utcnow().strftime("%H%M")
+
+    # Resolve artifact version up-front so bootstrap_config carries it
+    _catalog_release, _catalog_artifact = find_artifact(fmt if fmt in {"exe", "msi"} else "exe", body.arch)
+    _agent_version = str(_catalog_release.get("version", "")) if _catalog_release else ""
+
     bootstrap_config = {
         "server_url": server_url,
         "enrollment_token": token_row.token,
@@ -221,7 +225,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         "backup_enabled": False,
         "remote_enabled": False,
         "log_level": package_settings["log_level"],
-        "agent_version": "",
+        "agent_version": _agent_version,   # ← real version from manifest
         "device_id": "",
         "install_dir": body.install_dir,
         "log_dir": body.log_dir,
