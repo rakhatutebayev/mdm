@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -69,18 +70,20 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
 
     fmt = body.format.lower()
 
+    ts = datetime.utcnow().strftime("%H%M")
+
     # ── Build package ─────────────────────────────────────────────────────────
     try:
         if fmt == "zip":
             data      = build_zip(**kwargs)
             mime      = "application/zip"
-            filename  = f"nocko-mdm-agent-{customer.slug}.zip"
+            filename  = f"nocko-mdm-agent-{customer.slug}-{ts}.zip"
 
         elif fmt == "exe":
             try:
                 data     = build_exe(**kwargs)
                 mime     = "application/octet-stream"
-                filename = f"nocko-mdm-agent-{customer.slug}-setup.exe"
+                filename = f"nocko-mdm-agent-{customer.slug}-{ts}-setup.exe"
             except EXEMissing as e:
                 raise HTTPException(
                     status_code=503,
@@ -91,7 +94,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
             try:
                 data     = build_msi(**kwargs)
                 mime     = "application/octet-stream"
-                filename = f"nocko-mdm-agent-{customer.slug}.msi"
+                filename = f"nocko-mdm-agent-{customer.slug}-{ts}.msi"
             except MSIMissing as e:
                 raise HTTPException(
                     status_code=503,
