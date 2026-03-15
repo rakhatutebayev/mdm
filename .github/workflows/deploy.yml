@@ -25,8 +25,9 @@ jobs:
             git pull origin main || git pull origin master
 
             echo "==> Restarting application services with Docker Compose..."
+            docker compose down --remove-orphans || true
             docker compose pull
-            docker compose up -d --build --remove-orphans
+            docker compose up -d --build --force-recreate --remove-orphans
 
             echo "==> Refreshing seed data (tables auto-created on startup)..."
             sleep 5
