@@ -158,3 +158,15 @@ async def update_device_status(
     await db.commit()
     await db.refresh(device)
     return device
+
+
+@router.delete("/{device_id}", status_code=204)
+async def delete_device(device_id: str, db: AsyncSession = Depends(get_db)):
+    """Permanently delete a device and all its related records."""
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    await db.delete(device)
+    await db.commit()
+

@@ -108,6 +108,11 @@ export const updateDeviceStatus = (id: string, status: string) =>
     body: JSON.stringify({ status }),
   });
 
+export const deleteDevice = (id: string) =>
+  fetch(`${BASE}/devices/${id}`, { method: "DELETE" }).then((r) => {
+    if (!r.ok && r.status !== 204) throw new Error(`API ${r.status}`);
+  });
+
 // ── Enrollment Tokens ─────────────────────────────────────────────────────────
 
 export const getEnrollmentToken = (customerId: string) =>

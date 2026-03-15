@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WindowsIcon } from '@/components/icons/PlatformIcons';
 import EnrollWindowsModal from '@/components/EnrollWindowsModal/EnrollWindowsModal';
-import { getDevices, updateDeviceStatus, type DeviceListItem } from '@/lib/api';
+import { getDevices, updateDeviceStatus, deleteDevice, type DeviceListItem } from '@/lib/api';
 import styles from './page.module.css';
 
 const CUSTOMERS: Record<string, string> = {
@@ -75,6 +75,18 @@ export default function EnrollmentDevicesPage() {
       );
     } catch (e) {
       console.error('Failed to approve enrollment', e);
+    }
+  };
+
+  const handleDeprovision = async (deviceId: string, deviceName: string) => {
+    setOpenActionMenu(null);
+    if (!confirm(`Delete device "${deviceName}" from the system? This cannot be undone.`)) return;
+    try {
+      await deleteDevice(deviceId);
+      setDevices((prev) => prev.filter((d) => d.id !== deviceId));
+    } catch (e) {
+      console.error('Failed to delete device', e);
+      alert('Could not delete the device. Please try again.');
     }
   };
 
@@ -401,12 +413,18 @@ export default function EnrollmentDevicesPage() {
               Approve Enrollment
             </button>
           )}
-          <button className={styles.actionItem} onClick={() => setOpenActionMenu(null)}>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{color:'#ef4444'}}>
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11H7v-2h10v2z"/>
-            </svg>
-            Deprovision
-          </button>
+          <button
+              className={styles.actionItem}
+              onClick={() => {
+                const dev = filtered.find((d) => d.id === openActionMenu);
+                handleDeprovision(openActionMenu, dev?.device_name || openActionMenu);
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{color:'#ef4444'}}>
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+              Deprovision (Delete)
+            </button>
           <button className={styles.actionItem} onClick={() => setOpenActionMenu(null)}>
             <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{color:'#4a7cff'}}>
               <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
