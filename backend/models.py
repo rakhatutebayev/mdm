@@ -208,3 +208,21 @@ class SystemSettings(Base):
         DateTime, server_default=func.now(), onupdate=func.now()
     )
 
+
+class DeviceCommand(Base):
+    """MDM command queued for a device (e.g. rename_computer).
+
+    Lifecycle: pending → sent → acked | failed
+    """
+    __tablename__ = "device_commands"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    command_type: Mapped[str] = mapped_column(String(100), nullable=False)   # e.g. "rename_computer"
+    payload: Mapped[str] = mapped_column(Text, nullable=False, default="{}")  # JSON string
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    acked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    device: Mapped["Device"] = relationship()

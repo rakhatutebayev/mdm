@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { getDevice, type DeviceDetail } from '@/lib/api';
 import styles from './page.module.css';
 
@@ -142,7 +142,34 @@ export default function DeviceDetailPage() {
     void loadDevice();
   }, [loadDevice]);
 
-  if (loading) return <div className={styles.notFound}><p>Loading device…</p></div>;
+  // ── Rename state ──────────────────────────────────────────────────────────
+  const [renameOpen, setRenameOpen]     = useState(false);
+  const [renameValue, setRenameValue]   = useState('');
+  const [renameRestart, setRenameRestart] = useState(true);
+  const [renaming, setRenaming]         = useState(false);
+  const [renameMsg, setRenameMsg]       = useState<{ok: boolean; text: string} | null>(null);
+
+  const handleRename = async () => {
+    if (!renameValue.trim() || !device) return;
+    setRenaming(true);
+    setRenameMsg(null);
+    try {
+      const res = await fetch('/api/mdm/windows/portal/commands/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: device.id, new_name: renameValue.trim(), restart_after: renameRestart }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed');
+      setRenameMsg({ ok: true, text: `✅ Command queued! The device will rename to "${data.new_name}"${renameRestart ? ' and restart' : ''} on next check-in.` });
+      setRenameValue('');
+    } catch (e: unknown) {
+      setRenameMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : 'Error'}` });
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   if (error || !device) {
     return (
       <div className={styles.notFound}>
@@ -284,7 +311,18 @@ export default function DeviceDetailPage() {
             </svg>
           </div>
           <div>
-            <h1 className={styles.pageTitle}>{device.device_name}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h1 className={styles.pageTitle}>{device.device_name}</h1>
+              <button
+                title="Rename computer"
+                onClick={() => { setRenameOpen(true); setRenameMsg(null); setRenameValue(''); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center' }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 5.63l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 000-1.41z"/>
+                </svg>
+              </button>
+            </div>
             <div className={styles.metaRow}>
               <span className={styles.metaText}>{device.model}</span>
               <span className={styles.metaDot}>·</span>
@@ -295,6 +333,51 @@ export default function DeviceDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Rename Modal ── */}
+      {renameOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => e.target === e.currentTarget && setRenameOpen(false)}>
+          <div style={{ background: '#1a1d2e', border: '1px solid #2a2d3a', borderRadius: 12, padding: 28, width: 400, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🖊️ Rename Computer</h3>
+            <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 13 }}>Current name: <strong style={{ color: '#cbd5e1' }}>{device.device_name}</strong></p>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', color: '#94a3b8', fontSize: 12, marginBottom: 6 }}>New Computer Name <span style={{ color: '#ef4444' }}>*</span></label>
+              <input
+                type="text"
+                maxLength={15}
+                placeholder="e.g. OFFICE-PC-01"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value.replace(/[^a-zA-Z0-9-]/g, '').toUpperCase())}
+                style={{ width: '100%', boxSizing: 'border-box', background: '#0f1117', border: '1px solid #2a2d3a', borderRadius: 6, color: '#f1f5f9', padding: '8px 12px', fontSize: 14, outline: 'none' }}
+                autoFocus
+              />
+              <div style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>Max 15 chars, letters, digits, and hyphens only</div>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 20, color: '#94a3b8', fontSize: 13 }}>
+              <input type="checkbox" checked={renameRestart} onChange={(e) => setRenameRestart(e.target.checked)} />
+              Restart automatically after rename (recommended)
+            </label>
+            {renameMsg && (
+              <div style={{ marginBottom: 16, fontSize: 13, color: renameMsg.ok ? '#22c55e' : '#ef4444', background: renameMsg.ok ? '#14532d22' : '#7f1d1d22', borderRadius: 6, padding: '8px 12px' }}>
+                {renameMsg.text}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setRenameOpen(false)}
+                style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleRename}
+                disabled={renaming || !renameValue.trim()}
+                style={{ background: '#4a7cff', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (renaming || !renameValue.trim()) ? 0.5 : 1 }}>
+                {renaming ? 'Sending…' : 'Rename'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Telemetry Gauges ── */}
       <div className={styles.telemetryCard}>

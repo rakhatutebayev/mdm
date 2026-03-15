@@ -20,6 +20,7 @@ from database import get_db
 from models import (
     Customer,
     Device,
+    DeviceCommand,
     EnrollmentToken,
     HardwareInventory,
     LogicalDisk,
@@ -556,16 +557,78 @@ async def get_metrics(device_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-# ── Commands ──────────────────────────────────────────────────────────────────
+import json as _json
 
 @router.get("/commands")
 async def get_commands(device_id: str, db: AsyncSession = Depends(get_db)):
-    """Return pending MDM commands for this device (reserved for future use)."""
+    """Return pending MDM commands for this device and mark them as sent."""
     result = await db.execute(select(Device).where(Device.id == device_id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Device not found")
-    # No commands implemented yet
-    return {"device_id": device_id, "commands": []}
+
+    cmds_result = await db.execute(
+        select(DeviceCommand)
+        .where(DeviceCommand.device_id == device_id, DeviceCommand.status == "pending")
+        .order_by(DeviceCommand.created_at)
+    )
+    cmds = cmds_result.scalars().all()
+
+    out = []
+    for cmd in cmds:
+        out.append({"id": cmd.id, "type": cmd.command_type, "payload": _json.loads(cmd.payload)})
+        cmd.status = "sent"
+    await db.commit()
+    return {"device_id": device_id, "commands": out}
+
+
+class CommandAckPayload(BaseModel):
+    command_id: str
+    status: str = "acked"   # "acked" | "failed"
+    result: Optional[str] = None
+
+
+@router.post("/commands/ack")
+async def ack_command(body: CommandAckPayload, db: AsyncSession = Depends(get_db)):
+    """Agent acknowledges a command result."""
+    result = await db.execute(select(DeviceCommand).where(DeviceCommand.id == body.command_id))
+    cmd = result.scalar_one_or_none()
+    if not cmd:
+        raise HTTPException(status_code=404, detail="Command not found")
+    cmd.status = body.status
+    cmd.result = body.result
+    cmd.acked_at = datetime.utcnow()
+    await db.commit()
+    return {"status": "ok", "command_id": body.command_id}
+
+
+# ── Portal: issue commands ─────────────────────────────────────────────────────
+
+class RenameCommandPayload(BaseModel):
+    device_id: str
+    new_name: str
+    restart_after: bool = True
+
+
+@router.post("/portal/commands/rename")
+async def portal_rename_computer(body: RenameCommandPayload, db: AsyncSession = Depends(get_db)):
+    """Portal: queue a rename_computer command for a device."""
+    result = await db.execute(select(Device).where(Device.id == body.device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    new_name = body.new_name.strip()
+    if not new_name or len(new_name) > 15 or not all(c.isalnum() or c == '-' for c in new_name):
+        raise HTTPException(status_code=422, detail="Invalid computer name (max 15 chars, letters/digits/hyphens only)")
+
+    cmd = DeviceCommand(
+        device_id=body.device_id,
+        command_type="rename_computer",
+        payload=_json.dumps({"new_name": new_name, "restart_after": body.restart_after}),
+    )
+    db.add(cmd)
+    await db.commit()
+    return {"status": "queued", "command_id": cmd.id, "new_name": new_name}
 
 
 # ── Decommission ──────────────────────────────────────────────────────────────

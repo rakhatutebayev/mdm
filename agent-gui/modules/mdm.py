@@ -106,3 +106,11 @@ class MdmAgentClient:
         )
         response.raise_for_status()
         self.logger.info("Device decommissioned: %s", self.config.device_id)
+
+    def ack_command(self, command_id: str, status: str = "acked", result: str | None = None) -> None:
+        """Acknowledge a command result back to the server."""
+        self.session.post(
+            f"{self.api_base}/commands/ack",
+            json={"command_id": command_id, "status": status, "result": result},
+            timeout=15,
+        )

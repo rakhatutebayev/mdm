@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import subprocess
 import threading
 import time
 
@@ -13,6 +14,74 @@ def _next_due(now: float, interval: int) -> float:
     # Small jitter prevents many agents from hammering the server at the same second.
     return now + max(5, interval) + random.uniform(0, min(5, interval * 0.1))
 
+
+# ── Command handlers ──────────────────────────────────────────────────────────
+
+def _handle_rename_computer(cmd: dict, config: AgentConfig, logger: logging.Logger) -> tuple[str, str]:
+    """Rename this Windows computer. Returns (status, result_message)."""
+    payload = cmd.get("payload", {})
+    new_name: str = payload.get("new_name", "").strip()
+    restart_after: bool = bool(payload.get("restart_after", True))
+
+    if not new_name:
+        return "failed", "new_name is empty"
+
+    try:
+        # Use PowerShell — works on all Windows versions
+        result = subprocess.run(
+            ["powershell", "-NonInteractive", "-Command",
+             f"Rename-Computer -NewName '{new_name}' -Force"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            err = result.stderr.strip() or result.stdout.strip()
+            return "failed", f"Rename-Computer failed (rc={result.returncode}): {err}"
+
+        logger.info("Computer renamed to '%s' successfully", new_name)
+
+        if restart_after:
+            # Delayed restart so the agent can ack the command first
+            subprocess.Popen(
+                ["powershell", "-NonInteractive", "-Command",
+                 "Start-Sleep 10; Restart-Computer -Force"],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            return "acked", f"Renamed to '{new_name}'. Restarting in 10 seconds."
+
+        return "acked", f"Renamed to '{new_name}'. Restart required to apply."
+
+    except Exception as exc:
+        logger.exception("rename_computer error: %s", exc)
+        return "failed", str(exc)
+
+
+_COMMAND_HANDLERS = {
+    "rename_computer": _handle_rename_computer,
+}
+
+
+def _dispatch_commands(commands: list[dict], client: MdmAgentClient,
+                       config: AgentConfig, logger: logging.Logger) -> None:
+    for cmd in commands:
+        cmd_id = cmd.get("id", "")
+        cmd_type = cmd.get("type", "")
+        handler = _COMMAND_HANDLERS.get(cmd_type)
+        if not handler:
+            logger.warning("Unknown command type '%s' — ignoring", cmd_type)
+            client.ack_command(cmd_id, status="failed", result=f"Unknown command type: {cmd_type}")
+            continue
+
+        logger.info("Executing command '%s' (id=%s)", cmd_type, cmd_id)
+        try:
+            status, result_msg = handler(cmd, config, logger)
+            client.ack_command(cmd_id, status=status, result=result_msg)
+            logger.info("Command '%s' → %s: %s", cmd_type, status, result_msg)
+        except Exception as exc:
+            logger.exception("Command '%s' dispatch error: %s", cmd_type, exc)
+            client.ack_command(cmd_id, status="failed", result=str(exc))
+
+
+# ── Main agent loop ───────────────────────────────────────────────────────────
 
 def run_agent_loop(
     config: AgentConfig,
@@ -63,7 +132,7 @@ def run_agent_loop(
             try:
                 commands = client.fetch_commands()
                 if commands:
-                    logger.warning("Command execution is not implemented yet: %s", commands)
+                    _dispatch_commands(commands, client, config, logger)
             except Exception as exc:
                 logger.exception("Command polling failed: %s", exc)
             next_commands = _next_due(now, int(config.commands_interval))
