@@ -86,6 +86,7 @@ def is_windows_admin() -> bool:
 
 
 def relaunch_elevated() -> int:
+    """Re-launch ourselves with administrator privileges via UAC."""
     params = " ".join(f'"{arg}"' for arg in sys.argv[1:] or ["bootstrap-install"])
     rc = ctypes.windll.shell32.ShellExecuteW(
         None,
@@ -93,7 +94,7 @@ def relaunch_elevated() -> int:
         sys.executable,
         params,
         None,
-        1,
+        1,  # SW_SHOWNORMAL — shows UAC dialog (0=hidden, may silently fail)
     )
     return 0 if rc > 32 else 1
 
@@ -162,21 +163,35 @@ def remove_uninstall_entry() -> None:
 
 
 def schedule_cleanup(target_exe: Path, config_path: Path, install_dir: Path, log_dir: Path) -> None:
+    """Schedule deletion of agent files after the current process exits."""
     if os.name != "nt":
         return
-    cleanup = (
-        f'ping 127.0.0.1 -n 4 > NUL & '
-        f'del /f /q "{target_exe}" 2> NUL & '
-        f'del /f /q "{config_path}" 2> NUL & '
-        f'rmdir /s /q "{install_dir}" 2> NUL & '
-        f'rmdir /s /q "{log_dir}" 2> NUL'
-    )
-    subprocess.Popen(
-        ["cmd", "/c", cleanup],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+    import tempfile
+    # Write a batch file to a temp location so cmd can delete the exe even
+    # while this process is still running.
+    bat_lines = [
+        "@echo off",
+        "ping 127.0.0.1 -n 4 > NUL",          # wait ~3 s for the process to exit
+        f'sc stop {WINDOWS_SERVICE_NAME} > NUL 2>&1',
+        f'sc delete {WINDOWS_SERVICE_NAME} > NUL 2>&1',
+        f'del /f /q "{target_exe}" 2> NUL',
+        f'del /f /q "{config_path}" 2> NUL',
+        f'rmdir /s /q "{install_dir}" 2> NUL',
+        f'rmdir /s /q "{log_dir}" 2> NUL',
+        f'del /f /q "%~f0"',                    # self-delete the bat file
+    ]
+    try:
+        fd, bat_path = tempfile.mkstemp(suffix=".bat", prefix="nocko_uninstall_")
+        with os.fdopen(fd, "w") as f:
+            f.write("\r\n".join(bat_lines))
+        subprocess.Popen(
+            ["cmd", "/c", bat_path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception:
+        pass  # cleanup failure is non-fatal
 
 
 def uninstall_agent(quiet: bool = False) -> int:
@@ -201,6 +216,36 @@ def uninstall_agent(quiet: bool = False) -> int:
     if not quiet:
         logger.info("Uninstall scheduled for %s", target_exe)
     return 0
+
+
+def is_agent_already_installed(target_exe: Path) -> bool:
+    """Return True if a previous installation exists (service OR files)."""
+    if target_exe.exists():
+        return True
+    # Check if Windows service is registered
+    result = subprocess.run(
+        ["sc", "query", WINDOWS_SERVICE_NAME],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def cleanup_previous_installation(target_exe: Path, logger) -> None:
+    """Stop and remove old service + binary before fresh install."""
+    logger.info("Previous installation detected — cleaning up before reinstall")
+    try_run([str(target_exe), "stop"])    # stop service gracefully
+    try_run([str(target_exe), "remove"])  # unregister service
+    # sc delete as fallback
+    try_run(["sc", "stop", WINDOWS_SERVICE_NAME])
+    try_run(["sc", "delete", WINDOWS_SERVICE_NAME])
+    # Delete old binary (may be locked — ignore)
+    try:
+        if target_exe.exists():
+            target_exe.unlink()
+    except PermissionError:
+        logger.warning("Could not delete locked EXE — will be overwritten on next boot")
+    remove_uninstall_entry()
 
 
 def bootstrap_install_from_embedded_config() -> int:
@@ -228,6 +273,11 @@ def bootstrap_install_from_embedded_config() -> int:
     target_dir.mkdir(parents=True, exist_ok=True)
     target_exe = target_dir / "NOCKO-Agent.exe"
     current_exe = Path(sys.executable).resolve()
+
+    # ── Reinstall: remove old version first ───────────────────────────────────
+    if current_exe != target_exe.resolve() and is_agent_already_installed(target_exe):
+        cleanup_previous_installation(target_exe, logger)
+
     runtime_exe = prepare_installed_binary(current_exe, target_exe, logger)
 
     run_command([str(runtime_exe), "--startup", "auto", "install"])
