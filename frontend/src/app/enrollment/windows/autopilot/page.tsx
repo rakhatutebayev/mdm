@@ -1,17 +1,66 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { getCustomers } from '@/lib/api';
 import styles from './page.module.css';
 
 const DEFAULT_HOST = 'https://mdm.nocko.com';
 
+function CopyBtn({
+  id,
+  val,
+  copied,
+  onCopy,
+}: {
+  id: string;
+  val: string;
+  copied: string | null;
+  onCopy: (id: string, val: string) => void;
+}) {
+  return (
+    <button className={styles.copyBtn} onClick={() => onCopy(id, val)} title="Copy">
+      {copied === id ? (
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="#16a34a">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
 export default function AutoPilotPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const customerId   = searchParams.get('customer') || 'default';
+  const customerParam = searchParams.get('customer');
+  const isPlaceholderCustomer = !customerParam || customerParam === 'default';
+  const [customerId, setCustomerId] = useState(isPlaceholderCustomer ? '' : customerParam);
 
   const [serverUrl, setServerUrl] = useState(DEFAULT_HOST);
+
+  useEffect(() => {
+    getCustomers()
+      .then((list) => {
+        if (isPlaceholderCustomer && list.length > 0) {
+          const fallback = list[0];
+          const nextCustomerId = fallback.slug || fallback.id;
+          setCustomerId(nextCustomerId);
+          router.replace(`/enrollment/windows/autopilot?customer=${nextCustomerId}`);
+          return;
+        }
+        const activeCustomerId = isPlaceholderCustomer ? customerId : (customerParam || customerId);
+        const match = list.find((c) => c.slug === activeCustomerId || c.id === activeCustomerId);
+        if (match) {
+          setCustomerId(match.slug || match.id);
+        }
+      })
+      .catch(() => {});
+  }, [customerId, customerParam, isPlaceholderCustomer, router]);
 
   useEffect(() => {
     fetch('/api/mdm/settings')
@@ -32,20 +81,6 @@ export default function AutoPilotPage() {
       setTimeout(() => setCopied(null), 2000);
     });
   };
-
-  const CopyBtn = ({ id, val }: { id: string; val: string }) => (
-    <button className={styles.copyBtn} onClick={() => copyVal(id, val)} title="Copy">
-      {copied === id ? (
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="#16a34a">
-          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-          <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-        </svg>
-      )}
-    </button>
-  );
 
   return (
     <div className={styles.page}>
@@ -87,7 +122,7 @@ export default function AutoPilotPage() {
               <label className={styles.label}>MDM Enrollment URL</label>
               <div className={styles.inputRow}>
                 <input className={styles.input} value={mdmUrl} readOnly />
-                <CopyBtn id="mdm_url" val={mdmUrl} />
+                <CopyBtn id="mdm_url" val={mdmUrl} copied={copied} onCopy={copyVal} />
               </div>
               <span className={styles.hint}>
                 Entra ID → Mobility → MDM User Scope → Discovery Service URL
@@ -97,7 +132,7 @@ export default function AutoPilotPage() {
               <label className={styles.label}>Terms of Use URL</label>
               <div className={styles.inputRow}>
                 <input className={styles.input} value={termsUrl} readOnly />
-                <CopyBtn id="terms_url" val={termsUrl} />
+                <CopyBtn id="terms_url" val={termsUrl} copied={copied} onCopy={copyVal} />
               </div>
             </div>
           </div>

@@ -1,21 +1,39 @@
 'use client';
 export const dynamic = 'force-dynamic';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { getCustomers } from '@/lib/api';
 import styles from './page.module.css';
 
-const CUSTOMERS: Record<string, string> = {
-  default: 'DEFAULT_CUSTOMER',
-  nocko: 'NOCKO IT',
-  strattech: 'Strategic Technology Solutions',
-  almatygroup: 'Almaty Group',
-  delta: 'Delta Corp',
-};
-
 export default function WindowsEnrollPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const customerId = searchParams.get('customer') || 'default';
-  const customerName = CUSTOMERS[customerId] || customerId;
+  const customerParam = searchParams.get('customer');
+  const isPlaceholderCustomer = !customerParam || customerParam === 'default';
+  const [customerId, setCustomerId] = useState(isPlaceholderCustomer ? '' : customerParam);
+  const [customerName, setCustomerName] = useState(isPlaceholderCustomer ? 'Select customer' : customerParam);
+
+  useEffect(() => {
+    getCustomers()
+      .then((list) => {
+        if (isPlaceholderCustomer && list.length > 0) {
+          const fallback = list[0];
+          const nextCustomerId = fallback.slug || fallback.id;
+          setCustomerId(nextCustomerId);
+          setCustomerName(fallback.name);
+          router.replace(`/enrollment/windows?customer=${nextCustomerId}`);
+          return;
+        }
+        const activeCustomerId = isPlaceholderCustomer ? customerId : (customerParam || customerId);
+        const match = list.find((c) => c.slug === activeCustomerId || c.id === activeCustomerId);
+        if (match) {
+          setCustomerId(match.slug || match.id);
+          setCustomerName(match.name);
+        }
+      })
+      .catch(() => {});
+  }, [customerId, customerParam, isPlaceholderCustomer, router]);
 
   return (
     <div className={styles.page}>

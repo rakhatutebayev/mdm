@@ -20,8 +20,9 @@ export default function DeploymentPackagePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const customerParam = searchParams.get('customer');
-  const [customerId, setCustomerId] = useState(customerParam || '');
-  const [customerName, setCustomerName] = useState(customerParam || 'Select customer');
+  const isPlaceholderCustomer = !customerParam || customerParam === 'default';
+  const [customerId, setCustomerId] = useState(isPlaceholderCustomer ? '' : customerParam);
+  const [customerName, setCustomerName] = useState(isPlaceholderCustomer ? 'Select customer' : customerParam);
   const [catalog, setCatalog] = useState<PackageCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
 
@@ -29,7 +30,7 @@ export default function DeploymentPackagePage() {
   useEffect(() => {
     getCustomers()
       .then((list) => {
-        if (!customerParam && list.length > 0) {
+        if (isPlaceholderCustomer && list.length > 0) {
           const fallback = list[0];
           const nextCustomerId = fallback.slug || fallback.id;
           setCustomerId(nextCustomerId);
@@ -37,7 +38,7 @@ export default function DeploymentPackagePage() {
           router.replace(`/enrollment/windows/package?customer=${nextCustomerId}`);
           return;
         }
-        const activeCustomerId = customerParam || customerId;
+        const activeCustomerId = isPlaceholderCustomer ? customerId : (customerParam || customerId);
         const match = list.find((c) => c.slug === activeCustomerId || c.id === activeCustomerId);
         if (match) {
           setCustomerId(match.slug || match.id);
@@ -45,7 +46,7 @@ export default function DeploymentPackagePage() {
         }
       })
       .catch(() => {/* backend not available yet */});
-  }, [customerParam, customerId, router]);
+  }, [customerId, customerParam, isPlaceholderCustomer, router]);
 
   const [form, setForm] = useState({
     serverUrl: '',
