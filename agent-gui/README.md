@@ -43,7 +43,7 @@ Example config:
 
 ```json
 {
-  "server_url": "https://mdm.it-uae.com",
+  "server_url": "https://mdm.nocko.com",
   "enrollment_token": "YOUR-TOKEN",
   "customer_id": "YOUR-CUSTOMER-ID",
   "checkin_interval": 300,

@@ -21,7 +21,7 @@ def _default_base_dir() -> Path:
 
 @dataclass
 class AgentConfig:
-    server_url: str = "https://mdm.it-uae.com"
+    server_url: str = "https://mdm.nocko.com"
     enrollment_token: str = ""
     customer_id: str = ""
     checkin_interval: int = 300

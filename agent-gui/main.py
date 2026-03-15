@@ -94,6 +94,40 @@ def run_command(args: list[str]) -> None:
     subprocess.run(args, check=True)
 
 
+def try_run(args: list[str]) -> bool:
+    try:
+        subprocess.run(args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
+
+def prepare_installed_binary(current_exe: Path, target_exe: Path, logger) -> Path:
+    if current_exe == target_exe.resolve():
+        return target_exe
+
+    # If an older service instance is running, stop it before trying to replace
+    # the installed binary in Program Files.
+    try_run(["sc", "stop", WINDOWS_SERVICE_NAME])
+
+    try:
+        had_embedded = write_executable_without_embedded_config(current_exe, target_exe)
+        logger.info(
+            "Copied executable to %s%s",
+            target_exe,
+            " without embedded bootstrap footer" if had_embedded else "",
+        )
+        return target_exe
+    except PermissionError:
+        if target_exe.exists():
+            logger.warning(
+                "Could not overwrite %s because it is in use. Reusing the existing installed binary.",
+                target_exe,
+            )
+            return target_exe
+        raise
+
+
 def bootstrap_install_from_embedded_config() -> int:
     embedded = read_embedded_config(sys.executable)
     if not embedded:
@@ -119,18 +153,11 @@ def bootstrap_install_from_embedded_config() -> int:
     target_dir.mkdir(parents=True, exist_ok=True)
     target_exe = target_dir / "NOCKO-Agent.exe"
     current_exe = Path(sys.executable).resolve()
+    runtime_exe = prepare_installed_binary(current_exe, target_exe, logger)
 
-    if current_exe != target_exe.resolve():
-        had_embedded = write_executable_without_embedded_config(current_exe, target_exe)
-        logger.info(
-            "Copied executable to %s%s",
-            target_exe,
-            " without embedded bootstrap footer" if had_embedded else "",
-        )
-
-    run_command([str(target_exe), "--startup", "auto", "install"])
+    run_command([str(runtime_exe), "--startup", "auto", "install"])
     if config.start_immediately:
-        run_command([str(target_exe), "start"])
+        run_command([str(runtime_exe), "start"])
     logger.info("Bootstrap install complete")
     return 0
 
