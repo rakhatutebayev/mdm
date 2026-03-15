@@ -154,7 +154,7 @@ export default function DeviceDetailPage() {
     setRenaming(true);
     setRenameMsg(null);
     try {
-      const res = await fetch('/api/mdm/windows/portal/commands/rename', {
+      const res = await fetch('/api/mdm/mdm/windows/portal/commands/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ device_id: device.id, new_name: renameValue.trim(), restart_after: renameRestart }),
