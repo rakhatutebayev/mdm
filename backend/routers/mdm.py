@@ -631,6 +631,24 @@ async def portal_rename_computer(body: RenameCommandPayload, db: AsyncSession = 
     return {"status": "queued", "command_id": cmd.id, "new_name": new_name}
 
 
+@router.get("/portal/commands/{command_id}")
+async def portal_get_command_status(command_id: str, db: AsyncSession = Depends(get_db)):
+    """Portal: check current status of a queued command."""
+    result = await db.execute(select(DeviceCommand).where(DeviceCommand.id == command_id))
+    cmd = result.scalar_one_or_none()
+    if not cmd:
+        raise HTTPException(status_code=404, detail="Command not found")
+    return {
+        "command_id": cmd.id,
+        "command_type": cmd.command_type,
+        "status": cmd.status,          # pending | sent | acked | failed
+        "result": cmd.result,
+        "payload": _json.loads(cmd.payload),
+        "created_at": cmd.created_at.isoformat() if cmd.created_at else None,
+        "acked_at": cmd.acked_at.isoformat() if cmd.acked_at else None,
+    }
+
+
 # ── Decommission ──────────────────────────────────────────────────────────────
 
 class DecommissionPayload(BaseModel):

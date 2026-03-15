@@ -142,17 +142,47 @@ export default function DeviceDetailPage() {
     void loadDevice();
   }, [loadDevice]);
 
-  // ── Rename state ──────────────────────────────────────────────────────────
-  const [renameOpen, setRenameOpen]     = useState(false);
-  const [renameValue, setRenameValue]   = useState('');
+  // ── Rename state with live status polling ─────────────────────────────────
+  const [renameOpen, setRenameOpen]       = useState(false);
+  const [renameValue, setRenameValue]     = useState('');
   const [renameRestart, setRenameRestart] = useState(true);
-  const [renaming, setRenaming]         = useState(false);
-  const [renameMsg, setRenameMsg]       = useState<{ok: boolean; text: string} | null>(null);
+  const [renaming, setRenaming]           = useState(false);
+  const [cmdStatus, setCmdStatus]         = useState<null | {
+    phase: 'queued' | 'pending' | 'sent' | 'acked' | 'failed' | 'timeout';
+    commandId: string;
+    result?: string | null;
+    newName: string;
+  }>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
+  const startPolling = useCallback((commandId: string, newName: string) => {
+    const startedAt = Date.now();
+    pollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > 3 * 60 * 1000) {
+        stopPolling();
+        setCmdStatus(s => s ? { ...s, phase: 'timeout' } : null);
+        return;
+      }
+      try {
+        const r = await fetch(`/api/mdm/mdm/windows/portal/commands/${commandId}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const phase = d.status as 'pending' | 'sent' | 'acked' | 'failed';
+        setCmdStatus({ phase, commandId, result: d.result, newName });
+        if (phase === 'acked' || phase === 'failed') stopPolling();
+      } catch { /* keep polling */ }
+    }, 5000);
+  }, [stopPolling]);
 
   const handleRename = async () => {
     if (!renameValue.trim() || !device) return;
     setRenaming(true);
-    setRenameMsg(null);
+    setCmdStatus(null);
+    stopPolling();
     try {
       const res = await fetch('/api/mdm/mdm/windows/portal/commands/rename', {
         method: 'POST',
@@ -161,14 +191,19 @@ export default function DeviceDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed');
-      setRenameMsg({ ok: true, text: `✅ Command queued! The device will rename to "${data.new_name}"${renameRestart ? ' and restart' : ''} on next check-in.` });
+      const nm = data.new_name as string;
+      const cid = data.command_id as string;
+      setCmdStatus({ phase: 'queued', commandId: cid, newName: nm });
       setRenameValue('');
+      startPolling(cid, nm);
     } catch (e: unknown) {
-      setRenameMsg({ ok: false, text: `❌ ${e instanceof Error ? e.message : 'Error'}` });
+      setCmdStatus({ phase: 'failed', commandId: '', newName: renameValue, result: e instanceof Error ? e.message : 'Error' });
     } finally {
       setRenaming(false);
     }
   };
+
+  useEffect(() => () => stopPolling(), [stopPolling]);
 
   if (error || !device) {
     return (
@@ -315,7 +350,7 @@ export default function DeviceDetailPage() {
               <h1 className={styles.pageTitle}>{device.device_name}</h1>
               <button
                 title="Rename computer"
-                onClick={() => { setRenameOpen(true); setRenameMsg(null); setRenameValue(''); }}
+                onClick={() => { setRenameOpen(true); setCmdStatus(null); stopPolling(); setRenameValue(''); }}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center' }}
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
@@ -358,21 +393,71 @@ export default function DeviceDetailPage() {
               <input type="checkbox" checked={renameRestart} onChange={(e) => setRenameRestart(e.target.checked)} />
               Restart automatically after rename (recommended)
             </label>
-            {renameMsg && (
-              <div style={{ marginBottom: 16, fontSize: 13, color: renameMsg.ok ? '#22c55e' : '#ef4444', background: renameMsg.ok ? '#14532d22' : '#7f1d1d22', borderRadius: 6, padding: '8px 12px' }}>
-                {renameMsg.text}
+            {/* Live status tracker */}
+            {cmdStatus && (
+              <div style={{ marginBottom: 16, borderRadius: 8, overflow: 'hidden', border: '1px solid #2a2d3a' }}>
+
+                <div style={{ padding: '12px 14px' }}>
+                  {/* Step 1: Queued */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 16 }}>📤</span>
+                    <span style={{ fontSize: 13, color: '#cbd5e1' }}>Команда отправлена на сервер</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 12, color: '#22c55e' }}>✓</span>
+                  </div>
+                  {/* Step 2: Sent to agent */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 16 }}>
+                      {cmdStatus.phase === 'sent' || cmdStatus.phase === 'acked' || cmdStatus.phase === 'failed' ? '📡' : '🔄'}
+                    </span>
+                    <span style={{ fontSize: 13, color: cmdStatus.phase === 'queued' || cmdStatus.phase === 'pending' ? '#64748b' : '#cbd5e1' }}>
+                      {cmdStatus.phase === 'queued' || cmdStatus.phase === 'pending'
+                        ? 'Ожидание получения агентом…'
+                        : 'Агент получил команду'}
+                    </span>
+                    {(cmdStatus.phase === 'sent' || cmdStatus.phase === 'acked' || cmdStatus.phase === 'failed') && (
+                      <span style={{ marginLeft: 'auto', fontSize: 12, color: '#22c55e' }}>✓</span>
+                    )}
+                    {(cmdStatus.phase === 'queued' || cmdStatus.phase === 'pending') && (
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: '#f59e0b', animation: 'pulse 1.5s infinite' }}>⏳</span>
+                    )}
+                  </div>
+                  {/* Step 3: Executed */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>
+                      {cmdStatus.phase === 'acked' ? '✅' : cmdStatus.phase === 'failed' ? '❌' : cmdStatus.phase === 'timeout' ? '⏱️' : '⚙️'}
+                    </span>
+                    <span style={{ fontSize: 13, color: cmdStatus.phase === 'acked' ? '#22c55e' : cmdStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
+                      {cmdStatus.phase === 'acked'
+                        ? `Выполнено: переименован в «${cmdStatus.newName}»`
+                        : cmdStatus.phase === 'failed'
+                        ? `Ошибка: ${cmdStatus.result || 'unknown error'}`
+                        : cmdStatus.phase === 'timeout'
+                        ? 'Нет ответа (агент недоступен или не v1.0.3)'
+                        : 'Ожидание выполнения…'}
+                    </span>
+                    {(cmdStatus.phase === 'sent' || cmdStatus.phase === 'queued' || cmdStatus.phase === 'pending') && (
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>⏳</span>
+                    )}
+                  </div>
+                  {/* Result detail */}
+                  {cmdStatus.phase === 'acked' && cmdStatus.result && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: '#64748b', borderTop: '1px solid #2a2d3a', paddingTop: 8 }}>
+                      {cmdStatus.result}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setRenameOpen(false)}
+              <button onClick={() => { setRenameOpen(false); stopPolling(); setCmdStatus(null); }}
                 style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
-                Cancel
+                {cmdStatus?.phase === 'acked' ? 'Закрыть' : 'Отмена'}
               </button>
               <button
                 onClick={handleRename}
-                disabled={renaming || !renameValue.trim()}
-                style={{ background: '#4a7cff', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (renaming || !renameValue.trim()) ? 0.5 : 1 }}>
-                {renaming ? 'Sending…' : 'Rename'}
+                disabled={renaming || !renameValue.trim() || !!cmdStatus}
+                style={{ background: '#4a7cff', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (renaming || !renameValue.trim() || !!cmdStatus) ? 0.5 : 1 }}>
+                {renaming ? 'Отправка…' : 'Переименовать'}
               </button>
             </div>
           </div>
