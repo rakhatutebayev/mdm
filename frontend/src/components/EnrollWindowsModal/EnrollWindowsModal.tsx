@@ -1,8 +1,16 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import styles from './EnrollWindowsModal.module.css';
 
-export default function EnrollWindowsModal({ onClose }: { onClose: () => void }) {
+export default function EnrollWindowsModal({
+  onClose,
+  customerId,
+}: {
+  onClose: () => void;
+  customerId?: string;
+}) {
+  const router = useRouter();
   const [enrollUrl, setEnrollUrl] = useState('https://mdm.nocko.com/enroll/windows/win');
   const [copied, setCopied] = useState(false);
 
@@ -18,7 +26,6 @@ export default function EnrollWindowsModal({ onClose }: { onClose: () => void })
       .catch(() => {});
   }, []);
 
-
   const handleCopy = () => {
     navigator.clipboard.writeText(enrollUrl).catch(() => {});
     setCopied(true);
@@ -26,11 +33,10 @@ export default function EnrollWindowsModal({ onClose }: { onClose: () => void })
   };
 
   const handleDownload = () => {
-    // Trigger package download - in real impl this would call API to generate package
-    const link = document.createElement('a');
-    link.href = '/api/enrollment/windows/package';
-    link.download = 'nocko-mdm-enrollment.zip';
-    link.click();
+    // Navigate to the proper Deployment Package page which generates the real EXE
+    const param = customerId ? `?customer=${customerId}` : '';
+    router.push(`/enrollment/windows/package${param}`);
+    onClose();
   };
 
   return (

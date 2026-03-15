@@ -383,7 +383,7 @@ export default function EnrollmentDevicesPage() {
 
     {/* Windows Enrollment Modal */}
     {showEnrollModal && (
-      <EnrollWindowsModal onClose={() => setShowEnrollModal(false)} />
+      <EnrollWindowsModal onClose={() => setShowEnrollModal(false)} customerId={customerId} />
     )}
 
     {/* Fixed action dropdown — outside overflow:auto to not get clipped */}
