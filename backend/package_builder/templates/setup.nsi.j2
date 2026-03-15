@@ -9,8 +9,7 @@
 !define REG_KEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM"
 !define TASK_NAME  "NOCKO MDM Check-In"
 
-; Use 64-bit registry view — prevents dual 32/64 entries in Programs list
-SetRegView 64
+; SetRegView 64 is called inside Section and Function blocks below
 
 Name      "${APPNAME} — ${CUSTOMER}"
 OutFile   "nocko-mdm-agent-setup.exe"
@@ -40,6 +39,7 @@ Unicode true
 ; ── Silent / Interactive mode ────────────────────────────────────────────────
 {% if install_mode == 'interactive' %}
 Function .onInit
+    SetRegView 64
     ; Interactive: show MUI wizard — auto-remove previous version first
     ReadRegStr $R0 HKLM "${REG_KEY}" "UninstallString"
     StrCmp $R0 "" done_uninstall
@@ -49,6 +49,7 @@ Function .onInit
 FunctionEnd
 {% else %}
 Function .onInit
+    SetRegView 64
     SetSilent silent
     ; Silent: also auto-remove previous version
     ReadRegStr $R0 HKLM "${REG_KEY}" "UninstallString"
@@ -61,8 +62,8 @@ FunctionEnd
 
 ; ── Installer ─────────────────────────────────────────────────────────────────
 Section "MainSection" SEC01
+    SetRegView 64
     SetOutPath "$INSTDIR"
-    SetOverwrite on
 
     ; Write files to ProgramFiles
     File "install.ps1"
@@ -101,6 +102,7 @@ SectionEnd
 
 ; ── Uninstaller ───────────────────────────────────────────────────────────────
 Section "Uninstall"
+    SetRegView 64
     ; Remove scheduled task
     nsExec::ExecToLog 'schtasks /Delete /TN "${TASK_NAME}" /F'
 
