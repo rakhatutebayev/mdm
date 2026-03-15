@@ -16,6 +16,34 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
+    <!--
+      INSTALL: Run the PowerShell script directly without cmd.exe redirection.
+      Redirection to [CommonAppDataFolder]NOCKO MDM\enroll.log would fail because
+      the directory doesn't exist yet (the PS1 script creates it itself).
+    -->
+    <CustomAction
+        Id="EnrollDevice"
+        Directory="INSTALLFOLDER"
+        ExeCommand="powershell.exe -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        Execute="deferred"
+        Impersonate="no"
+        Return="asyncNoWait" />
+
+    <CustomAction
+        Id="NotifyUninstall"
+        Directory="INSTALLFOLDER"
+        ExeCommand="powershell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
+        Execute="deferred"
+        Impersonate="no"
+        Return="asyncNoWait" />
+
+    <InstallExecuteSequence>
+      <!-- Enroll on fresh install only -->
+      <Custom Action="EnrollDevice"   After="InstallFiles">NOT Installed</Custom>
+      <!-- Notify MDM on uninstall -->
+      <Custom Action="NotifyUninstall" Before="RemoveFiles">Installed AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+
   </Product>
 
   <Fragment>
@@ -28,8 +56,6 @@
 
   <Fragment>
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
-
-      <!-- Agent scripts & config -->
       <Component Id="InstallScript" Guid="*">
         <File Id="InstallPS1" Source="install.ps1" KeyPath="yes" />
       </Component>
@@ -41,21 +67,6 @@
       </Component>
       <Component Id="ReadmeFile" Guid="*">
         <File Id="ReadmeTXT" Source="README.txt" KeyPath="yes" />
-      </Component>
-
-      <!--
-        AUTO-ENROLL via RunOnce registry key.
-        wixl (msitools) does NOT support CustomAction with Directory+ExeCommand,
-        so we use RunOnce instead — Windows executes this command once at next
-        admin login and automatically removes the key afterward.
-      -->
-      <Component Id="RunOnceEnroll" Guid="*">
-        <RegistryValue Root="HKLM"
-            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
-            Name="NockoMDMEnroll"
-            Type="string"
-            Value="powershell.exe -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
-            KeyPath="yes" />
       </Component>
 
       <!-- App metadata in our own registry key -->
