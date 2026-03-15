@@ -7,7 +7,7 @@
 !define VERSION    "1.0.0"
 !define PUBLISHER  "NOCKO IT"
 !define INSTDIR_DEFAULT "$PROGRAMFILES64\NOCKO MDM"
-!define CONFIG_DIR  "$APPDATA\NOCKO MDM"
+!define CONFIG_DIR  "$PROGRAMDATA\NOCKO MDM"
 !define TASK_NAME  "NOCKO MDM Check-In"
 
 Name      "${APPNAME} — ${CUSTOMER}"
@@ -53,7 +53,7 @@ Section "MainSection" SEC01
     nsExec::ExecToLog 'PowerShell.exe -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1"'
     Pop $0
     ${If} $0 != 0
-        MessageBox MB_ICONEXCLAMATION "Enrollment encountered an issue (exit code: $0).$\nCheck $INSTDIR\install-log.txt for details."
+        MessageBox MB_ICONEXCLAMATION "Enrollment encountered an issue (exit code: $0).$\nCheck $PROGRAMDATA\NOCKO MDM\enroll.log for details."
     ${Else}
         DetailPrint "Enrollment successful!"
     ${EndIf}
@@ -83,6 +83,15 @@ Section "Uninstall"
     Delete "$INSTDIR\README.txt"
     Delete "$INSTDIR\Uninstall.exe"
     RMDir  "$INSTDIR"
+
+    ; Remove ProgramData config (ask user)
+    MessageBox MB_YESNO "Remove device configuration from $PROGRAMDATA\NOCKO MDM?" IDNO skip_config
+        Delete "$PROGRAMDATA\NOCKO MDM\config.json"
+        Delete "$PROGRAMDATA\NOCKO MDM\checkin.ps1"
+        Delete "$PROGRAMDATA\NOCKO MDM\enroll.log"
+        Delete "$PROGRAMDATA\NOCKO MDM\uninstall.log"
+        RMDir  "$PROGRAMDATA\NOCKO MDM"
+    skip_config:
 
     ; Remove registry
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM"

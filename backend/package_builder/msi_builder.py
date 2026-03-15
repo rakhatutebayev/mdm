@@ -43,12 +43,13 @@ def build_msi(
         customer_id=customer_id,
         customer_name=customer_name,
         arch=arch,
-        # Deterministic upgrade GUID from customer_id
-        upgrade_guid=str(uuid.uuid5(uuid.NAMESPACE_DNS, customer_id)).replace("-", "")[:12],
+        # Deterministic upgrade GUID from customer_id (full UUID5, standard 8-4-4-4-12 format)
+        upgrade_guid=str(uuid.uuid5(uuid.NAMESPACE_DNS, customer_id)).upper(),
     )
 
-    install_ps1 = _jinja.get_template("install.ps1.j2").render(**ctx)
-    wxs_content  = _jinja.get_template("product.wxs.j2").render(**ctx)
+    install_ps1   = _jinja.get_template("install.ps1.j2").render(**ctx)
+    uninstall_ps1 = _jinja.get_template("uninstall.ps1.j2").render(**ctx)
+    wxs_content   = _jinja.get_template("product.wxs.j2").render(**ctx)
     config_json  = json.dumps(
         {"server_url": server_url, "enrollment_token": enrollment_token,
          "customer_id": customer_id, "customer_name": customer_name},
@@ -63,18 +64,19 @@ def build_msi(
 
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = Path(tmp)
-        (tmpdir / "install.ps1").write_text(install_ps1, encoding="utf-8")
-        (tmpdir / "config.json").write_text(config_json, encoding="utf-8")
-        (tmpdir / "README.txt").write_text(readme,       encoding="utf-8")
+        (tmpdir / "install.ps1").write_text(install_ps1,   encoding="utf-8")
+        (tmpdir / "uninstall.ps1").write_text(uninstall_ps1, encoding="utf-8")
+        (tmpdir / "config.json").write_text(config_json,   encoding="utf-8")
+        (tmpdir / "README.txt").write_text(readme,         encoding="utf-8")
 
         wxs_path = tmpdir / "product.wxs"
         wxs_path.write_text(wxs_content, encoding="utf-8")
 
         out_msi = tmpdir / "nocko-mdm-agent.msi"
 
-        arch_flag = "-a x64" if arch == "x64" else ""
+        arch_args = ["-a", "x64"] if arch == "x64" else []
         result = subprocess.run(
-            [wixl, "-v", *arch_flag.split(), "-o", str(out_msi), str(wxs_path)],
+            [wixl, "-v", *arch_args, "-o", str(out_msi), str(wxs_path)],
             capture_output=True,
             cwd=str(tmpdir),
         )

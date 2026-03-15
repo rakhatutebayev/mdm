@@ -6,7 +6,7 @@
       Language="1033"
       Version="1.0.0"
       Manufacturer="NOCKO IT"
-      UpgradeCode="12345678-1234-1234-1234-{{ upgrade_guid }}">
+      UpgradeCode="{{ upgrade_guid }}">
 
     <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
@@ -17,24 +17,38 @@
     </Feature>
 
     <!--
-      CustomAction: run install.ps1 via cmd.exe so it works in both
-      32-bit and 64-bit MSI contexts on all Windows versions.
-      Return="ignore" keeps installer from rolling back if PS fails,
-      but the PS1 itself exits 1 on error and writes to Event Log.
+      INSTALL: run install.ps1 via cmd /c powershell — most reliable
+      approach across all Windows versions and MSI architectures.
+      The PS1 has ServerUrl and Token baked in by the server at
+      package generation time, so no extra parameters needed.
     -->
-    <Property Id="PS_EXEC" Value="[System64Folder]WindowsPowerShell\v1.0\powershell.exe" />
-
     <CustomAction
         Id="EnrollDevice"
-        Property="PS_EXEC"
-        ExeCommand="-NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]install.ps1&quot; 2&gt;&amp;1 | Out-File -FilePath &quot;[CommonAppDataFolder]NOCKO MDM\enroll.log&quot; -Encoding UTF8"
+        Directory="INSTALLFOLDER"
+        ExeCommand="cmd.exe /c powershell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]install.ps1&quot; &gt; &quot;[CommonAppDataFolder]NOCKO MDM\enroll.log&quot; 2&gt;&amp;1"
         Execute="deferred"
         Impersonate="no"
-        Return="ignore" />
+        Return="asyncNoWait" />
+
+    <!--
+      UNINSTALL: notify MDM server before files are removed.
+      Runs uninstall.ps1 which POSTs to /mdm/windows/decommission.
+    -->
+    <CustomAction
+        Id="NotifyUninstall"
+        Directory="INSTALLFOLDER"
+        ExeCommand="cmd.exe /c powershell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot; &gt; &quot;[CommonAppDataFolder]NOCKO MDM\uninstall.log&quot; 2&gt;&amp;1"
+        Execute="deferred"
+        Impersonate="no"
+        Return="asyncNoWait" />
 
     <InstallExecuteSequence>
-      <Custom Action="EnrollDevice" After="InstallFiles">NOT Installed</Custom>
+      <!-- Enroll on fresh install only -->
+      <Custom Action="EnrollDevice"   After="InstallFiles">NOT Installed</Custom>
+      <!-- Notify MDM on uninstall (Installed=true means it was installed) -->
+      <Custom Action="NotifyUninstall" After="InstallInitialize">Installed AND NOT UPGRADINGPRODUCTCODE</Custom>
     </InstallExecuteSequence>
+
   </Product>
 
   <Fragment>
@@ -50,11 +64,32 @@
       <Component Id="InstallScript" Guid="*">
         <File Id="InstallPS1" Source="install.ps1" KeyPath="yes" />
       </Component>
+      <Component Id="UninstallScript" Guid="*">
+        <File Id="UninstallPS1" Source="uninstall.ps1" />
+      </Component>
       <Component Id="ConfigFile" Guid="*">
         <File Id="ConfigJSON" Source="config.json" />
       </Component>
       <Component Id="ReadmeFile" Guid="*">
         <File Id="ReadmeTXT" Source="README.txt" />
+      </Component>
+      <!-- Add/Remove Programs — extra info shown in Windows Settings -->
+      <Component Id="RegistryEntries" Guid="*">
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
+            Name="DisplayName"    Type="string" Value="NOCKO MDM Agent ({{ customer_name }})" />
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
+            Name="Publisher"      Type="string" Value="NOCKO IT" />
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
+            Name="DisplayVersion" Type="string" Value="1.0.0" />
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
+            Name="URLInfoAbout"   Type="string" Value="{{ server_url }}" />
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NOCKO MDM Agent"
+            Name="Comments"       Type="string" Value="MDM enrollment for {{ customer_name }}" />
       </Component>
     </ComponentGroup>
   </Fragment>

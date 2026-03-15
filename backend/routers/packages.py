@@ -45,12 +45,15 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     # ── Get enrollment token ──────────────────────────────────────────────────
     token_result = await db.execute(
         select(EnrollmentToken)
-        .where(EnrollmentToken.customer_id == customer.id)
+        .where(
+            EnrollmentToken.customer_id == customer.id,
+            EnrollmentToken.revoked == False,  # noqa: E712
+        )
         .order_by(EnrollmentToken.created_at.desc())
     )
     token_row = token_result.scalars().first()
     if not token_row:
-        raise HTTPException(status_code=404, detail="No enrollment token found for this customer. Generate one first.")
+        raise HTTPException(status_code=404, detail="No active enrollment token found. Generate one first.")
 
     server_url = (body.server_url or await get_server_url(db)).rstrip("/")
 
