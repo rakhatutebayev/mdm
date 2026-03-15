@@ -27,7 +27,7 @@
         ExeCommand="powershell.exe -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
         Execute="deferred"
         Impersonate="no"
-        Return="asyncNoWait" />
+        Return="ignore" />
 
     <CustomAction
         Id="NotifyUninstall"
@@ -35,7 +35,7 @@
         ExeCommand="powershell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
         Execute="deferred"
         Impersonate="no"
-        Return="asyncNoWait" />
+        Return="ignore" />
 
     <InstallExecuteSequence>
       <!-- Enroll on fresh install only -->
