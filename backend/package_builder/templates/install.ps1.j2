@@ -134,26 +134,104 @@ $network      = Get-NetworkInfo
 Write-Log "Device    : $deviceName | Serial: $serial | OS: $osVersion"
 Write-Log "Network   : IP=$($network.ip_address) MAC=$($network.mac_address)"
 
+# ── Collect hardware inventory ────────────────────────────────────────────────
+Write-Log "Collecting hardware inventory..."
+try {
+    $proc = Get-WmiObject Win32_Processor | Select-Object -First 1
+    $cs   = Get-WmiObject Win32_ComputerSystem
+    $enc  = Get-WmiObject Win32_SystemEnclosure | Select-Object -First 1
+    $mem  = Get-WmiObject Win32_PhysicalMemory
+
+    $chassisTypes = @{1="Other";2="Unknown";3="Desktop";4="Low Profile Desktop";5="Pizza Box";6="Mini Tower";7="Tower";8="Portable";9="Laptop";10="Notebook";11="Hand Held";12="Docking Station";13="All in One";14="Sub Notebook";15="Space-Saving";16="Lunch Box";17="Main System Chassis";18="Expansion Chassis";19="SubChassis";20="Bus Expansion";21="Peripheral Chassis";22="Storage Chassis";23="Rack Mount";24="Sealed-Case PC";30="Tablet";31="Convertible";32="Detachable"}
+    $chassisId = if ($enc.ChassisTypes) { $enc.ChassisTypes[0] } else { 1 }
+    $chassisLabel = if ($chassisTypes.ContainsKey([int]$chassisId)) { $chassisTypes[[int]$chassisId] } else { "Unknown" }
+
+    # Machine class: Desktop, Laptop, or Server
+    $machineClass = switch ($chassisId) {
+        { $_ -in @(9,10,11,14,30,31,32) } { "Laptop" }
+        { $_ -in @(23) } { "Server" }
+        default { "Desktop" }
+    }
+
+    $memSlotCount = @(Get-WmiObject Win32_PhysicalMemoryArray | ForEach-Object { $_.MemoryDevices } | Measure-Object -Sum).Sum
+    if (-not $memSlotCount) { $memSlotCount = 0 }
+
+    $hwInventory = @{
+        processor_model    = if ($proc) { $proc.Name.Trim() } else { "" }
+        processor_vendor   = if ($proc) { $proc.Manufacturer } else { "" }
+        physical_cores     = if ($proc) { [int]$proc.NumberOfCores } else { $null }
+        logical_processors = if ($proc) { [int]$proc.NumberOfLogicalProcessors } else { $null }
+        memory_total_gb    = if ($cs) { [math]::Round([double]$cs.TotalPhysicalMemory / 1GB, 2) } else { $null }
+        memory_slot_count  = [int]$memSlotCount
+        memory_slots_used  = @($mem).Count
+        memory_module_count = @($mem).Count
+        machine_class      = $machineClass
+        chassis_type       = $chassisLabel
+    }
+    Write-Log "CPU: $($hwInventory.processor_model) | RAM: $($hwInventory.memory_total_gb)GB | Class: $machineClass"
+} catch {
+    Write-Log "WARN: Could not collect hardware inventory: $_"
+    $hwInventory = $null
+}
+
+# ── Collect disk inventory ────────────────────────────────────────────────────
+Write-Log "Collecting disk inventory..."
+$physicalDisks = @()
+$logicalDisks  = @()
+try {
+    # Physical disks
+    $pdisks = Get-WmiObject Win32_DiskDrive
+    foreach ($pd in $pdisks) {
+        $physicalDisks += @{
+            disk_index     = [int]$pd.Index
+            model          = $pd.Model
+            serial_number  = ($pd.SerialNumber -replace '\s','')
+            media_type     = $pd.MediaType
+            interface_type = $pd.InterfaceType
+            size_gb        = [math]::Round([double]$pd.Size / 1GB, 2)
+        }
+    }
+    # Logical disks (fixed drives only, type 3)
+    $ldisks = Get-WmiObject Win32_LogicalDisk -Filter "DriveType=3"
+    foreach ($ld in $ldisks) {
+        $logicalDisks += @{
+            name        = $ld.DeviceID
+            volume_name = $ld.VolumeName
+            file_system = $ld.FileSystem
+            drive_type  = "Fixed"
+            size_gb     = [math]::Round([double]$ld.Size / 1GB, 2)
+            free_gb     = [math]::Round([double]$ld.FreeSpace / 1GB, 2)
+            used_gb     = [math]::Round(([double]$ld.Size - [double]$ld.FreeSpace) / 1GB, 2)
+        }
+    }
+    Write-Log "Found $($physicalDisks.Count) physical disk(s), $($logicalDisks.Count) logical disk(s)"
+} catch {
+    Write-Log "WARN: Could not collect disk inventory: $_"
+}
+
 # ── Register with NOCKO MDM ───────────────────────────────────────────────────
 Write-Log "Sending enrollment to $APIBase/mdm/windows/enroll ..."
 
 $payload = @{
-    customer_id       = $CustomerID
-    enrollment_token  = $Token
-    device_name       = $deviceName
-    platform          = "Windows"
-    device_type       = "Desktop"
-    model             = $model
-    manufacturer      = $manufacturer
-    serial_number     = $serial
-    udid              = $udid
-    os_version        = $osVersion
-    architecture      = $arch
-    owner             = ""
-    enrollment_method = "Agent"
-    agent_version     = "1.0.0"
-    network           = $network
-    monitors          = @()
+    customer_id        = $CustomerID
+    enrollment_token   = $Token
+    device_name        = $deviceName
+    platform           = "Windows"
+    device_type        = "Desktop"
+    model              = $model
+    manufacturer       = $manufacturer
+    serial_number      = $serial
+    udid               = $udid
+    os_version         = $osVersion
+    architecture       = $arch
+    owner              = ""
+    enrollment_method  = "Agent"
+    agent_version      = "1.0.0"
+    network            = $network
+    monitors           = @()
+    hardware_inventory = $hwInventory
+    physical_disks     = $physicalDisks
+    logical_disks      = $logicalDisks
 } | ConvertTo-Json -Depth 10
 
 try {
