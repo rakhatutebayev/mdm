@@ -17,33 +17,7 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
 
-    <!--
-      INSTALL: Run native 64-bit PowerShell directly using System64Folder.
-      Return="check" ensures the MSI waits for the script to finish and fails
-      if the script throws an unhandled error.
-    -->
-    <CustomAction
-        Id="EnrollDevice"
-        Directory="INSTALLFOLDER"
-        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
-        Execute="deferred"
-        Impersonate="no"
-        Return="check" />
 
-    <CustomAction
-        Id="NotifyUninstall"
-        Directory="INSTALLFOLDER"
-        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
-        Execute="deferred"
-        Impersonate="no"
-        Return="check" />
-
-    <InstallExecuteSequence>
-      <!-- Enroll on fresh install only -->
-      <Custom Action="EnrollDevice"   After="InstallFiles">NOT Installed</Custom>
-      <!-- Notify MDM on uninstall -->
-      <Custom Action="NotifyUninstall" Before="RemoveFiles">Installed AND NOT UPGRADINGPRODUCTCODE</Custom>
-    </InstallExecuteSequence>
 
   </Product>
 
@@ -69,6 +43,21 @@
       </Component>
       <Component Id="ReadmeFile" Guid="*" Win64="yes">
         <File Id="ReadmeTXT" Source="README.txt" KeyPath="yes" />
+      </Component>
+
+      <!--
+        AUTO-ENROLL via RunOnce registry key.
+        wixl (msitools) CustomActions are extremely unreliable for running PowerShell
+        as SYSTEM. RunOnce tells Windows to reliably execute this command once at the 
+        next admin login, and Windows automatically removes the key afterward.
+      -->
+      <Component Id="RunOnceEnroll" Guid="*" Win64="yes">
+        <RegistryValue Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
+            Name="NockoMDMEnroll"
+            Type="string"
+            Value="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+            KeyPath="yes" />
       </Component>
 
       <!-- App metadata in strictly 64-bit registry (not WOW6432Node) -->
