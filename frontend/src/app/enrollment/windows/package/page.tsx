@@ -135,23 +135,27 @@ export default function DeploymentPackagePage() {
         );
       }
 
-      const res = await fetch('/api/mdm/packages/generate', {
+      // POST directly to the backend (bypasses Next.js proxy for large binary responses)
+      const payload = {
+        customer_id:   customerId,
+        format:        selectedFormat,
+        arch:          selectedArch,
+        server_url:    form.serverUrl || undefined,
+        install_mode:  form.installMode.toLowerCase(),
+        agent_display_name: form.agentName,
+        install_dir: form.installPath,
+        log_dir: form.logPath,
+        register_scheduled_task: form.scheduleTask,
+        start_immediately: form.autoStart,
+      };
+
+      const res = await fetch('/api/v1/packages/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(90_000), // 90s — backend downloads ~10 MB EXE from GitHub
-        body: JSON.stringify({
-          customer_id:   customerId,
-          format:        selectedFormat,
-          arch:          selectedArch,
-          server_url:    form.serverUrl || undefined,
-          install_mode:  form.installMode.toLowerCase(), // "silent" | "interactive"
-          agent_display_name: form.agentName,
-          install_dir: form.installPath,
-          log_dir: form.logPath,
-          register_scheduled_task: form.scheduleTask,
-          start_immediately: form.autoStart,
-        }),
+        signal: AbortSignal.timeout(90_000),
+        body: JSON.stringify(payload),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
         throw new Error(err.detail || 'Package generation failed');
@@ -159,7 +163,7 @@ export default function DeploymentPackagePage() {
       // Trigger browser download
       const blob = await res.blob();
       const cd   = res.headers.get('Content-Disposition') || '';
-      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? 'nocko-mdm-agent.zip';
+      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? 'nocko-mdm-agent.exe';
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href = url; a.download = name; a.click();
