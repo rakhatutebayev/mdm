@@ -72,6 +72,32 @@ Write-Log "=== NOCKO MDM Enrollment Starting ==="
 Write-Log "ServerUrl : $ServerUrl"
 Write-Log "CustomerID: $CustomerID"
 
+# ── Verify installation files ─────────────────────────────────────────────────
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Write-Log "Install directory: $scriptDir"
+if (-not (Test-Path "$scriptDir\install.ps1")) {
+    Write-Log "ERROR: install.ps1 not found in $scriptDir. Installation may be corrupt."
+    exit 1
+}
+Write-Log "Installation files verified OK."
+
+# ── Clean up duplicate entries in Programs & Features ─────────────────────────
+# Remove stale uninstall keys from previous broken installs (both 64-bit and WOW6432Node)
+foreach ($regPath in @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+)) {
+    if (Test-Path $regPath) {
+        Get-ChildItem $regPath -ErrorAction SilentlyContinue | ForEach-Object {
+            $displayName = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).DisplayName
+            if ($displayName -and $displayName -match "NOCKO MDM") {
+                Write-Log "Removing stale uninstall entry: $displayName ($($_.PSChildName))"
+                Remove-Item $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
 # ── Check privileges ─────────────────────────────────────────────────────────
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -140,12 +166,20 @@ try {
     Write-Log "Enrollment OK. device_id=$deviceId status=$($response.status)"
 } catch {
     Write-Log "ERROR: Enrollment failed: $_"
-    # Print response body if available
     if ($_.Exception.Response) {
-        $stream = $_.Exception.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader $stream
-        Write-Log "Server response: $($reader.ReadToEnd())"
+        try {
+            $stream = $_.Exception.Response.GetResponseStream()
+            $reader = New-Object System.IO.StreamReader $stream
+            Write-Log "Server response: $($reader.ReadToEnd())"
+        } catch {}
     }
+    # ── ROLLBACK: clean up partial state ──────────────────────────────────────
+    Write-Log "Rolling back: removing partial config and scheduled task..."
+    Remove-Item -Path $configFile -Force -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName "{{ agent_display_name }} Check-In" -Confirm:$false -ErrorAction SilentlyContinue
+    # Remove the RunOnce key so it doesn't re-trigger on next login
+    Remove-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" -Name "NockoMDMEnroll" -Force -ErrorAction SilentlyContinue
+    Write-Log "Rollback complete. Fix the issue and reinstall the agent."
     exit 1
 }
 
