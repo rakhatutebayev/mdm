@@ -44,6 +44,41 @@ class MonitorInfoOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class HardwareInventoryOut(BaseModel):
+    processor_model: str
+    processor_vendor: str
+    physical_cores: Optional[int]
+    logical_processors: Optional[int]
+    memory_total_gb: Optional[float]
+    memory_slot_count: Optional[int]
+    memory_slots_used: Optional[int]
+    memory_module_count: Optional[int]
+    machine_class: str
+    chassis_type: str
+    model_config = {"from_attributes": True}
+
+
+class PhysicalDiskOut(BaseModel):
+    disk_index: Optional[int]
+    model: str
+    serial_number: str
+    media_type: str
+    interface_type: str
+    size_gb: Optional[float]
+    model_config = {"from_attributes": True}
+
+
+class LogicalDiskOut(BaseModel):
+    name: str
+    volume_name: str
+    file_system: str
+    drive_type: str
+    size_gb: Optional[float]
+    free_gb: Optional[float]
+    used_gb: Optional[float]
+    model_config = {"from_attributes": True}
+
+
 # ── Device ────────────────────────────────────────────────────────────────────
 class NetworkCreateIn(BaseModel):
     ip_address: str = ""
@@ -70,6 +105,38 @@ class MonitorCreateIn(BaseModel):
     hdr_support: bool = False
     is_external: bool = True  # alias from PS1
 
+
+class HardwareInventoryCreateIn(BaseModel):
+    processor_model: str = ""
+    processor_vendor: str = ""
+    physical_cores: Optional[int] = None
+    logical_processors: Optional[int] = None
+    memory_total_gb: Optional[float] = None
+    memory_slot_count: Optional[int] = None
+    memory_slots_used: Optional[int] = None
+    memory_module_count: Optional[int] = None
+    machine_class: str = ""
+    chassis_type: str = ""
+
+
+class PhysicalDiskCreateIn(BaseModel):
+    disk_index: Optional[int] = None
+    model: str = ""
+    serial_number: str = ""
+    media_type: str = ""
+    interface_type: str = ""
+    size_gb: Optional[float] = None
+
+
+class LogicalDiskCreateIn(BaseModel):
+    name: str = ""
+    volume_name: str = ""
+    file_system: str = ""
+    drive_type: str = ""
+    size_gb: Optional[float] = None
+    free_gb: Optional[float] = None
+    used_gb: Optional[float] = None
+
 class DeviceCreate(BaseModel):
     customer_id: str
     device_name: str
@@ -88,6 +155,9 @@ class DeviceCreate(BaseModel):
     enrollment_token: Optional[str] = None   # validated on server but not stored as field
     network: Optional[NetworkCreateIn] = None
     monitors: Optional[list[MonitorCreateIn]] = None
+    hardware_inventory: Optional[HardwareInventoryCreateIn] = None
+    physical_disks: Optional[list[PhysicalDiskCreateIn]] = None
+    logical_disks: Optional[list[LogicalDiskCreateIn]] = None
 
 class DeviceListOut(BaseModel):
     id: str
@@ -98,6 +168,7 @@ class DeviceListOut(BaseModel):
     enrollment_method: str
     status: str
     enrolled_at: Optional[datetime]
+    last_checkin: Optional[datetime]
     model_config = {"from_attributes": True}
 
 class DeviceDetailOut(BaseModel):
@@ -121,6 +192,9 @@ class DeviceDetailOut(BaseModel):
     agent_version: str
     network: Optional[NetworkInfoOut]
     monitors: list[MonitorInfoOut]
+    hardware_inventory: Optional[HardwareInventoryOut]
+    physical_disks: list[PhysicalDiskOut]
+    logical_disks: list[LogicalDiskOut]
     customer_name: str
     model_config = {"from_attributes": True}
 

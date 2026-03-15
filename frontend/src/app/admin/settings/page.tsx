@@ -5,6 +5,10 @@ import styles from './page.module.css';
 interface Settings {
   mdm_server_url: string;
   agent_checkin_interval: string;
+  agent_heartbeat_interval: string;
+  agent_metrics_interval: string;
+  agent_inventory_interval: string;
+  agent_commands_interval: string;
   agent_log_level: string;
   smtp_host: string;
   smtp_port: string;
@@ -20,6 +24,10 @@ interface Settings {
 const DEFAULT: Settings = {
   mdm_server_url: 'https://mdm.nocko.com',
   agent_checkin_interval: '300',
+  agent_heartbeat_interval: '60',
+  agent_metrics_interval: '120',
+  agent_inventory_interval: '21600',
+  agent_commands_interval: '45',
   agent_log_level: 'INFO',
   smtp_host: '',
   smtp_port: '587',
@@ -108,7 +116,7 @@ export default function SettingsPage() {
           </div>
           <div className={styles.formGrid}>
             <div className={styles.formRow}>
-              <label className={styles.label}>Agent Check-in Interval (seconds)</label>
+              <label className={styles.label}>Legacy Check-in Interval (seconds)</label>
               <input
                 className={styles.input}
                 type="number"
@@ -125,6 +133,24 @@ export default function SettingsPage() {
               >
                 {['DEBUG', 'INFO', 'WARNING', 'ERROR'].map((l) => <option key={l}>{l}</option>)}
               </select>
+            </div>
+          </div>
+          <div className={styles.formGrid}>
+            <div className={styles.formRow}>
+              <label className={styles.label}>Heartbeat Interval (seconds)</label>
+              <input className={styles.input} type="number" value={form.agent_heartbeat_interval} onChange={(e) => set('agent_heartbeat_interval', e.target.value)} />
+            </div>
+            <div className={styles.formRow}>
+              <label className={styles.label}>Metrics Interval (seconds)</label>
+              <input className={styles.input} type="number" value={form.agent_metrics_interval} onChange={(e) => set('agent_metrics_interval', e.target.value)} />
+            </div>
+            <div className={styles.formRow}>
+              <label className={styles.label}>Inventory Interval (seconds)</label>
+              <input className={styles.input} type="number" value={form.agent_inventory_interval} onChange={(e) => set('agent_inventory_interval', e.target.value)} />
+            </div>
+            <div className={styles.formRow}>
+              <label className={styles.label}>Commands Poll Interval (seconds)</label>
+              <input className={styles.input} type="number" value={form.agent_commands_interval} onChange={(e) => set('agent_commands_interval', e.target.value)} />
             </div>
           </div>
           <div className={styles.infoBox}>

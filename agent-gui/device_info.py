@@ -9,6 +9,16 @@ from typing import Any
 
 import psutil
 
+try:
+    import pythoncom  # type: ignore[import-not-found]
+except ImportError:
+    pythoncom = None
+
+try:
+    import wmi  # type: ignore[import-not-found]
+except ImportError:
+    wmi = None
+
 
 def _safe(callable_obj, fallback: Any = "") -> Any:
     try:
@@ -33,22 +43,203 @@ def _first_mac() -> str:
     return ""
 
 
-def collect_enrollment_payload(config) -> dict[str, Any]:
+def _to_gb(value: Any) -> float | None:
+    try:
+        return round(int(value) / (1024 ** 3), 2)
+    except Exception:
+        return None
+
+
+def _machine_class(manufacturer: str, model: str) -> str:
+    marker = f"{manufacturer} {model}".lower()
+    virtual_markers = (
+        "virtual",
+        "vmware",
+        "virtualbox",
+        "kvm",
+        "qemu",
+        "hyper-v",
+        "xen",
+        "parallels",
+    )
+    return "Virtual Machine" if any(token in marker for token in virtual_markers) else "Physical Machine"
+
+
+def _chassis_type(chassis_codes: list[int], machine_class: str) -> str:
+    if machine_class == "Virtual Machine":
+        return "Virtual Machine"
+
+    laptop_codes = {8, 9, 10, 14, 30, 31, 32}
+    desktop_codes = {3, 4, 5, 6, 7, 13, 15, 16}
+    server_codes = {17, 23, 28}
+
+    if any(code in laptop_codes for code in chassis_codes):
+        return "Laptop"
+    if any(code in server_codes for code in chassis_codes):
+        return "Server"
+    if any(code in desktop_codes for code in chassis_codes):
+        return "Desktop"
+    return "Desktop" if os.name == "nt" else "Unknown"
+
+
+def _drive_type_name(code: Any) -> str:
     return {
-        "customer_id": config.customer_id,
-        "enrollment_token": config.enrollment_token,
+        0: "Unknown",
+        1: "No Root Directory",
+        2: "Removable",
+        3: "Local Disk",
+        4: "Network",
+        5: "CD-ROM",
+        6: "RAM Disk",
+    }.get(int(code), "Unknown")
+
+
+def _logical_disk_telemetry() -> list[dict[str, Any]]:
+    disks: list[dict[str, Any]] = []
+    for part in psutil.disk_partitions(all=False):
+        mount = part.mountpoint
+        device_name = part.device or mount
+        if os.name == "nt" and not device_name:
+            continue
+        try:
+            usage = psutil.disk_usage(mount)
+        except Exception:
+            continue
+        disks.append({
+            "name": str(device_name).strip(),
+            "volume_name": "",
+            "file_system": part.fstype or "",
+            "drive_type": "Local Disk",
+            "size_gb": round(usage.total / (1024 ** 3), 2),
+            "free_gb": round(usage.free / (1024 ** 3), 2),
+            "used_gb": round(usage.used / (1024 ** 3), 2),
+        })
+    return disks
+
+
+def _collect_windows_inventory() -> dict[str, Any]:
+    if os.name != "nt" or wmi is None:
+        return {}
+
+    initialized = False
+    if pythoncom is not None:
+        try:
+            pythoncom.CoInitialize()
+            initialized = True
+        except Exception:
+            initialized = False
+
+    try:
+        client = wmi.WMI()
+        computer = client.Win32_ComputerSystem()[0] if client.Win32_ComputerSystem() else None
+        bios = client.Win32_BIOS()[0] if client.Win32_BIOS() else None
+        enclosure = client.Win32_SystemEnclosure()[0] if client.Win32_SystemEnclosure() else None
+        processors = client.Win32_Processor()
+        memory_modules = client.Win32_PhysicalMemory()
+        memory_arrays = client.Win32_PhysicalMemoryArray()
+        physical_disks = client.Win32_DiskDrive()
+        logical_disks = client.Win32_LogicalDisk()
+
+        manufacturer = str(getattr(computer, "Manufacturer", "") or "")
+        model = str(getattr(computer, "Model", "") or "")
+        machine_class = _machine_class(manufacturer, model)
+        chassis_codes = [int(code) for code in (getattr(enclosure, "ChassisTypes", None) or []) if str(code).isdigit()]
+        chassis_type = _chassis_type(chassis_codes, machine_class)
+
+        processor_model = ""
+        processor_vendor = ""
+        physical_cores = None
+        logical_processors = None
+        if processors:
+            processor_model = str(getattr(processors[0], "Name", "") or "").strip()
+            processor_vendor = str(getattr(processors[0], "Manufacturer", "") or "").strip()
+            physical_cores = sum(int(getattr(cpu, "NumberOfCores", 0) or 0) for cpu in processors) or None
+            logical_processors = sum(int(getattr(cpu, "NumberOfLogicalProcessors", 0) or 0) for cpu in processors) or None
+
+        slot_count = sum(int(getattr(arr, "MemoryDevices", 0) or 0) for arr in memory_arrays) or None
+        slots_used = sum(1 for module in memory_modules if int(getattr(module, "Capacity", 0) or 0) > 0) or None
+
+        hardware_inventory = {
+            "processor_model": processor_model,
+            "processor_vendor": processor_vendor,
+            "physical_cores": physical_cores,
+            "logical_processors": logical_processors,
+            "memory_total_gb": _to_gb(getattr(computer, "TotalPhysicalMemory", 0)),
+            "memory_slot_count": slot_count,
+            "memory_slots_used": slots_used,
+            "memory_module_count": len(memory_modules) or None,
+            "machine_class": machine_class,
+            "chassis_type": chassis_type,
+        }
+
+        physical_disk_items = []
+        for disk in physical_disks:
+            physical_disk_items.append({
+                "disk_index": int(getattr(disk, "Index", 0)) if str(getattr(disk, "Index", "")).isdigit() else None,
+                "model": str(getattr(disk, "Model", "") or "").strip(),
+                "serial_number": str(getattr(disk, "SerialNumber", "") or "").strip(),
+                "media_type": str(getattr(disk, "MediaType", "") or "").strip(),
+                "interface_type": str(getattr(disk, "InterfaceType", "") or "").strip(),
+                "size_gb": _to_gb(getattr(disk, "Size", 0)),
+            })
+
+        logical_disk_items = []
+        for disk in logical_disks:
+            size_gb = _to_gb(getattr(disk, "Size", 0))
+            free_gb = _to_gb(getattr(disk, "FreeSpace", 0))
+            used_gb = round(size_gb - free_gb, 2) if size_gb is not None and free_gb is not None else None
+            logical_disk_items.append({
+                "name": str(getattr(disk, "DeviceID", "") or "").strip(),
+                "volume_name": str(getattr(disk, "VolumeName", "") or "").strip(),
+                "file_system": str(getattr(disk, "FileSystem", "") or "").strip(),
+                "drive_type": _drive_type_name(getattr(disk, "DriveType", 0)),
+                "size_gb": size_gb,
+                "free_gb": free_gb,
+                "used_gb": used_gb,
+            })
+
+        return {
+            "device_type": chassis_type,
+            "manufacturer": manufacturer,
+            "model": model,
+            "serial_number": str(getattr(bios, "SerialNumber", "") or "").strip(),
+            "hardware_inventory": hardware_inventory,
+            "physical_disks": physical_disk_items,
+            "logical_disks": logical_disk_items,
+        }
+    except Exception:
+        return {}
+    finally:
+        if initialized and pythoncom is not None:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+
+
+def _identity_payload(config) -> dict[str, Any]:
+    windows_inventory = _collect_windows_inventory()
+    return {
         "device_name": socket.gethostname(),
         "platform": "Windows" if os.name == "nt" else platform.system(),
-        "device_type": "Desktop",
-        "model": platform.machine(),
-        "manufacturer": platform.node(),
-        "serial_number": "",
+        "device_type": windows_inventory.get("device_type") or "Desktop",
+        "model": windows_inventory.get("model") or platform.machine(),
+        "manufacturer": windows_inventory.get("manufacturer") or platform.node(),
+        "serial_number": windows_inventory.get("serial_number") or "",
         "udid": hex(uuid.getnode())[2:].upper(),
         "os_version": platform.platform(),
         "architecture": platform.machine(),
         "owner": os.getenv("USERNAME", ""),
         "enrollment_method": "WindowsService",
         "agent_version": config.agent_version,
+        "hardware_inventory": windows_inventory.get("hardware_inventory"),
+        "physical_disks": windows_inventory.get("physical_disks", []),
+        "logical_disks": windows_inventory.get("logical_disks", []),
+    }
+
+
+def _network_payload() -> dict[str, Any]:
+    return {
         "network": {
             "ip_address": _first_ipv4(),
             "mac_address": _first_mac(),
@@ -58,24 +249,50 @@ def collect_enrollment_payload(config) -> dict[str, Any]:
             "dns_server": "",
             "default_gateway": "",
         },
+    }
+
+
+def collect_enrollment_payload(config) -> dict[str, Any]:
+    return {
+        "customer_id": config.customer_id,
+        "enrollment_token": config.enrollment_token,
+        **_identity_payload(config),
+        **_network_payload(),
         "monitors": [],
     }
 
 
-def collect_checkin_payload(config) -> dict[str, Any]:
-    vm = _safe(psutil.virtual_memory)
-    disk = _safe(lambda: psutil.disk_usage("C:\\" if os.name == "nt" else "/"))
-    boot_time = _safe(psutil.boot_time, 0.0)
-
+def collect_heartbeat_payload(config) -> dict[str, Any]:
     return {
         "device_id": config.device_id,
         "agent_version": config.agent_version,
         "os_version": platform.platform(),
         "ip_address": _first_ipv4(),
+    }
+
+
+def collect_metrics_payload(config) -> dict[str, Any]:
+    vm = _safe(psutil.virtual_memory)
+    disk = _safe(lambda: psutil.disk_usage("C:\\" if os.name == "nt" else "/"))
+    boot_time = _safe(psutil.boot_time, 0.0)
+    logical_disks = _logical_disk_telemetry()
+
+    return {
+        **collect_heartbeat_payload(config),
         "cpu_pct": _safe(lambda: round(psutil.cpu_percent(interval=1), 1), None),
         "ram_used_gb": _safe(lambda: round((vm.used / (1024 ** 3)), 2), None) if vm else None,
         "ram_total_gb": _safe(lambda: round((vm.total / (1024 ** 3)), 2), None) if vm else None,
         "disk_used_gb": _safe(lambda: round((disk.used / (1024 ** 3)), 2), None) if disk else None,
         "disk_total_gb": _safe(lambda: round((disk.total / (1024 ** 3)), 2), None) if disk else None,
         "uptime_seconds": _safe(lambda: max(0, int(time.time() - boot_time)), 0),
+        "logical_disks": logical_disks,
+    }
+
+
+def collect_inventory_payload(config) -> dict[str, Any]:
+    return {
+        "device_id": config.device_id,
+        **_identity_payload(config),
+        **_network_payload(),
+        "monitors": [],
     }

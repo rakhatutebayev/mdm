@@ -14,7 +14,11 @@ router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 # ── Default values (used when no row exists in DB yet) ──────────────────────
 DEFAULTS: dict[str, tuple[str, str]] = {
     "mdm_server_url":          ("https://mdm.nocko.com",  "Public MDM server URL used by agents and package builder"),
-    "agent_checkin_interval":  ("300",                     "Seconds between agent check-ins"),
+    "agent_checkin_interval":  ("300",                     "Legacy overall check-in interval"),
+    "agent_heartbeat_interval": ("60",                     "Seconds between heartbeat updates"),
+    "agent_metrics_interval":   ("120",                    "Seconds between metrics uploads"),
+    "agent_inventory_interval": ("21600",                  "Seconds between full inventory uploads"),
+    "agent_commands_interval":  ("45",                     "Seconds between command polling"),
     "agent_log_level":         ("INFO",                    "Agent log verbosity: DEBUG | INFO | WARNING | ERROR"),
     "smtp_host":               ("",                        "SMTP host for email notifications"),
     "smtp_port":               ("587",                     "SMTP port"),
@@ -52,7 +56,10 @@ async def get_agent_package_settings(db: AsyncSession) -> dict[str, str]:
     data = await _get_all(db)
     return {
         "server_url": data["mdm_server_url"].rstrip("/"),
-        "checkin_interval": data["agent_checkin_interval"],
+        "heartbeat_interval": data.get("agent_heartbeat_interval", data["agent_checkin_interval"]),
+        "metrics_interval": data.get("agent_metrics_interval", data["agent_checkin_interval"]),
+        "inventory_interval": data.get("agent_inventory_interval", "21600"),
+        "commands_interval": data.get("agent_commands_interval", "45"),
         "log_level": data["agent_log_level"],
         "siem_enabled": data["siem_enabled"],
     }
@@ -61,6 +68,10 @@ async def get_agent_package_settings(db: AsyncSession) -> dict[str, str]:
 class SettingsOut(BaseModel):
     mdm_server_url: str
     agent_checkin_interval: str
+    agent_heartbeat_interval: str
+    agent_metrics_interval: str
+    agent_inventory_interval: str
+    agent_commands_interval: str
     agent_log_level: str
     smtp_host: str
     smtp_port: str
@@ -76,6 +87,10 @@ class SettingsOut(BaseModel):
 class SettingsIn(BaseModel):
     mdm_server_url: str | None = None
     agent_checkin_interval: str | None = None
+    agent_heartbeat_interval: str | None = None
+    agent_metrics_interval: str | None = None
+    agent_inventory_interval: str | None = None
+    agent_commands_interval: str | None = None
     agent_log_level: str | None = None
     smtp_host: str | None = None
     smtp_port: str | None = None
@@ -92,6 +107,10 @@ def _to_out(data: dict[str, str]) -> SettingsOut:
     return SettingsOut(
         mdm_server_url=data["mdm_server_url"],
         agent_checkin_interval=data["agent_checkin_interval"],
+        agent_heartbeat_interval=data.get("agent_heartbeat_interval", data["agent_checkin_interval"]),
+        agent_metrics_interval=data.get("agent_metrics_interval", data["agent_checkin_interval"]),
+        agent_inventory_interval=data.get("agent_inventory_interval", "21600"),
+        agent_commands_interval=data.get("agent_commands_interval", "45"),
         agent_log_level=data["agent_log_level"],
         smtp_host=data["smtp_host"],
         smtp_port=data["smtp_port"],
@@ -120,6 +139,14 @@ async def update_settings(body: SettingsIn, db: AsyncSession = Depends(get_db)):
         updates["mdm_server_url"] = body.mdm_server_url.rstrip("/")
     if body.agent_checkin_interval is not None:
         updates["agent_checkin_interval"] = body.agent_checkin_interval
+    if body.agent_heartbeat_interval is not None:
+        updates["agent_heartbeat_interval"] = body.agent_heartbeat_interval
+    if body.agent_metrics_interval is not None:
+        updates["agent_metrics_interval"] = body.agent_metrics_interval
+    if body.agent_inventory_interval is not None:
+        updates["agent_inventory_interval"] = body.agent_inventory_interval
+    if body.agent_commands_interval is not None:
+        updates["agent_commands_interval"] = body.agent_commands_interval
     if body.agent_log_level is not None:
         updates["agent_log_level"] = body.agent_log_level
     if body.smtp_host is not None:

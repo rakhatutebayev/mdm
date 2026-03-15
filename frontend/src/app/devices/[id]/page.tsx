@@ -15,6 +15,15 @@ interface MetricsSnapshot {
   disk_used_gb: number | null;
   disk_total_gb: number | null;
   uptime_seconds: number | null;
+  logical_disks: Array<{
+    name: string;
+    volume_name: string;
+    file_system: string;
+    drive_type: string;
+    size_gb: number | null;
+    free_gb: number | null;
+    used_gb: number | null;
+  }>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -35,6 +44,10 @@ function gaugeColor(p: number): string {
   if (p < 60) return '#22c55e';
   if (p < 80) return '#f59e0b';
   return '#ef4444';
+}
+
+function formatGb(value: number | null | undefined) {
+  return value == null ? '—' : `${value.toFixed(2)} GB`;
 }
 
 // ── Gauge Component ───────────────────────────────────────────────────────────
@@ -79,8 +92,11 @@ function Gauge({ label, value, unit, used, total, colorByPct = true }: {
 
 const SECTION_ICONS: Record<string, string> = {
   'Device Summary':  '🖥️',
+  'Hardware Summary': '⚙️',
   'Network Summary': '🌐',
   'MDM Info':        '🔒',
+  'Physical Disks':  '💽',
+  'Logical Disks':   '🗂️',
   'Monitor Summary': '🖱️',
 };
 
@@ -106,16 +122,25 @@ export default function DeviceDetailPage() {
     } catch { /* metrics optional */ }
   }, [id]);
 
-  useEffect(() => {
+  const loadDevice = useCallback(async () => {
     setLoading(true);
-    Promise.all([
-      getDevice(id),
-      fetchMetrics(),
-    ])
-      .then(([dev]) => setDevice(dev))
-      .catch((e) => setError(e.message || 'Failed to load device'))
-      .finally(() => setLoading(false));
+    setError(null);
+    try {
+      const [dev] = await Promise.all([
+        getDevice(id),
+        fetchMetrics(),
+      ]);
+      setDevice(dev);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load device');
+    } finally {
+      setLoading(false);
+    }
   }, [id, fetchMetrics]);
+
+  useEffect(() => {
+    void loadDevice();
+  }, [loadDevice]);
 
   if (loading) return <div className={styles.notFound}><p>Loading device…</p></div>;
   if (error || !device) {
@@ -150,6 +175,19 @@ export default function DeviceDetailPage() {
     'Last Check-in':   device.last_checkin ? new Date(device.last_checkin).toLocaleString() : '—',
   } : { 'Network Info': 'No network data available' };
 
+  const hardwareSec: Record<string, string> = device.hardware_inventory ? {
+    'Processor Model': device.hardware_inventory.processor_model || '—',
+    'Processor Vendor': device.hardware_inventory.processor_vendor || '—',
+    'Physical Cores': device.hardware_inventory.physical_cores != null ? String(device.hardware_inventory.physical_cores) : '—',
+    'Logical Processors': device.hardware_inventory.logical_processors != null ? String(device.hardware_inventory.logical_processors) : '—',
+    'Memory Total': formatGb(device.hardware_inventory.memory_total_gb),
+    'Memory Slots': device.hardware_inventory.memory_slot_count != null ? String(device.hardware_inventory.memory_slot_count) : '—',
+    'Memory Slots Used': device.hardware_inventory.memory_slots_used != null ? String(device.hardware_inventory.memory_slots_used) : '—',
+    'Memory Modules': device.hardware_inventory.memory_module_count != null ? String(device.hardware_inventory.memory_module_count) : '—',
+    'Machine Class': device.hardware_inventory.machine_class || '—',
+    'Chassis Type': device.hardware_inventory.chassis_type || '—',
+  } : { 'Hardware Info': 'No hardware inventory data available' };
+
   const mdmSec: Record<string, string> = {
     'Enrollment Method': device.enrollment_method,
     'Enrolled Time':     device.enrolled_at ? new Date(device.enrolled_at).toLocaleString() : '—',
@@ -177,10 +215,45 @@ export default function DeviceDetailPage() {
           ]))
         }}];
 
+  const physicalDiskSections = device.physical_disks.length === 0
+    ? [{ title: 'Physical Disks', data: { 'Physical Disks': 'No physical disk data available' } }]
+    : [{
+        title: 'Physical Disks',
+        data: {
+          'Disk Count': String(device.physical_disks.length),
+          ...Object.fromEntries(device.physical_disks.flatMap((disk, idx) => [
+            [`Disk ${idx + 1} — Model`, disk.model || '—'],
+            [`Disk ${idx + 1} — Size`, formatGb(disk.size_gb)],
+            [`Disk ${idx + 1} — Media Type`, disk.media_type || '—'],
+            [`Disk ${idx + 1} — Interface`, disk.interface_type || '—'],
+          ])),
+        },
+      }];
+
+  const logicalDiskSections = device.logical_disks.length === 0
+    ? [{ title: 'Logical Disks', data: { 'Logical Disks': 'No logical disk data available' } }]
+    : [{
+        title: 'Logical Disks',
+        data: {
+          'Logical Disk Count': String(device.logical_disks.length),
+          ...Object.fromEntries(device.logical_disks.flatMap((disk) => [
+            [`${disk.name} — Volume`, disk.volume_name || '—'],
+            [`${disk.name} — File System`, disk.file_system || '—'],
+            [`${disk.name} — Drive Type`, disk.drive_type || '—'],
+            [`${disk.name} — Size`, formatGb(disk.size_gb)],
+            [`${disk.name} — Free`, formatGb(disk.free_gb)],
+            [`${disk.name} — Used`, formatGb(disk.used_gb)],
+          ])),
+        },
+      }];
+
   const sections = [
     { title: 'Device Summary',  data: summarySec },
+    { title: 'Hardware Summary', data: hardwareSec },
     { title: 'Network Summary', data: networkSec },
     { title: 'MDM Info',        data: mdmSec },
+    ...physicalDiskSections,
+    ...logicalDiskSections,
     ...monitorSections,
   ];
 
@@ -235,32 +308,58 @@ export default function DeviceDetailPage() {
           )}
         </div>
         {hasMetrics ? (
-          <div className={styles.gauges}>
-            <Gauge
-              label="CPU"
-              value={Math.round(cpuPct ?? 0)}
-              unit="%"
-            />
-            <Gauge
-              label="RAM"
-              value={ramPct}
-              used={metrics?.ram_used_gb}
-              total={metrics?.ram_total_gb}
-              unit="GB"
-            />
-            <Gauge
-              label="Disk C:"
-              value={diskPct}
-              used={metrics?.disk_used_gb}
-              total={metrics?.disk_total_gb}
-              unit="GB"
-            />
-            <div className={styles.uptimeCard}>
-              <div className={styles.uptimeIcon}>⏱</div>
-              <div className={styles.uptimeLabel}>Uptime</div>
-              <div className={styles.uptimeValue}>{formatUptime(metrics?.uptime_seconds ?? null)}</div>
+          <>
+            <div className={styles.gauges}>
+              <Gauge
+                label="CPU"
+                value={Math.round(cpuPct ?? 0)}
+                unit="%"
+              />
+              <Gauge
+                label="RAM"
+                value={ramPct}
+                used={metrics?.ram_used_gb}
+                total={metrics?.ram_total_gb}
+                unit="GB"
+              />
+              <Gauge
+                label="Disk C:"
+                value={diskPct}
+                used={metrics?.disk_used_gb}
+                total={metrics?.disk_total_gb}
+                unit="GB"
+              />
+              <div className={styles.uptimeCard}>
+                <div className={styles.uptimeIcon}>⏱</div>
+                <div className={styles.uptimeLabel}>Uptime</div>
+                <div className={styles.uptimeValue}>{formatUptime(metrics?.uptime_seconds ?? null)}</div>
+              </div>
             </div>
-          </div>
+            {metrics.logical_disks.length > 0 && (
+              <div className={styles.card} style={{ marginTop: 16 }}>
+                <div className={styles.cardHeader}>
+                  <span className={styles.cardIcon}>💾</span>
+                  <h2 className={styles.cardTitle}>Disk Telemetry</h2>
+                </div>
+                <dl className={styles.dl}>
+                  {metrics.logical_disks.flatMap((disk) => ([
+                    <div key={`${disk.name}-used`} className={styles.dlRow}>
+                      <dt className={styles.dt}>{disk.name} Used</dt>
+                      <dd className={styles.dd}>{formatGb(disk.used_gb)}</dd>
+                    </div>,
+                    <div key={`${disk.name}-free`} className={styles.dlRow}>
+                      <dt className={styles.dt}>{disk.name} Free</dt>
+                      <dd className={styles.dd}>{formatGb(disk.free_gb)}</dd>
+                    </div>,
+                    <div key={`${disk.name}-total`} className={styles.dlRow}>
+                      <dt className={styles.dt}>{disk.name} Total</dt>
+                      <dd className={styles.dd}>{formatGb(disk.size_gb)}</dd>
+                    </div>,
+                  ]))}
+                </dl>
+              </div>
+            )}
+          </>
         ) : (
           <div className={styles.noMetrics}>
             <span>📡</span>

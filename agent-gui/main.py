@@ -7,9 +7,11 @@ import subprocess
 import sys
 import threading
 from pathlib import Path
+from typing import Any
 
 from config import (
     AGENT_VERSION,
+    UNINSTALL_REGISTRY_KEY,
     WINDOWS_SERVICE_NAME,
     AgentConfig,
     load_config,
@@ -17,6 +19,7 @@ from config import (
     write_executable_without_embedded_config,
 )
 from logger import configure_logging
+from modules.mdm import MdmAgentClient
 from service_runtime import run_agent_loop
 
 try:
@@ -29,6 +32,11 @@ except ImportError:
     win32event = None
     win32service = None
     win32serviceutil = None
+
+try:
+    import winreg  # type: ignore[import-not-found]
+except ImportError:
+    winreg = None
 
 
 class NockoAgentService(win32serviceutil.ServiceFramework if win32serviceutil else object):
@@ -128,6 +136,73 @@ def prepare_installed_binary(current_exe: Path, target_exe: Path, logger) -> Pat
         raise
 
 
+def register_uninstall_entry(config: AgentConfig, target_exe: Path) -> None:
+    if os.name != "nt" or winreg is None:
+        return
+
+    with winreg.CreateKey(winreg.HKEY_LOCAL_MACHINE, UNINSTALL_REGISTRY_KEY) as key:
+        winreg.SetValueEx(key, "DisplayName", 0, winreg.REG_SZ, config.agent_display_name)
+        winreg.SetValueEx(key, "Publisher", 0, winreg.REG_SZ, "NOCKO IT")
+        winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, config.agent_version or AGENT_VERSION)
+        winreg.SetValueEx(key, "InstallLocation", 0, winreg.REG_SZ, str(target_exe.parent))
+        winreg.SetValueEx(key, "DisplayIcon", 0, winreg.REG_SZ, str(target_exe))
+        winreg.SetValueEx(key, "UninstallString", 0, winreg.REG_SZ, f'"{target_exe}" uninstall')
+        winreg.SetValueEx(key, "QuietUninstallString", 0, winreg.REG_SZ, f'"{target_exe}" uninstall --quiet')
+        winreg.SetValueEx(key, "NoModify", 0, winreg.REG_DWORD, 1)
+        winreg.SetValueEx(key, "NoRepair", 0, winreg.REG_DWORD, 1)
+
+
+def remove_uninstall_entry() -> None:
+    if os.name != "nt" or winreg is None:
+        return
+    try:
+        winreg.DeleteKey(winreg.HKEY_LOCAL_MACHINE, UNINSTALL_REGISTRY_KEY)
+    except FileNotFoundError:
+        pass
+
+
+def schedule_cleanup(target_exe: Path, config_path: Path, install_dir: Path, log_dir: Path) -> None:
+    if os.name != "nt":
+        return
+    cleanup = (
+        f'ping 127.0.0.1 -n 4 > NUL & '
+        f'del /f /q "{target_exe}" 2> NUL & '
+        f'del /f /q "{config_path}" 2> NUL & '
+        f'rmdir /s /q "{install_dir}" 2> NUL & '
+        f'rmdir /s /q "{log_dir}" 2> NUL'
+    )
+    subprocess.Popen(
+        ["cmd", "/c", cleanup],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+
+
+def uninstall_agent(quiet: bool = False) -> int:
+    if os.name != "nt":
+        return 0
+    if not is_windows_admin():
+        return relaunch_elevated()
+
+    config = load_config()
+    logger = configure_logging(config.log_level, config.log_dir)
+    target_exe = Path(sys.executable).resolve()
+
+    try:
+        MdmAgentClient(config, logger).decommission("Agent uninstalled")
+    except Exception as exc:
+        logger.warning("Decommission request failed: %s", exc)
+
+    try_run([str(target_exe), "stop"])
+    try_run([str(target_exe), "remove"])
+    remove_uninstall_entry()
+    schedule_cleanup(target_exe, AgentConfig.config_path(), target_exe.parent, Path(config.log_dir))
+    if not quiet:
+        logger.info("Uninstall scheduled for %s", target_exe)
+    return 0
+
+
 def bootstrap_install_from_embedded_config() -> int:
     embedded = read_embedded_config(sys.executable)
     if not embedded:
@@ -158,6 +233,7 @@ def bootstrap_install_from_embedded_config() -> int:
     run_command([str(runtime_exe), "--startup", "auto", "install"])
     if config.start_immediately:
         run_command([str(runtime_exe), "start"])
+    register_uninstall_entry(config, runtime_exe)
     logger.info("Bootstrap install complete")
     return 0
 
@@ -167,6 +243,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("command", nargs="?", default="run")
     parser.add_argument("--config", dest="config_path")
     parser.add_argument("--version", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
     return parser.parse_args()
 
 
@@ -180,6 +257,9 @@ def main() -> int:
     if args.version:
         print(AGENT_VERSION)
         return 0
+
+    if args.command == "uninstall":
+        return uninstall_agent(args.quiet)
 
     if args.command in {"bootstrap-install", "bootstrap"}:
         return bootstrap_install_from_embedded_config()

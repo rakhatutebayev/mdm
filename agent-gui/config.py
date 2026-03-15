@@ -7,9 +7,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.0.0")
+AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.0.1")
 WINDOWS_SERVICE_NAME = "NOCKOAgent"
 EMBEDDED_CONFIG_MAGIC = b"NOCKO_CFG_V1"
+UNINSTALL_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOAgent"
 
 
 def _default_base_dir() -> Path:
@@ -24,7 +25,10 @@ class AgentConfig:
     server_url: str = "https://mdm.nocko.com"
     enrollment_token: str = ""
     customer_id: str = ""
-    checkin_interval: int = 300
+    heartbeat_interval: int = 60
+    metrics_interval: int = 120
+    inventory_interval: int = 21600
+    commands_interval: int = 45
     mdm_enabled: bool = True
     siem_enabled: bool = False
     backup_enabled: bool = False
@@ -59,6 +63,12 @@ class AgentConfig:
 
         with config_path.open("r", encoding="utf-8") as fh:
             raw = json.load(fh)
+        if "checkin_interval" in raw:
+            legacy = int(raw["checkin_interval"])
+            raw.setdefault("heartbeat_interval", legacy)
+            raw.setdefault("metrics_interval", max(legacy, 120))
+            raw.setdefault("inventory_interval", 21600)
+            raw.setdefault("commands_interval", min(max(legacy // 2, 30), 300))
         defaults = asdict(cls())
         allowed = set(defaults.keys())
         merged = {**defaults, **{k: v for k, v in raw.items() if k in allowed}}

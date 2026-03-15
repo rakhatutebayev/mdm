@@ -8,14 +8,6 @@ import EnrollWindowsModal from '@/components/EnrollWindowsModal/EnrollWindowsMod
 import { getDevices, updateDeviceStatus, deleteDevice, type DeviceListItem } from '@/lib/api';
 import styles from './page.module.css';
 
-const CUSTOMERS: Record<string, string> = {
-  default: 'DEFAULT_CUSTOMER',
-  nocko: 'NOCKO IT',
-  strattech: 'Strategic Technology Solutions',
-  almatygroup: 'Almaty Group',
-  delta: 'Delta Corp',
-};
-
 
 const COLUMNS = [
   { key: 'deviceName', label: 'Device Name', visible: true },
@@ -23,6 +15,7 @@ const COLUMNS = [
   { key: 'owner', label: 'Owner', visible: true },
   { key: 'enrollmentMethod', label: 'Enrollment Method', visible: true },
   { key: 'enrolledTime', label: 'Enrolled Time', visible: true },
+  { key: 'lastUpdate', label: 'Last Update', visible: true },
   { key: 'status', label: 'Status', visible: true },
   { key: 'actions', label: 'Actions', visible: true },
 ];
@@ -285,7 +278,8 @@ export default function EnrollmentDevicesPage() {
                       checked={selected.has(d.id)}
                       onChange={() => {
                         const next = new Set(selected);
-                        next.has(d.id) ? next.delete(d.id) : next.add(d.id);
+                        if (next.has(d.id)) next.delete(d.id);
+                        else next.add(d.id);
                         setSelected(next);
                       }}
                     />
@@ -347,6 +341,7 @@ export default function EnrollmentDevicesPage() {
                       ) : col.key === 'owner' ? d.owner
                       : col.key === 'enrollmentMethod' ? d.enrollment_method
                       : col.key === 'enrolledTime' ? (d.enrolled_at ? new Date(d.enrolled_at).toLocaleString() : '—')
+                      : col.key === 'lastUpdate' ? (d.last_checkin ? new Date(d.last_checkin).toLocaleString() : '—')
                       : null}
                     </td>
                   ))}

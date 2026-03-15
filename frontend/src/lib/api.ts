@@ -35,6 +35,7 @@ export interface DeviceListItem {
   enrollment_method: string;
   status: string;
   enrolled_at: string | null;
+  last_checkin: string | null;
 }
 
 export interface NetworkInfo {
@@ -59,6 +60,38 @@ export interface MonitorInfo {
   hdr_support: boolean;
 }
 
+export interface HardwareInventory {
+  processor_model: string;
+  processor_vendor: string;
+  physical_cores: number | null;
+  logical_processors: number | null;
+  memory_total_gb: number | null;
+  memory_slot_count: number | null;
+  memory_slots_used: number | null;
+  memory_module_count: number | null;
+  machine_class: string;
+  chassis_type: string;
+}
+
+export interface PhysicalDiskInfo {
+  disk_index: number | null;
+  model: string;
+  serial_number: string;
+  media_type: string;
+  interface_type: string;
+  size_gb: number | null;
+}
+
+export interface LogicalDiskInfo {
+  name: string;
+  volume_name: string;
+  file_system: string;
+  drive_type: string;
+  size_gb: number | null;
+  free_gb: number | null;
+  used_gb: number | null;
+}
+
 export interface DeviceDetail extends DeviceListItem {
   device_type: string;
   model: string;
@@ -72,6 +105,9 @@ export interface DeviceDetail extends DeviceListItem {
   agent_version: string;
   network: NetworkInfo | null;
   monitors: MonitorInfo[];
+  hardware_inventory: HardwareInventory | null;
+  physical_disks: PhysicalDiskInfo[];
+  logical_disks: LogicalDiskInfo[];
   customer_name: string;
 }
 

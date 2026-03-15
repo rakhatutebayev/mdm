@@ -14,9 +14,19 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from database import get_db
-from models import Device, NetworkInfo, MonitorInfo, EnrollmentToken, Customer
+from models import (
+    Customer,
+    Device,
+    EnrollmentToken,
+    HardwareInventory,
+    LogicalDisk,
+    MonitorInfo,
+    NetworkInfo,
+    PhysicalDisk,
+)
 
 router = APIRouter(prefix="/api/v1/mdm/windows", tags=["mdm-agent"])
 
@@ -49,6 +59,38 @@ class MonitorPayload(BaseModel):
     is_external: bool = True
 
 
+class HardwareInventoryPayload(BaseModel):
+    processor_model: str = ""
+    processor_vendor: str = ""
+    physical_cores: Optional[int] = None
+    logical_processors: Optional[int] = None
+    memory_total_gb: Optional[float] = None
+    memory_slot_count: Optional[int] = None
+    memory_slots_used: Optional[int] = None
+    memory_module_count: Optional[int] = None
+    machine_class: str = ""
+    chassis_type: str = ""
+
+
+class PhysicalDiskPayload(BaseModel):
+    disk_index: Optional[int] = None
+    model: str = ""
+    serial_number: str = ""
+    media_type: str = ""
+    interface_type: str = ""
+    size_gb: Optional[float] = None
+
+
+class LogicalDiskPayload(BaseModel):
+    name: str = ""
+    volume_name: str = ""
+    file_system: str = ""
+    drive_type: str = ""
+    size_gb: Optional[float] = None
+    free_gb: Optional[float] = None
+    used_gb: Optional[float] = None
+
+
 class EnrollPayload(BaseModel):
     """Payload the Windows PS1 agent sends on first run."""
     customer_id: str
@@ -68,6 +110,9 @@ class EnrollPayload(BaseModel):
     agent_version: str = ""
     network: Optional[NetworkPayload] = None
     monitors: Optional[list[MonitorPayload]] = None
+    hardware_inventory: Optional[HardwareInventoryPayload] = None
+    physical_disks: Optional[list[PhysicalDiskPayload]] = None
+    logical_disks: Optional[list[LogicalDiskPayload]] = None
 
 
 class CheckinPayload(BaseModel):
@@ -85,7 +130,30 @@ class CheckinPayload(BaseModel):
     disk_used_gb: Optional[float] = None
     disk_total_gb: Optional[float] = None
     uptime_seconds: Optional[float] = None  # float to accept PS decimal output
+    logical_disks: Optional[list[LogicalDiskPayload]] = None
     extra: Optional[dict[str, Any]] = None
+
+
+class InventoryPayload(BaseModel):
+    device_id: str
+    device_name: str = ""
+    platform: str = "Windows"
+    device_type: str = "Desktop"
+    model: str = ""
+    manufacturer: str = ""
+    serial_number: str = ""
+    udid: str = ""
+    os_version: str = ""
+    architecture: str = ""
+    owner: str = ""
+    shared_device: bool = False
+    enrollment_method: str = "WindowsService"
+    agent_version: str = ""
+    network: Optional[NetworkPayload] = None
+    monitors: Optional[list[MonitorPayload]] = None
+    hardware_inventory: Optional[HardwareInventoryPayload] = None
+    physical_disks: Optional[list[PhysicalDiskPayload]] = None
+    logical_disks: Optional[list[LogicalDiskPayload]] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -100,6 +168,118 @@ async def _resolve_customer(customer_id: str, db: AsyncSession) -> Customer:
     if not customer:
         raise HTTPException(status_code=404, detail=f"Customer not found: {customer_id}")
     return customer
+
+
+async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayload, db: AsyncSession) -> None:
+    device.device_name = body.device_name or device.device_name
+    device.platform = body.platform or device.platform
+    device.device_type = body.device_type or device.device_type
+    device.model = body.model
+    device.manufacturer = body.manufacturer
+    device.serial_number = body.serial_number
+    device.udid = body.udid
+    device.os_version = body.os_version
+    device.architecture = body.architecture
+    device.owner = body.owner
+    device.shared_device = body.shared_device
+    device.enrollment_method = body.enrollment_method
+    if body.agent_version:
+        device.agent_version = body.agent_version
+
+    if body.network:
+        net = body.network
+        if device.network:
+            device.network.ip_address = net.ip_address
+            device.network.mac_address = net.mac_address
+            device.network.hostname = net.hostname or net.interface or device.device_name
+            device.network.wifi_ssid = net.wifi_ssid
+            device.network.connection_type = net.connection_type
+            device.network.dns_server = net.dns_server or net.dns_servers
+            device.network.default_gateway = net.default_gateway or net.gateway
+        else:
+            db.add(NetworkInfo(
+                device_id=device.id,
+                ip_address=net.ip_address,
+                mac_address=net.mac_address,
+                hostname=net.hostname or net.interface or device.device_name,
+                wifi_ssid=net.wifi_ssid,
+                connection_type=net.connection_type,
+                dns_server=net.dns_server or net.dns_servers,
+                default_gateway=net.default_gateway or net.gateway,
+            ))
+
+    if body.monitors is not None:
+        for existing in list(device.monitors):
+            await db.delete(existing)
+        for idx, m in enumerate(body.monitors):
+            db.add(MonitorInfo(
+                device_id=device.id,
+                display_index=m.display_index or (idx + 1),
+                model=m.model or m.name or "",
+                serial_number=m.serial_number,
+                resolution=m.resolution,
+                refresh_rate=m.refresh_rate,
+                color_depth=m.color_depth,
+                connection_type=m.connection_type,
+                hdr_support=m.hdr_support,
+            ))
+
+    if body.hardware_inventory:
+        hw = body.hardware_inventory
+        if device.hardware_inventory:
+            device.hardware_inventory.processor_model = hw.processor_model
+            device.hardware_inventory.processor_vendor = hw.processor_vendor
+            device.hardware_inventory.physical_cores = hw.physical_cores
+            device.hardware_inventory.logical_processors = hw.logical_processors
+            device.hardware_inventory.memory_total_gb = hw.memory_total_gb
+            device.hardware_inventory.memory_slot_count = hw.memory_slot_count
+            device.hardware_inventory.memory_slots_used = hw.memory_slots_used
+            device.hardware_inventory.memory_module_count = hw.memory_module_count
+            device.hardware_inventory.machine_class = hw.machine_class
+            device.hardware_inventory.chassis_type = hw.chassis_type
+        else:
+            db.add(HardwareInventory(
+                device_id=device.id,
+                processor_model=hw.processor_model,
+                processor_vendor=hw.processor_vendor,
+                physical_cores=hw.physical_cores,
+                logical_processors=hw.logical_processors,
+                memory_total_gb=hw.memory_total_gb,
+                memory_slot_count=hw.memory_slot_count,
+                memory_slots_used=hw.memory_slots_used,
+                memory_module_count=hw.memory_module_count,
+                machine_class=hw.machine_class,
+                chassis_type=hw.chassis_type,
+            ))
+
+    if body.physical_disks is not None:
+        for existing in list(device.physical_disks):
+            await db.delete(existing)
+        for disk in body.physical_disks:
+            db.add(PhysicalDisk(
+                device_id=device.id,
+                disk_index=disk.disk_index,
+                model=disk.model,
+                serial_number=disk.serial_number,
+                media_type=disk.media_type,
+                interface_type=disk.interface_type,
+                size_gb=disk.size_gb,
+            ))
+
+    if body.logical_disks is not None:
+        for existing in list(device.logical_disks):
+            await db.delete(existing)
+        for disk in body.logical_disks:
+            db.add(LogicalDisk(
+                device_id=device.id,
+                name=disk.name,
+                volume_name=disk.volume_name,
+                file_system=disk.file_system,
+                drive_type=disk.drive_type,
+                size_gb=disk.size_gb,
+                free_gb=disk.free_gb,
+                used_gb=disk.used_gb,
+            ))
 
 
 # ── Enroll ────────────────────────────────────────────────────────────────────
@@ -178,6 +358,47 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
                 hdr_support     = m.hdr_support,
             ))
 
+    if body.hardware_inventory:
+        hw = body.hardware_inventory
+        db.add(HardwareInventory(
+            device_id=device.id,
+            processor_model=hw.processor_model,
+            processor_vendor=hw.processor_vendor,
+            physical_cores=hw.physical_cores,
+            logical_processors=hw.logical_processors,
+            memory_total_gb=hw.memory_total_gb,
+            memory_slot_count=hw.memory_slot_count,
+            memory_slots_used=hw.memory_slots_used,
+            memory_module_count=hw.memory_module_count,
+            machine_class=hw.machine_class,
+            chassis_type=hw.chassis_type,
+        ))
+
+    if body.physical_disks:
+        for disk in body.physical_disks:
+            db.add(PhysicalDisk(
+                device_id=device.id,
+                disk_index=disk.disk_index,
+                model=disk.model,
+                serial_number=disk.serial_number,
+                media_type=disk.media_type,
+                interface_type=disk.interface_type,
+                size_gb=disk.size_gb,
+            ))
+
+    if body.logical_disks:
+        for disk in body.logical_disks:
+            db.add(LogicalDisk(
+                device_id=device.id,
+                name=disk.name,
+                volume_name=disk.volume_name,
+                file_system=disk.file_system,
+                drive_type=disk.drive_type,
+                size_gb=disk.size_gb,
+                free_gb=disk.free_gb,
+                used_gb=disk.used_gb,
+            ))
+
     await db.commit()
     return {
         "device_id": device.id,
@@ -191,9 +412,13 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
 @router.post("/checkin")
 async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
     """Heartbeat from the Windows agent. Updates last_checkin and saves metrics."""
-    from models import DeviceMetrics
+    from models import DeviceMetrics, LogicalDiskMetric
 
-    result = await db.execute(select(Device).where(Device.id == body.device_id))
+    result = await db.execute(
+        select(Device)
+        .options(selectinload(Device.network))
+        .where(Device.id == body.device_id)
+    )
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -213,9 +438,10 @@ async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
         body.ram_used_gb is not None,
         body.disk_used_gb is not None,
         body.uptime_seconds is not None,
+        body.logical_disks,
     ])
     if has_metrics:
-        db.add(DeviceMetrics(
+        snapshot = DeviceMetrics(
             device_id      = device.id,
             cpu_pct        = body.cpu_pct,
             ram_used_gb    = body.ram_used_gb,
@@ -224,7 +450,22 @@ async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
             disk_total_gb  = body.disk_total_gb,
             uptime_seconds = body.uptime_seconds,
             os_version     = body.os_version or device.os_version,
-        ))
+        )
+        db.add(snapshot)
+        await db.flush()
+
+        for disk in body.logical_disks or []:
+            db.add(LogicalDiskMetric(
+                metric_id=snapshot.id,
+                name=disk.name,
+                volume_name=disk.volume_name,
+                file_system=disk.file_system,
+                drive_type=disk.drive_type,
+                size_gb=disk.size_gb,
+                free_gb=disk.free_gb,
+                used_gb=disk.used_gb,
+            ))
+
         # Prune old snapshots — keep last 48 (2 days @ 15min interval)
         old = await db.execute(
             select(DeviceMetrics)
@@ -235,6 +476,30 @@ async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
         for row in old.scalars().all():
             await db.delete(row)
 
+    await db.commit()
+    return {"status": "ok", "device_id": device.id}
+
+
+@router.post("/inventory")
+async def inventory(body: InventoryPayload, db: AsyncSession = Depends(get_db)):
+    """Update full device inventory on a slower cadence than heartbeat."""
+    result = await db.execute(
+        select(Device)
+        .options(
+            selectinload(Device.network),
+            selectinload(Device.monitors),
+            selectinload(Device.hardware_inventory),
+            selectinload(Device.physical_disks),
+            selectinload(Device.logical_disks),
+        )
+        .where(Device.id == body.device_id)
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    await _apply_inventory(device, body, db)
+    device.last_checkin = datetime.utcnow()
     await db.commit()
     return {"status": "ok", "device_id": device.id}
 
@@ -252,6 +517,7 @@ async def get_metrics(device_id: str, db: AsyncSession = Depends(get_db)):
 
     rows = await db.execute(
         select(DeviceMetrics)
+        .options(selectinload(DeviceMetrics.disk_metrics))
         .where(DeviceMetrics.device_id == device_id)
         .order_by(DeviceMetrics.recorded_at.desc())
         .limit(96)
@@ -270,6 +536,18 @@ async def get_metrics(device_id: str, db: AsyncSession = Depends(get_db)):
             "disk_used_gb":  m.disk_used_gb,
             "disk_total_gb": m.disk_total_gb,
             "uptime_seconds": m.uptime_seconds,
+            "logical_disks": [
+                {
+                    "name": disk.name,
+                    "volume_name": disk.volume_name,
+                    "file_system": disk.file_system,
+                    "drive_type": disk.drive_type,
+                    "size_gb": disk.size_gb,
+                    "free_gb": disk.free_gb,
+                    "used_gb": disk.used_gb,
+                }
+                for disk in m.disk_metrics
+            ],
         }
 
     return {

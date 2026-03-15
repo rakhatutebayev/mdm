@@ -6,7 +6,12 @@ from typing import Any
 import requests
 
 from config import AgentConfig
-from device_info import collect_checkin_payload, collect_enrollment_payload
+from device_info import (
+    collect_enrollment_payload,
+    collect_heartbeat_payload,
+    collect_inventory_payload,
+    collect_metrics_payload,
+)
 
 
 class MdmAgentClient:
@@ -41,9 +46,9 @@ class MdmAgentClient:
         self.logger.info("Enrollment complete. device_id=%s", self.config.device_id)
         return self.config.device_id
 
-    def checkin(self) -> dict[str, Any]:
+    def heartbeat(self) -> dict[str, Any]:
         self.enroll_if_needed()
-        payload = collect_checkin_payload(self.config)
+        payload = collect_heartbeat_payload(self.config)
         response = self.session.post(
             f"{self.api_base}/checkin",
             json=payload,
@@ -51,7 +56,33 @@ class MdmAgentClient:
         )
         response.raise_for_status()
         data = response.json()
-        self.logger.info("Check-in OK for device_id=%s", self.config.device_id)
+        self.logger.info("Heartbeat OK for device_id=%s", self.config.device_id)
+        return data
+
+    def send_metrics(self) -> dict[str, Any]:
+        self.enroll_if_needed()
+        payload = collect_metrics_payload(self.config)
+        response = self.session.post(
+            f"{self.api_base}/checkin",
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        self.logger.info("Metrics upload OK for device_id=%s", self.config.device_id)
+        return data
+
+    def send_inventory(self) -> dict[str, Any]:
+        self.enroll_if_needed()
+        payload = collect_inventory_payload(self.config)
+        response = self.session.post(
+            f"{self.api_base}/inventory",
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        self.logger.info("Inventory upload OK for device_id=%s", self.config.device_id)
         return data
 
     def fetch_commands(self) -> list[dict[str, Any]]:
@@ -64,12 +95,6 @@ class MdmAgentClient:
         response.raise_for_status()
         data = response.json()
         return data.get("commands", [])
-
-    def run_once(self) -> None:
-        self.checkin()
-        commands = self.fetch_commands()
-        if commands:
-            self.logger.warning("Command execution is not implemented yet: %s", commands)
 
     def decommission(self, reason: str = "Agent removed") -> None:
         if not self.config.device_id:

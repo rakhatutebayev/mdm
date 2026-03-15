@@ -52,6 +52,9 @@ class Device(Base):
     customer: Mapped["Customer"] = relationship(back_populates="devices")
     network: Mapped["NetworkInfo | None"] = relationship(back_populates="device", uselist=False, cascade="all, delete-orphan")
     monitors: Mapped[list["MonitorInfo"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    hardware_inventory: Mapped["HardwareInventory | None"] = relationship(back_populates="device", uselist=False, cascade="all, delete-orphan")
+    physical_disks: Mapped[list["PhysicalDisk"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    logical_disks: Mapped[list["LogicalDisk"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     metrics: Mapped[list["DeviceMetrics"]] = relationship(back_populates="device", cascade="all, delete-orphan", order_by="DeviceMetrics.recorded_at.desc()")
 
 
@@ -89,6 +92,56 @@ class MonitorInfo(Base):
     device: Mapped["Device"] = relationship(back_populates="monitors")
 
 
+class HardwareInventory(Base):
+    __tablename__ = "hardware_inventory"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), unique=True)
+    processor_model: Mapped[str] = mapped_column(String(255), default="")
+    processor_vendor: Mapped[str] = mapped_column(String(255), default="")
+    physical_cores: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    logical_processors: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_total_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    memory_slot_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_slots_used: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_module_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    machine_class: Mapped[str] = mapped_column(String(50), default="")
+    chassis_type: Mapped[str] = mapped_column(String(50), default="")
+
+    device: Mapped["Device"] = relationship(back_populates="hardware_inventory")
+
+
+class PhysicalDisk(Base):
+    __tablename__ = "physical_disks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    disk_index: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    model: Mapped[str] = mapped_column(String(255), default="")
+    serial_number: Mapped[str] = mapped_column(String(255), default="")
+    media_type: Mapped[str] = mapped_column(String(100), default="")
+    interface_type: Mapped[str] = mapped_column(String(100), default="")
+    size_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    device: Mapped["Device"] = relationship(back_populates="physical_disks")
+
+
+class LogicalDisk(Base):
+    __tablename__ = "logical_disks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(50), default="")
+    volume_name: Mapped[str] = mapped_column(String(255), default="")
+    file_system: Mapped[str] = mapped_column(String(50), default="")
+    drive_type: Mapped[str] = mapped_column(String(100), default="")
+    size_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    free_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    used_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    device: Mapped["Device"] = relationship(back_populates="logical_disks")
+
+
 class DeviceMetrics(Base):
     """One telemetry snapshot per checkin (keep latest ~48 per device)."""
     __tablename__ = "device_metrics"
@@ -113,6 +166,23 @@ class DeviceMetrics(Base):
     os_version: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     device: Mapped["Device"] = relationship(back_populates="metrics")
+    disk_metrics: Mapped[list["LogicalDiskMetric"]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")
+
+
+class LogicalDiskMetric(Base):
+    __tablename__ = "logical_disk_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    metric_id: Mapped[int] = mapped_column(ForeignKey("device_metrics.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(50), default="")
+    volume_name: Mapped[str] = mapped_column(String(255), default="")
+    file_system: Mapped[str] = mapped_column(String(50), default="")
+    drive_type: Mapped[str] = mapped_column(String(100), default="")
+    size_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    free_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    used_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    snapshot: Mapped["DeviceMetrics"] = relationship(back_populates="disk_metrics")
 
 
 class EnrollmentToken(Base):
