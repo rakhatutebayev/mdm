@@ -138,6 +138,7 @@ export default function DeploymentPackagePage() {
       const res = await fetch('/api/mdm/packages/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(90_000), // 90s — backend downloads ~10 MB EXE from GitHub
         body: JSON.stringify({
           customer_id:   customerId,
           format:        selectedFormat,
@@ -166,10 +167,14 @@ export default function DeploymentPackagePage() {
       setGenerated(true);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
+      const isTimeout = e instanceof DOMException && e.name === 'TimeoutError';
+      const isFetchFail = message === 'Failed to fetch';
       setGenerateError(
-        message === 'Failed to fetch'
-          ? 'Could not reach the package generation endpoint. Check that a valid customer is selected and try again.'
-          : message,
+        isTimeout
+          ? 'Package generation timed out. The server may be downloading the base EXE from GitHub — please try again.'
+          : isFetchFail
+            ? 'Could not reach the server. Ensure the backend is running and try again.'
+            : message,
       );
     } finally {
       setGenerating(false);

@@ -9,6 +9,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND = process.env.API_URL ?? "http://localhost:8000";
 
+// Allow up to 60s for package generation (backend downloads ~10 MB from GitHub)
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 type Context = { params: Promise<{ slug: string[] }> };
 
 async function proxy(req: NextRequest, context: Context) {
