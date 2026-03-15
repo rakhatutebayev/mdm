@@ -26,17 +26,17 @@
     <CustomAction
         Id="EnrollDevice"
         Directory="INSTALLFOLDER"
-        ExeCommand="cmd.exe /c powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot; &gt; &quot;[INSTALLFOLDER]ps_install.log&quot; 2&gt;&amp;1"
+        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File install.ps1"
         Execute="deferred"
-        Impersonate="no"
+        Impersonate="yes"
         Return="ignore" />
 
     <CustomAction
         Id="NotifyUninstall"
         Directory="INSTALLFOLDER"
-        ExeCommand="cmd.exe /c powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]uninstall.ps1&quot; &gt; &quot;[INSTALLFOLDER]ps_uninstall.log&quot; 2&gt;&amp;1"
+        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File uninstall.ps1"
         Execute="deferred"
-        Impersonate="no"
+        Impersonate="yes"
         Return="ignore" />
 
     <InstallExecuteSequence>
