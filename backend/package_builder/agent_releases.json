@@ -1,7 +1,55 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-15T17:13:10Z",
+  "generated_at": "2026-03-15T19:38:00Z",
   "releases": [
+    {
+      "version": "1.0.3",
+      "tag": "agent-v1.0.3",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.3-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13638645,
+          "notes": "Remote rename command support added"
+        },
+        {
+          "format": "msi",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.3-x64.msi",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64.msi",
+          "sha256": "",
+          "size_bytes": 32768,
+          "notes": "Remote rename command support added"
+        }
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "tag": "agent-v1.0.2",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.2-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.2/nocko-agent-1.0.2-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13638645,
+          "notes": "Uninstall fix and reinstall detection"
+        },
+        {
+          "format": "msi",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.2-x64.msi",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.2/nocko-agent-1.0.2-x64.msi",
+          "sha256": "",
+          "size_bytes": 32768,
+          "notes": "Uninstall fix and reinstall detection"
+        }
+      ]
+    },
     {
       "version": "1.0.1",
       "tag": "agent-v1.0.1",
