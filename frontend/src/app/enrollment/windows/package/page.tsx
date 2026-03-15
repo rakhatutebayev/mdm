@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { getEnrollmentToken, regenerateToken as apiRegenerateToken, getCustomers } from '@/lib/api';
 import styles from './page.module.css';
 
@@ -25,7 +26,7 @@ export default function DeploymentPackagePage() {
   }, [customerId]);
 
   const [form, setForm] = useState({
-    serverUrl: 'https://mdm.it-uae.com',
+    serverUrl: 'https://mdm.nocko.com',
     enrollmentToken: '',
     agentName: 'NOCKO MDM Agent',
     installMode: 'Silent' as (typeof INSTALL_MODES)[number],
@@ -128,11 +129,30 @@ export default function DeploymentPackagePage() {
       {/* Header */}
       <div className={styles.pageHeader}>
         <div>
-          <h1 className={styles.pageTitle}>Deployment Package</h1>
+          <h1 className={styles.pageTitle}>Windows Enrollment</h1>
           <p className={styles.pageSubtitle}>
             Configure and generate a Windows MDM agent installation package for distribution to client machines.
           </p>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div className={styles.tabs}>
+        <span className={`${styles.tab} ${styles.tabActive}`}>
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+            <path d="M20 6h-2.18c.07-.44.18-.88.18-1.36C18 2.54 15.46 0 12.36 0c-1.86 0-3.58.88-4.63 2.24L12 6.5l4.27-4.27c.34.77.73 1.57.73 2.41 0 2.21-1.79 4-4 4H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/>
+          </svg>
+          Deployment Package
+        </span>
+        <Link
+          href={`/enrollment/windows/autopilot?customer=${customerId}`}
+          className={styles.tab}
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+            <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/>
+          </svg>
+          Windows Autopilot
+        </Link>
       </div>
 
       <div className={styles.layout}>

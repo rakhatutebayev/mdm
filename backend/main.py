@@ -7,6 +7,7 @@ from routers import customers, devices, enrollment
 from routers.packages import router as packages_router
 from routers.dashboard import router as dashboard_router
 from routers.mdm import router as mdm_router
+from routers.settings import router as settings_router
 
 
 @asynccontextmanager
@@ -36,6 +37,7 @@ app.include_router(enrollment.router)
 app.include_router(packages_router)
 app.include_router(dashboard_router)
 app.include_router(mdm_router)
+app.include_router(settings_router)
 
 
 @app.get("/health")

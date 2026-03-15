@@ -21,6 +21,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://mdm:${POSTGRES_PASSWORD:-mdmpassword}@postgres:5432/nocko_mdm
+      MDM_SERVER_URL: ${MDM_SERVER_URL:-https://mdm.nocko.com}
     depends_on:
       postgres:
         condition: service_healthy

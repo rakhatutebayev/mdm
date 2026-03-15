@@ -1,18 +1,26 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styles from './EnrollWindowsModal.module.css';
 
-const ENROLL_URL = 'https://mdm.it-uae.com/enroll/windows/win';
-
-interface Props {
-  onClose: () => void;
-}
-
-export default function EnrollWindowsModal({ onClose }: Props) {
+export default function EnrollWindowsModal({ onClose }: { onClose: () => void }) {
+  const [enrollUrl, setEnrollUrl] = useState('https://mdm.nocko.com/enroll/windows/win');
   const [copied, setCopied] = useState(false);
 
+  // Load server URL from settings (fall back to default if backend unavailable)
+  useEffect(() => {
+    fetch('/api/mdm/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.mdm_server_url) {
+          setEnrollUrl(`${d.mdm_server_url.replace(/\/$/, '')}/enroll/windows/win`);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(ENROLL_URL).catch(() => {});
+    navigator.clipboard.writeText(enrollUrl).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -62,8 +70,8 @@ export default function EnrollWindowsModal({ onClose }: Props) {
                   1. Paste the <strong>Enrollment Link</strong> in IE/Edge browser on the device to be enrolled.
                 </p>
                 <div className={styles.urlBox}>
-                  <a href={ENROLL_URL} className={styles.urlText} target="_blank" rel="noreferrer">
-                    {ENROLL_URL}
+                  <a href={enrollUrl} className={styles.urlText} target="_blank" rel="noreferrer">
+                    {enrollUrl}
                   </a>
                   <button className={styles.copyBtn} onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'}>
                     {copied ? (

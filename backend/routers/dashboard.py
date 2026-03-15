@@ -49,8 +49,8 @@ async def get_dashboard_stats(
         for p, c in sorted(platform_counts.items(), key=lambda x: -x[1])
     ]
 
-    # ── Recent 5 devices (by last_seen desc) ───────────────────────────────────
-    recent_q = select(Device).order_by(Device.last_seen.desc().nullslast()).limit(5)
+    # ── Recent 5 devices (by last_checkin desc) ──────────────────────────────
+    recent_q = select(Device).order_by(Device.last_checkin.desc().nullslast()).limit(5)
     if customer_id and cust:
         recent_q = recent_q.where(Device.customer_id == cust.id)
     recent_result = await db.execute(recent_q)
@@ -78,7 +78,7 @@ async def get_dashboard_stats(
             "user": d.owner or "—",
             "platform": d.platform or "Unknown",
             "status": d.status or "Unknown",
-            "last_seen": fmt_time(d.last_seen),
+            "last_seen": fmt_time(d.last_checkin),
         }
         for d in recent
     ]

@@ -1,6 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import styles from './page.module.css';
 
 const CUSTOMERS: Record<string, string> = {
@@ -27,10 +28,42 @@ export default function WindowsEnrollPage() {
             {customerName}
           </div>
           <h1 className={styles.title}>Enroll Windows Device</h1>
-          <p className={styles.subtitle}>Enroll Windows devices for <strong>{customerName}</strong> using the NOCKO MDM Agent.</p>
+          <p className={styles.subtitle}>
+            Choose an enrollment method for <strong>{customerName}</strong>.
+          </p>
         </div>
       </div>
 
+      {/* Method cards */}
+      <div className={styles.methodGrid}>
+        <Link
+          href={`/enrollment/windows/package?customer=${customerId}`}
+          className={styles.methodCard}
+        >
+          <div className={styles.methodIcon}>📦</div>
+          <div className={styles.methodTitle}>Deployment Package</div>
+          <div className={styles.methodDesc}>
+            Generate a self-contained ZIP or EXE installer with the enrollment token
+            pre-configured for {customerName}. No Azure required.
+          </div>
+          <div className={styles.methodBadge}>Recommended for MSPs</div>
+        </Link>
+
+        <Link
+          href={`/enrollment/windows/autopilot?customer=${customerId}`}
+          className={styles.methodCard}
+        >
+          <div className={styles.methodIcon}>🏢</div>
+          <div className={styles.methodTitle}>Windows Autopilot</div>
+          <div className={styles.methodDesc}>
+            Enroll via native Windows MDM (OMA-DM) using Azure Entra ID. Zero-touch
+            for domain-joined devices in corporate environments.
+          </div>
+          <div className={styles.methodBadge}>Requires Azure AD</div>
+        </Link>
+      </div>
+
+      {/* Quick steps */}
       <div className={styles.steps}>
         <div className={styles.step}>
           <div className={styles.stepNum}>1</div>

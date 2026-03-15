@@ -16,12 +16,9 @@ from models import Customer, EnrollmentToken
 from package_builder import build_zip
 from package_builder.exe_builder import build_exe, BuildToolMissingError as EXEMissing
 from package_builder.msi_builder import build_msi, BuildToolMissingError as MSIMissing
+from routers.settings import get_server_url
 
 router = APIRouter(prefix="/api/v1/packages", tags=["packages"])
-
-# Default server URL — override via env in production
-import os
-DEFAULT_SERVER_URL = os.getenv("MDM_SERVER_URL", "http://localhost:8000")
 
 
 class PackageRequest(BaseModel):
@@ -55,7 +52,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     if not token_row:
         raise HTTPException(status_code=404, detail="No enrollment token found for this customer. Generate one first.")
 
-    server_url = (body.server_url or DEFAULT_SERVER_URL).rstrip("/")
+    server_url = (body.server_url or await get_server_url(db)).rstrip("/")
 
     kwargs = dict(
         customer_id=str(customer.id),

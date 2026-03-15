@@ -64,5 +64,7 @@ async function proxy(req: NextRequest, context: Context) {
 
 export const GET    = (req: NextRequest, ctx: Context) => proxy(req, ctx);
 export const POST   = (req: NextRequest, ctx: Context) => proxy(req, ctx);
+export const PUT    = (req: NextRequest, ctx: Context) => proxy(req, ctx);
 export const PATCH  = (req: NextRequest, ctx: Context) => proxy(req, ctx);
 export const DELETE = (req: NextRequest, ctx: Context) => proxy(req, ctx);
+
