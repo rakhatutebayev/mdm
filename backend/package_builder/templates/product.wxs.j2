@@ -8,8 +8,8 @@
       Manufacturer="NOCKO IT"
       UpgradeCode="{{ upgrade_guid }}">
 
-    <!-- FORCE 64-bit installer to prevent WOW6432Node registry redirection -->
-    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" Platform="x64" />
+    <!-- wixl does not support Platform="x64" on Package via XML, only via -a switch -->
+    <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
@@ -25,16 +25,14 @@
     -->
     <CustomAction
         Id="EnrollDevice"
-        Directory="INSTALLFOLDER"
-        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File install.ps1"
+        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass {% if install_mode == 'interactive' %}-WindowStyle Normal{% else %}-WindowStyle Hidden{% endif %} -File &quot;[INSTALLFOLDER]install.ps1&quot;"
         Execute="deferred"
         Impersonate="yes"
         Return="ignore" />
 
     <CustomAction
         Id="NotifyUninstall"
-        Directory="INSTALLFOLDER"
-        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File uninstall.ps1"
+        ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
         Execute="deferred"
         Impersonate="yes"
         Return="ignore" />
@@ -48,10 +46,10 @@
 
   <Fragment>
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="INSTALLFOLDER" Name="Temp" />
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="NOCKO MDM" />
+      </Directory>
     </Directory>
-    
-    <SetDirectory Id="INSTALLFOLDER" Value="{{ install_dir }}" />
   </Fragment>
 
   <Fragment>
