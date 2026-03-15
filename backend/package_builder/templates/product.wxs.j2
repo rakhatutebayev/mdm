@@ -26,7 +26,7 @@
     <CustomAction
         Id="EnrollDevice"
         Directory="INSTALLFOLDER"
-        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+        ExeCommand="cmd.exe /c powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot; &gt; &quot;[INSTALLFOLDER]ps_install.log&quot; 2&gt;&amp;1"
         Execute="deferred"
         Impersonate="no"
         Return="ignore" />
@@ -34,7 +34,7 @@
     <CustomAction
         Id="NotifyUninstall"
         Directory="INSTALLFOLDER"
-        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]uninstall.ps1&quot;"
+        ExeCommand="cmd.exe /c powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]uninstall.ps1&quot; &gt; &quot;[INSTALLFOLDER]ps_uninstall.log&quot; 2&gt;&amp;1"
         Execute="deferred"
         Impersonate="no"
         Return="ignore" />
