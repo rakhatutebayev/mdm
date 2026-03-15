@@ -6,13 +6,15 @@
 !define CUSTOMER   "{{ customer_name }}"
 !define VERSION    "1.0.0"
 !define PUBLISHER  "NOCKO IT"
-!define INSTDIR_DEFAULT "$PROGRAMFILES64\NOCKO MDM"
-!define CONFIG_DIR  "$PROGRAMDATA\NOCKO MDM"
+!define REG_KEY    "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM"
 !define TASK_NAME  "NOCKO MDM Check-In"
+
+; Use 64-bit registry view — prevents dual 32/64 entries in Programs list
+SetRegView 64
 
 Name      "${APPNAME} — ${CUSTOMER}"
 OutFile   "nocko-mdm-agent-setup.exe"
-InstallDir "${INSTDIR_DEFAULT}"
+InstallDir "$PROGRAMFILES64\NOCKO MDM"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 Unicode true
@@ -35,41 +37,57 @@ Unicode true
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 
+; ── Auto-remove previous installation before installing ───────────────────────
+Function .onInit
+    ; Check if already installed
+    ReadRegStr $R0 HKLM "${REG_KEY}" "UninstallString"
+    StrCmp $R0 "" done_uninstall
+
+    ; Silently uninstall previous version first
+    ExecWait '"$R0" /S'
+    Sleep 1000
+
+    done_uninstall:
+FunctionEnd
+
 ; ── Installer ─────────────────────────────────────────────────────────────────
 Section "MainSection" SEC01
     SetOutPath "$INSTDIR"
     SetOverwrite on
 
-    ; Write files
+    ; Write files to ProgramFiles
     File "install.ps1"
     File "config.json"
     File "README.txt"
 
-    ; Create config directory
-    CreateDirectory "${CONFIG_DIR}"
+    ; Create ProgramData config directory
+    ; $COMMONAPPDATA = C:\ProgramData (valid NSIS constant)
+    CreateDirectory "$COMMONAPPDATA\NOCKO MDM"
 
     ; Run enrollment PowerShell script
+    ; Use cmd /c to handle paths with spaces correctly
     DetailPrint "Enrolling device with NOCKO MDM..."
-    nsExec::ExecToLog 'PowerShell.exe -NonInteractive -ExecutionPolicy Bypass -File "$INSTDIR\install.ps1"'
+    nsExec::ExecToLog 'cmd.exe /C "PowerShell.exe -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File ""$INSTDIR\install.ps1"" >> ""$COMMONAPPDATA\NOCKO MDM\enroll.log"" 2>&1"'
     Pop $0
     ${If} $0 != 0
-        MessageBox MB_ICONEXCLAMATION "Enrollment encountered an issue (exit code: $0).$\nCheck $PROGRAMDATA\NOCKO MDM\enroll.log for details."
+        MessageBox MB_ICONEXCLAMATION "Enrollment encountered an issue (exit code: $0).$\nCheck $COMMONAPPDATA\NOCKO MDM\enroll.log for details."
     ${Else}
-        DetailPrint "Enrollment successful!"
+        DetailPrint "Enrollment completed!"
     ${EndIf}
 
     ; Write uninstaller
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-    ; Registry uninstall entry
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM" \
-        "DisplayName" "${APPNAME} (${CUSTOMER})"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM" \
-        "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM" \
-        "DisplayVersion" "${VERSION}"
-    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM" \
-        "Publisher" "${PUBLISHER}"
+    ; Registry uninstall entry (64-bit view set at top)
+    WriteRegStr HKLM "${REG_KEY}" "DisplayName"     "${APPNAME} (${CUSTOMER})"
+    WriteRegStr HKLM "${REG_KEY}" "UninstallString"  "$\"$INSTDIR\Uninstall.exe$\""
+    WriteRegStr HKLM "${REG_KEY}" "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
+    WriteRegStr HKLM "${REG_KEY}" "DisplayVersion"   "${VERSION}"
+    WriteRegStr HKLM "${REG_KEY}" "Publisher"        "${PUBLISHER}"
+    WriteRegStr HKLM "${REG_KEY}" "InstallLocation"  "$INSTDIR"
+    WriteRegStr HKLM "${REG_KEY}" "DisplayIcon"      "$INSTDIR\Uninstall.exe"
+    WriteRegDWORD HKLM "${REG_KEY}" "NoModify"       1
+    WriteRegDWORD HKLM "${REG_KEY}" "NoRepair"       1
 SectionEnd
 
 ; ── Uninstaller ───────────────────────────────────────────────────────────────
@@ -77,24 +95,24 @@ Section "Uninstall"
     ; Remove scheduled task
     nsExec::ExecToLog 'schtasks /Delete /TN "${TASK_NAME}" /F'
 
-    ; Remove files
+    ; Remove files from ProgramFiles
     Delete "$INSTDIR\install.ps1"
     Delete "$INSTDIR\config.json"
     Delete "$INSTDIR\README.txt"
     Delete "$INSTDIR\Uninstall.exe"
     RMDir  "$INSTDIR"
 
-    ; Remove ProgramData config (ask user)
-    MessageBox MB_YESNO "Remove device configuration from $PROGRAMDATA\NOCKO MDM?" IDNO skip_config
-        Delete "$PROGRAMDATA\NOCKO MDM\config.json"
-        Delete "$PROGRAMDATA\NOCKO MDM\checkin.ps1"
-        Delete "$PROGRAMDATA\NOCKO MDM\enroll.log"
-        Delete "$PROGRAMDATA\NOCKO MDM\uninstall.log"
-        RMDir  "$PROGRAMDATA\NOCKO MDM"
+    ; Ask user whether to remove ProgramData config (keeps logs/history if no)
+    MessageBox MB_YESNO "Remove device configuration from $COMMONAPPDATA\NOCKO MDM?$\n(This removes enrollment info and logs)" IDNO skip_config
+        Delete "$COMMONAPPDATA\NOCKO MDM\config.json"
+        Delete "$COMMONAPPDATA\NOCKO MDM\checkin.ps1"
+        Delete "$COMMONAPPDATA\NOCKO MDM\enroll.log"
+        Delete "$COMMONAPPDATA\NOCKO MDM\uninstall.log"
+        RMDir  "$COMMONAPPDATA\NOCKO MDM"
     skip_config:
 
-    ; Remove registry
-    DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOMDM"
+    ; Remove registry entry
+    DeleteRegKey HKLM "${REG_KEY}"
 
     MessageBox MB_OK "NOCKO MDM Agent has been removed from this device.$\nThe device will no longer report to the MDM server."
 SectionEnd
