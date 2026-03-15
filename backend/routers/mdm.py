@@ -71,12 +71,18 @@ class EnrollPayload(BaseModel):
 
 
 class CheckinPayload(BaseModel):
-    """Periodic heartbeat payload."""
+    """Periodic heartbeat payload with optional telemetry."""
     device_id: str
     agent_version: str = ""
     os_version: str = ""
     ip_address: str = ""
-    # Additional fields (future)
+    # Telemetry
+    cpu_pct: Optional[float] = None         # 0–100
+    ram_used_gb: Optional[float] = None
+    ram_total_gb: Optional[float] = None
+    disk_used_gb: Optional[float] = None
+    disk_total_gb: Optional[float] = None
+    uptime_seconds: Optional[int] = None
     extra: Optional[dict[str, Any]] = None
 
 
@@ -182,25 +188,92 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
 
 @router.post("/checkin")
 async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
-    """Heartbeat from the Windows agent. Updates last_checkin timestamp."""
+    """Heartbeat from the Windows agent. Updates last_checkin and saves metrics."""
+    from models import DeviceMetrics
 
     result = await db.execute(select(Device).where(Device.id == body.device_id))
     device = result.scalar_one_or_none()
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
+    # Update device fields
     device.last_checkin = datetime.utcnow()
     if body.agent_version:
         device.agent_version = body.agent_version
     if body.os_version:
         device.os_version = body.os_version
-
-    # Update IP if changed
     if body.ip_address and device.network:
         device.network.ip_address = body.ip_address
 
+    # Save metrics snapshot if any telemetry provided
+    has_metrics = any([
+        body.cpu_pct is not None,
+        body.ram_used_gb is not None,
+        body.disk_used_gb is not None,
+        body.uptime_seconds is not None,
+    ])
+    if has_metrics:
+        db.add(DeviceMetrics(
+            device_id      = device.id,
+            cpu_pct        = body.cpu_pct,
+            ram_used_gb    = body.ram_used_gb,
+            ram_total_gb   = body.ram_total_gb,
+            disk_used_gb   = body.disk_used_gb,
+            disk_total_gb  = body.disk_total_gb,
+            uptime_seconds = body.uptime_seconds,
+            os_version     = body.os_version or device.os_version,
+        ))
+        # Prune old snapshots — keep last 48 (2 days @ 15min interval)
+        old = await db.execute(
+            select(DeviceMetrics)
+            .where(DeviceMetrics.device_id == device.id)
+            .order_by(DeviceMetrics.recorded_at.desc())
+            .offset(48)
+        )
+        for row in old.scalars().all():
+            await db.delete(row)
+
     await db.commit()
     return {"status": "ok", "device_id": device.id}
+
+
+# ── Metrics history ───────────────────────────────────────────────────────────
+
+@router.get("/metrics")
+async def get_metrics(device_id: str, db: AsyncSession = Depends(get_db)):
+    """Return latest metrics snapshot + 24h history for charts."""
+    from models import DeviceMetrics
+
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    rows = await db.execute(
+        select(DeviceMetrics)
+        .where(DeviceMetrics.device_id == device_id)
+        .order_by(DeviceMetrics.recorded_at.desc())
+        .limit(96)
+    )
+    snapshots = rows.scalars().all()
+
+    if not snapshots:
+        return {"latest": None, "history": []}
+
+    def to_dict(m: DeviceMetrics):
+        return {
+            "recorded_at":   m.recorded_at.isoformat(),
+            "cpu_pct":       m.cpu_pct,
+            "ram_used_gb":   m.ram_used_gb,
+            "ram_total_gb":  m.ram_total_gb,
+            "disk_used_gb":  m.disk_used_gb,
+            "disk_total_gb": m.disk_total_gb,
+            "uptime_seconds": m.uptime_seconds,
+        }
+
+    return {
+        "latest":  to_dict(snapshots[0]),
+        "history": [to_dict(s) for s in snapshots],
+    }
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────

@@ -164,13 +164,30 @@ Write-Log "Config saved to $configFile"
 $checkinScript = @"
 `$config = Get-Content '$configFile' | ConvertFrom-Json
 try {
+    # Collect metrics
+    `$cpu  = [math]::Round((Get-WmiObject Win32_Processor | Measure-Object -Property LoadPercentage -Average).Average, 1)
+    `$os   = Get-WmiObject Win32_OperatingSystem
+    `$ramTotalGB = [math]::Round(`$os.TotalVisibleMemorySize / 1MB, 2)
+    `$ramUsedGB  = [math]::Round((`$os.TotalVisibleMemorySize - `$os.FreePhysicalMemory) / 1MB, 2)
+    `$disk = Get-WmiObject Win32_LogicalDisk -Filter "DeviceID='C:'"
+    `$diskTotalGB = [math]::Round(`$disk.Size / 1GB, 2)
+    `$diskUsedGB  = [math]::Round((`$disk.Size - `$disk.FreeSpace) / 1GB, 2)
+    `$uptimeSec  = [int](`$os.ConvertToDateTime(`$os.LastBootUpTime) | ForEach-Object { (Get-Date) - `$_ } | Select-Object -ExpandProperty TotalSeconds)
+    `$ip = @(Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { `$_.IPEnabled -and `$_.DefaultIPGateway } | Select-Object -First 1 | ForEach-Object { `$_.IPAddress | Where-Object { `$_ -notmatch ':' } }) | Select-Object -First 1
+
     Invoke-RestMethod -Uri "`$(`$config.server_url)/api/v1/mdm/windows/checkin" ``
         -Method POST -ContentType 'application/json' ``
         -Body (ConvertTo-Json @{
-            device_id     = `$config.device_id
-            agent_version = '1.0.0'
-            ip_address    = (Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object {`$_.IPEnabled} | Select-Object -First 1).IPAddress[0]
-        }) | Out-Null
+            device_id      = `$config.device_id
+            agent_version  = '1.0.0'
+            ip_address     = if (`$ip) { `$ip } else { '' }
+            cpu_pct        = `$cpu
+            ram_used_gb    = `$ramUsedGB
+            ram_total_gb   = `$ramTotalGB
+            disk_used_gb   = `$diskUsedGB
+            disk_total_gb  = `$diskTotalGB
+            uptime_seconds = `$uptimeSec
+        } -Depth 3) | Out-Null
 } catch {}
 "@
 $checkinScript | Set-Content -Path "$configDir\checkin.ps1" -Encoding UTF8

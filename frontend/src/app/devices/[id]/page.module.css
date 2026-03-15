@@ -150,3 +150,136 @@
   text-decoration: none;
 }
 .backLink:hover { text-decoration: underline; }
+
+/* ── Telemetry card ── */
+.telemetryCard {
+  background: #fff;
+  border: 1px solid #e2e4ec;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.telemetryHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f1f7;
+  background: #fafbfd;
+}
+
+.telemetryTs {
+  margin-left: auto;
+  font-size: 11px;
+  color: #8b90a4;
+}
+
+/* ── Gauges row ── */
+.gauges {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 20px 24px;
+  flex-wrap: wrap;
+}
+
+/* ── Individual arc gauge ── */
+.gauge {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  border-right: 1px solid #f0f1f7;
+}
+.gauge:last-child { border-right: none; }
+
+.gaugeLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b90a4;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gaugeArc {
+  position: relative;
+  width: 110px;
+  height: 68px;
+}
+
+.gaugeSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.gaugeCenter {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  line-height: 1;
+}
+
+.gaugeValue {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.gaugeUnit {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.gaugeSub {
+  font-size: 11px;
+  color: #8b90a4;
+  text-align: center;
+}
+
+/* ── Uptime card (4th item) ── */
+.uptimeCard {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 12px;
+  height: 105px;
+}
+
+.uptimeIcon { font-size: 28px; line-height: 1; }
+.uptimeLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b90a4;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.uptimeValue {
+  font-size: 18px;
+  font-weight: 800;
+  color: #4a7cff;
+}
+
+/* ── No metrics empty state ── */
+.noMetrics {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 24px;
+  color: #8b90a4;
+  font-size: 13px;
+  text-align: center;
+}
+.noMetrics span { font-size: 32px; }
+.noMetrics p { margin: 0; line-height: 1.5; }

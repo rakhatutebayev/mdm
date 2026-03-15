@@ -52,6 +52,7 @@ class Device(Base):
     customer: Mapped["Customer"] = relationship(back_populates="devices")
     network: Mapped["NetworkInfo | None"] = relationship(back_populates="device", uselist=False, cascade="all, delete-orphan")
     monitors: Mapped[list["MonitorInfo"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    metrics: Mapped[list["DeviceMetrics"]] = relationship(back_populates="device", cascade="all, delete-orphan", order_by="DeviceMetrics.recorded_at.desc()")
 
 
 class NetworkInfo(Base):
@@ -86,6 +87,32 @@ class MonitorInfo(Base):
     hdr_support: Mapped[bool] = mapped_column(Boolean, default=False)
 
     device: Mapped["Device"] = relationship(back_populates="monitors")
+
+
+class DeviceMetrics(Base):
+    """One telemetry snapshot per checkin (keep latest ~48 per device)."""
+    __tablename__ = "device_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # CPU
+    cpu_pct: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    # RAM
+    ram_used_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    ram_total_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    # Disk C:
+    disk_used_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    disk_total_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    # System
+    uptime_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    os_version: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+
+    device: Mapped["Device"] = relationship(back_populates="metrics")
 
 
 class EnrollmentToken(Base):
