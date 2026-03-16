@@ -506,6 +506,14 @@ async def inventory(body: InventoryPayload, db: AsyncSession = Depends(get_db)):
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
+    import logging as _log
+    _log.getLogger("mdm.inventory").info(
+        "inventory from %s (v%s): monitors=%d hardware=%s",
+        body.device_id, body.agent_version,
+        len(body.monitors) if body.monitors else 0,
+        "yes" if body.hardware_inventory else "no",
+    )
+
     await _apply_inventory(device, body, db)
     device.last_checkin = datetime.utcnow()
     await db.commit()

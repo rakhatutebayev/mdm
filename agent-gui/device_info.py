@@ -37,91 +37,114 @@ def _wmi_str_from_bytes(byte_array) -> str:
 
 
 def _collect_monitors() -> list[dict]:
-    """Collect monitor info via WMI (root\\wmi namespace + Win32_VideoController).
+    """Collect monitor info via PowerShell — more reliable than Python WMI in service context.
 
-    Supports multiple monitors. Falls back to empty list gracefully on VMs
-    or systems where WMI monitor classes are unavailable.
+    Queries: WmiMonitorID, WmiMonitorBasicDisplayParams, WmiMonitorConnectionParams,
+             Win32_VideoController. Supports multiple monitors.
+    Falls back gracefully on VMs or systems without monitor WMI classes.
     """
     if os.name != "nt":
         return []
-    try:
-        import pythoncom as _pcom
-        _pcom.CoInitialize()
-    except Exception:
-        pass
 
-    monitors: list[dict] = []
+    ps_script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$result = @()
+
+# Helper: convert WMI byte array to string
+function ConvertFrom-WmiBytes($arr) {
+    if (-not $arr) { return "" }
+    $bytes = $arr | Where-Object { $_ -ne 0 }
+    if (-not $bytes) { return "" }
+    try { return [System.Text.Encoding]::ASCII.GetString([byte[]]$bytes).Trim() } catch { return "" }
+}
+
+# Connection type map
+$connMap = @{0="VGA";1="S-Video";2="Composite";3="Component";4="DVI";5="HDMI";
+             6="LVDS";8="D-Jpn";9="SDI";10="DisplayPort";11="UDI";16="Internal (laptop)"}
+
+# Collect monitors from WmiMonitorID
+$wmiMons = Get-WmiObject -Namespace 'root\wmi' -Class WmiMonitorID 2>$null
+if (-not $wmiMons) { '[]'; exit }
+
+# size lookup
+$sizeMap = @{}
+$bParams = Get-WmiObject -Namespace 'root\wmi' -Class WmiMonitorBasicDisplayParams 2>$null
+foreach ($bp in $bParams) {
+    $key = $bp.InstanceName -replace '_\d+$',''
+    $w = $bp.MaxHorizontalImageSize; $h = $bp.MaxVerticalImageSize
+    if ($w -and $h -and $w -gt 0 -and $h -gt 0) {
+        $d = [Math]::Round([Math]::Sqrt($w*$w + $h*$h) / 2.54, 1)
+        $sizeMap[$key.ToUpper()] = "$d`""
+    }
+}
+
+# connection type lookup
+$connTypeMap = @{}
+$cParams = Get-WmiObject -Namespace 'root\wmi' -Class WmiMonitorConnectionParams 2>$null
+foreach ($cp in $cParams) {
+    $key = ($cp.InstanceName -replace '_\d+$','').ToUpper()
+    $t = $cp.VideoOutputTechnology
+    $connTypeMap[$key] = if ($connMap.ContainsKey([int]$t)) { $connMap[[int]$t] } else { "Unknown" }
+}
+
+# resolution from VideoController
+$resolutions = @()
+$vcs = Get-WmiObject -Class Win32_VideoController 2>$null
+foreach ($vc in $vcs) {
+    if ($vc.CurrentHorizontalResolution -and $vc.CurrentVerticalResolution) {
+        $resolutions += "$($vc.CurrentHorizontalResolution)x$($vc.CurrentVerticalResolution)"
+    }
+}
+
+$idx = 0
+foreach ($mon in $wmiMons) {
+    $key = ($mon.InstanceName -replace '_\d+$','').ToUpper()
+    $mfr   = ConvertFrom-WmiBytes $mon.ManufacturerName
+    $model = ConvertFrom-WmiBytes $mon.UserFriendlyName
+    $ser   = ConvertFrom-WmiBytes $mon.SerialNumberID
+    $size  = if ($sizeMap.ContainsKey($key)) { $sizeMap[$key] } else { "" }
+    $conn  = if ($connTypeMap.ContainsKey($key)) { $connTypeMap[$key] } else { "" }
+    $res   = if ($idx -lt $resolutions.Count) { $resolutions[$idx] } elseif ($resolutions.Count -gt 0) { $resolutions[0] } else { "" }
+    $result += [PSCustomObject]@{
+        display_index=$idx+1; manufacturer=$mfr; model=$model; serial_number=$ser;
+        display_size=$size; resolution=$res; connection_type=$conn;
+        refresh_rate=""; color_depth=""; hdr_support=$false
+    }
+    $idx++
+}
+$result | ConvertTo-Json -Compress
+"""
+
+    import json, subprocess
     try:
-        c = wmi.WMI(namespace="root\\wmi") if wmi else None
-        if not c:
+        r = subprocess.run(
+            ["powershell", "-NonInteractive", "-NoProfile", "-Command", ps_script],
+            capture_output=True, text=True, timeout=20,
+        )
+        raw = (r.stdout or "").strip()
+        if not raw or raw == "[]":
             return []
-
-        # Build lookup tables keyed by InstanceName (strip trailing _0 etc.)
-        def _inst_key(name: str) -> str:
-            return name.rsplit("_", 1)[0].upper() if name else ""
-
-        # WmiMonitorBasicDisplayParams → physical size
-        size_map: dict[str, str] = {}
-        try:
-            for bp in c.WmiMonitorBasicDisplayParams():
-                key = _inst_key(bp.InstanceName)
-                w_cm = getattr(bp, "MaxHorizontalImageSize", 0) or 0
-                h_cm = getattr(bp, "MaxVerticalImageSize", 0) or 0
-                if w_cm and h_cm:
-                    import math
-                    diag_inch = round(math.sqrt(w_cm**2 + h_cm**2) / 2.54, 1)
-                    size_map[key] = f"{diag_inch}\""
-        except Exception:
-            pass
-
-        # WmiMonitorConnectionParams → connection type
-        conn_map: dict[str, str] = {}
-        try:
-            for cp in c.WmiMonitorConnectionParams():
-                key = _inst_key(cp.InstanceName)
-                tech = getattr(cp, "VideoOutputTechnology", -1)
-                conn_map[key] = _CONN_TYPE_MAP.get(tech, f"Unknown ({tech})")
-        except Exception:
-            pass
-
-        # Win32_VideoController → resolution (primary or per adapter index)
-        vc_resolutions: list[str] = []
-        try:
-            c2 = wmi.WMI()
-            for vc in c2.Win32_VideoController():
-                w = getattr(vc, "CurrentHorizontalResolution", None)
-                h = getattr(vc, "CurrentVerticalResolution", None)
-                if w and h:
-                    vc_resolutions.append(f"{w}x{h}")
-        except Exception:
-            pass
-
-        # WmiMonitorID → manufacturer / model / serial
-        for idx, mon in enumerate(c.WmiMonitorID()):
-            key = _inst_key(mon.InstanceName)
-            manufacturer = _wmi_str_from_bytes(getattr(mon, "ManufacturerName", []) or [])
-            model        = _wmi_str_from_bytes(getattr(mon, "UserFriendlyName", []) or [])
-            serial       = _wmi_str_from_bytes(getattr(mon, "SerialNumberID", []) or [])
-            display_size = size_map.get(key, "")
-            conn_type    = conn_map.get(key, "")
-            resolution   = vc_resolutions[idx] if idx < len(vc_resolutions) else (vc_resolutions[0] if vc_resolutions else "")
-
-            monitors.append({
-                "display_index":   idx + 1,
-                "manufacturer":    manufacturer,
-                "model":           model,
-                "serial_number":   serial,
-                "display_size":    display_size,
-                "resolution":      resolution,
-                "connection_type": conn_type,
+        data = json.loads(raw)
+        # PowerShell returns a dict (not list) when there's only 1 item
+        if isinstance(data, dict):
+            data = [data]
+        out = []
+        for item in data:
+            out.append({
+                "display_index":   int(item.get("display_index", 1)),
+                "manufacturer":    str(item.get("manufacturer") or ""),
+                "model":           str(item.get("model") or ""),
+                "serial_number":   str(item.get("serial_number") or ""),
+                "display_size":    str(item.get("display_size") or ""),
+                "resolution":      str(item.get("resolution") or ""),
+                "connection_type": str(item.get("connection_type") or ""),
                 "refresh_rate":    "",
                 "color_depth":     "",
                 "hdr_support":     False,
             })
+        return out
     except Exception:
-        pass
-
-    return monitors
+        return []
 
 
 def _safe(callable_obj, fallback: Any = "") -> Any:
