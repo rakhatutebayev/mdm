@@ -203,7 +203,65 @@ export default function DeviceDetailPage() {
     }
   };
 
-  useEffect(() => () => stopPolling(), [stopPolling]);
+  // ── Update Agent state ─────────────────────────────────────────────────────
+  const [updateOpen, setUpdateOpen]       = useState(false);
+  const [updating, setUpdating]           = useState(false);
+  const [updateStatus, setUpdateStatus]   = useState<null | {
+    phase: 'queued' | 'pending' | 'sent' | 'acked' | 'failed' | 'timeout';
+    commandId: string;
+    result?: string | null;
+    targetVersion: string;
+  }>(null);
+  const updatePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopUpdatePolling = useCallback(() => {
+    if (updatePollRef.current) { clearInterval(updatePollRef.current); updatePollRef.current = null; }
+  }, []);
+
+  const startUpdatePolling = useCallback((commandId: string, targetVersion: string) => {
+    const startedAt = Date.now();
+    updatePollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > 5 * 60 * 1000) {
+        stopUpdatePolling();
+        setUpdateStatus(s => s ? { ...s, phase: 'timeout' } : null);
+        return;
+      }
+      try {
+        const r = await fetch(`/api/mdm/mdm/windows/portal/commands/${commandId}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const phase = d.status as 'pending' | 'sent' | 'acked' | 'failed';
+        setUpdateStatus({ phase, commandId, result: d.result, targetVersion });
+        if (phase === 'acked' || phase === 'failed') stopUpdatePolling();
+      } catch { /* keep polling */ }
+    }, 5000);
+  }, [stopUpdatePolling]);
+
+  const handleUpdateAgent = async () => {
+    if (!device) return;
+    setUpdating(true);
+    setUpdateStatus(null);
+    stopUpdatePolling();
+    try {
+      const res = await fetch('/api/mdm/mdm/windows/portal/commands/update-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: device.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed');
+      const cid = data.command_id as string;
+      const tv  = data.target_version as string;
+      setUpdateStatus({ phase: 'queued', commandId: cid, targetVersion: tv });
+      startUpdatePolling(cid, tv);
+    } catch (e: unknown) {
+      setUpdateStatus({ phase: 'failed', commandId: '', targetVersion: '', result: e instanceof Error ? e.message : 'Error' });
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  useEffect(() => () => { stopPolling(); stopUpdatePolling(); }, [stopPolling, stopUpdatePolling]);
 
   if (error || !device) {
     return (
@@ -357,6 +415,17 @@ export default function DeviceDetailPage() {
                   <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 5.63l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 000-1.41z"/>
                 </svg>
               </button>
+              {/* Update Agent button */}
+              <button
+                title="Update agent"
+                onClick={() => { setUpdateOpen(true); setUpdateStatus(null); stopUpdatePolling(); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f59e0b', padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3 }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+                </svg>
+                <span style={{ fontSize: 11 }}>Update</span>
+              </button>
             </div>
             <div className={styles.metaRow}>
               <span className={styles.metaText}>{device.model}</span>
@@ -368,6 +437,67 @@ export default function DeviceDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Update Agent Modal ── */}
+      {updateOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => e.target === e.currentTarget && setUpdateOpen(false)}>
+          <div style={{ background: '#1a1d2e', border: '1px solid #2a2d3a', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🔄 Удалённое обновление агента</h3>
+            <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 13 }}>
+              Текущая версия: <strong style={{ color: '#cbd5e1' }}>{device.agent_version || '—'}</strong><br/>
+              Сервер отправит команду установить последнюю версию. Агент скачает обновление и переустановит себя.
+            </p>
+            {/* Live status tracker */}
+            {updateStatus && (
+              <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #2a2d3a', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 16 }}>📤</span>
+                  <span style={{ fontSize: 13, color: '#cbd5e1' }}>Команда отправлена на сервер</span>
+                  <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 16 }}>
+                    {updateStatus.phase === 'sent' || updateStatus.phase === 'acked' || updateStatus.phase === 'failed' ? '📡' : '🔄'}
+                  </span>
+                  <span style={{ fontSize: 13, color: updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? '#64748b' : '#cbd5e1' }}>
+                    {updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? 'Ожидание получения агентом…' : 'Агент получил команду'}
+                  </span>
+                  {(updateStatus.phase === 'sent' || updateStatus.phase === 'acked' || updateStatus.phase === 'failed') && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>}
+                  {(updateStatus.phase === 'queued' || updateStatus.phase === 'pending') && <span style={{ marginLeft: 'auto', color: '#f59e0b', fontSize: 11 }}>⏳</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>
+                    {updateStatus.phase === 'acked' ? '✅' : updateStatus.phase === 'failed' ? '❌' : updateStatus.phase === 'timeout' ? '⏱️' : '⬇️'}
+                  </span>
+                  <span style={{ fontSize: 13, color: updateStatus.phase === 'acked' ? '#22c55e' : updateStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
+                    {updateStatus.phase === 'acked'
+                      ? `Обновление до v${updateStatus.targetVersion} запущено. Агент перезапускается…`
+                      : updateStatus.phase === 'failed'
+                      ? `Ошибка: ${updateStatus.result || 'unknown error'}`
+                      : updateStatus.phase === 'timeout'
+                      ? 'Нет ответа (агент недоступен или устарел)'
+                      : `Скачивание и установка v${updateStatus.targetVersion}…`}
+                  </span>
+                  {(updateStatus.phase === 'queued' || updateStatus.phase === 'pending' || updateStatus.phase === 'sent') && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>⏳</span>}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setUpdateOpen(false); stopUpdatePolling(); setUpdateStatus(null); }}
+                style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                {updateStatus?.phase === 'acked' ? 'Закрыть' : 'Отмена'}
+              </button>
+              <button
+                onClick={handleUpdateAgent}
+                disabled={updating || !!updateStatus}
+                style={{ background: '#f59e0b', border: 'none', borderRadius: 6, color: '#000', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (updating || !!updateStatus) ? 0.5 : 1 }}>
+                {updating ? 'Отправка…' : '⬆️ Обновить агент'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Rename Modal ── */}
       {renameOpen && (

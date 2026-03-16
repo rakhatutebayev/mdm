@@ -28,6 +28,7 @@ from models import (
     NetworkInfo,
     PhysicalDisk,
 )
+from package_builder.release_catalog import find_artifact
 
 router = APIRouter(prefix="/api/v1/mdm/windows", tags=["mdm-agent"])
 
@@ -647,6 +648,36 @@ async def portal_get_command_status(command_id: str, db: AsyncSession = Depends(
         "created_at": cmd.created_at.isoformat() if cmd.created_at else None,
         "acked_at": cmd.acked_at.isoformat() if cmd.acked_at else None,
     }
+
+
+class UpdateAgentPayload(BaseModel):
+    device_id: str
+
+
+@router.post("/portal/commands/update-agent")
+async def portal_update_agent(body: UpdateAgentPayload, db: AsyncSession = Depends(get_db)):
+    """Portal: queue an update_agent command — agent will download and reinstall itself."""
+    result = await db.execute(select(Device).where(Device.id == body.device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    # Resolve the latest EXE artifact URL from the catalog
+    release, artifact = find_artifact("exe", "x64")
+    if not release or not artifact:
+        raise HTTPException(status_code=404, detail="No EXE artifact found in release catalog")
+
+    target_version = str(release.get("version", ""))
+    download_url   = str(artifact.get("url", ""))
+
+    cmd = DeviceCommand(
+        device_id=body.device_id,
+        command_type="update_agent",
+        payload=_json.dumps({"download_url": download_url, "target_version": target_version}),
+    )
+    db.add(cmd)
+    await db.commit()
+    return {"status": "queued", "command_id": cmd.id, "target_version": target_version}
 
 
 # ── Decommission ──────────────────────────────────────────────────────────────

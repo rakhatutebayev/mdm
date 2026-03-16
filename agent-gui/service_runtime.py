@@ -55,8 +55,49 @@ def _handle_rename_computer(cmd: dict, config: AgentConfig, logger: logging.Logg
         return "failed", str(exc)
 
 
+def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger) -> tuple[str, str]:
+    """Download the latest agent EXE and re-run it elevated to self-update.
+
+    ACKs immediately — the current process will be killed when the new installer
+    stops/removes the old Windows service.
+    """
+    import ctypes
+    import os
+    import tempfile
+    import urllib.request
+
+    payload      = cmd.get("payload", {})
+    download_url: str   = payload.get("download_url", "").strip()
+    target_version: str = payload.get("target_version", "unknown")
+
+    if not download_url:
+        return "failed", "download_url is missing in payload"
+
+    try:
+        logger.info("Downloading agent update v%s from %s", target_version, download_url)
+        tmp_dir  = tempfile.mkdtemp(prefix="nocko_update_")
+        exe_path = os.path.join(tmp_dir, f"nocko-agent-{target_version}.exe")
+
+        urllib.request.urlretrieve(download_url, exe_path)
+        logger.info("Downloaded %d bytes to %s", os.path.getsize(exe_path), exe_path)
+
+        # Launch elevated — new EXE detects existing install and reinstalls
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", exe_path, None, None, 1
+        )
+        if ret <= 32:
+            return "failed", f"ShellExecuteW failed (ret={ret})"
+
+        return "acked", f"Update to v{target_version} started. Agent will restart shortly."
+
+    except Exception as exc:
+        logger.exception("update_agent error: %s", exc)
+        return "failed", str(exc)
+
+
 _COMMAND_HANDLERS = {
     "rename_computer": _handle_rename_computer,
+    "update_agent":    _handle_update_agent,
 }
 
 
