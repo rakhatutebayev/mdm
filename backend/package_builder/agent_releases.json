@@ -1,7 +1,31 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-16T17:35:00Z",
+  "generated_at": "2026-03-16T18:20:00Z",
   "releases": [
+    {
+      "version": "1.0.5",
+      "tag": "agent-v1.0.5",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.5-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.5/nocko-agent-1.0.5-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13638380,
+          "notes": "WMI monitor collection: manufacturer, model, serial, size, resolution, connection type"
+        },
+        {
+          "format": "msi",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.5-x64.msi",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.5/nocko-agent-1.0.5-x64.msi",
+          "sha256": "",
+          "size_bytes": 32768,
+          "notes": "WMI monitor collection"
+        }
+      ]
+    },
     {
       "version": "1.0.4",
       "tag": "agent-v1.0.4",
