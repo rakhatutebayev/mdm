@@ -33,6 +33,7 @@ class NetworkInfoOut(BaseModel):
 # ── Monitor ───────────────────────────────────────────────────────────────────
 class MonitorInfoOut(BaseModel):
     display_index: int
+    manufacturer: str
     model: str
     serial_number: str
     display_size: str
@@ -95,6 +96,7 @@ class NetworkCreateIn(BaseModel):
 class MonitorCreateIn(BaseModel):
     display_index: int = 1
     name: str = ""           # alias from PS1
+    manufacturer: str = ""
     model: str = ""
     serial_number: str = ""
     display_size: str = ""

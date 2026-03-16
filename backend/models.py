@@ -80,6 +80,7 @@ class MonitorInfo(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
     display_index: Mapped[int] = mapped_column(Integer, default=1)
+    manufacturer: Mapped[str] = mapped_column(String(255), default="")
     model: Mapped[str] = mapped_column(String(255), default="")
     serial_number: Mapped[str] = mapped_column(String(255), default="")
     display_size: Mapped[str] = mapped_column(String(50), default="")

@@ -51,8 +51,10 @@ class NetworkPayload(BaseModel):
 class MonitorPayload(BaseModel):
     display_index: int = 1
     name: str = ""
+    manufacturer: str = ""
     model: str = ""
     serial_number: str = ""
+    display_size: str = ""
     resolution: str = ""
     refresh_rate: str = ""
     color_depth: str = ""
@@ -217,8 +219,10 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
             db.add(MonitorInfo(
                 device_id=device.id,
                 display_index=m.display_index or (idx + 1),
+                manufacturer=m.manufacturer,
                 model=m.model or m.name or "",
                 serial_number=m.serial_number,
+                display_size=m.display_size,
                 resolution=m.resolution,
                 refresh_rate=m.refresh_rate,
                 color_depth=m.color_depth,
@@ -351,8 +355,10 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
             db.add(MonitorInfo(
                 device_id       = device.id,
                 display_index   = m.display_index or (idx + 1),
+                manufacturer    = m.manufacturer,
                 model           = m.model or m.name or "",
                 serial_number   = m.serial_number,
+                display_size    = m.display_size,
                 resolution      = m.resolution,
                 refresh_rate    = m.refresh_rate,
                 color_depth     = m.color_depth,
