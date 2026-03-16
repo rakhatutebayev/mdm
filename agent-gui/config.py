@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.0.6")
+AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.0.7")
 WINDOWS_SERVICE_NAME = "NOCKOAgent"
 EMBEDDED_CONFIG_MAGIC = b"NOCKO_CFG_V1"
 UNINSTALL_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOAgent"
@@ -27,7 +27,7 @@ class AgentConfig:
     customer_id: str = ""
     heartbeat_interval: int = 60
     metrics_interval: int = 120
-    inventory_interval: int = 21600
+    inventory_interval: int = 600
     commands_interval: int = 45
     mdm_enabled: bool = True
     siem_enabled: bool = False

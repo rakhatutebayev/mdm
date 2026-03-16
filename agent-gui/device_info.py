@@ -36,115 +36,139 @@ def _wmi_str_from_bytes(byte_array) -> str:
         return ""
 
 
-def _collect_monitors() -> list[dict]:
-    """Collect monitor info via PowerShell — more reliable than Python WMI in service context.
+def _parse_edid(edid: bytes) -> dict:
+    """Parse EDID binary blob → manufacturer, model, serial, size_inches."""
+    result = {"manufacturer": "", "model": "", "serial_number": "", "display_size": ""}
+    if len(edid) < 128:
+        return result
 
-    Queries: WmiMonitorID, WmiMonitorBasicDisplayParams, WmiMonitorConnectionParams,
-             Win32_VideoController. Supports multiple monitors.
-    Falls back gracefully on VMs or systems without monitor WMI classes.
+    # Manufacturer ID — 3 letters packed into 2 bytes at offset 8-9
+    mid = (edid[8] << 8) | edid[9]
+    c1 = ((mid >> 10) & 0x1F) + 64
+    c2 = ((mid >> 5)  & 0x1F) + 64
+    c3 = (mid         & 0x1F) + 64
+    mfr_id = chr(c1) + chr(c2) + chr(c3)
+    # Expand well-known IDs
+    _KNOWN = {
+        "SAM": "Samsung", "DEL": "Dell", "LEN": "Lenovo", "BNQ": "BenQ",
+        "AOC": "AOC", "ACI": "Asus", "GBR": "LG", "GSM": "LG", "HWP": "HP",
+        "PHL": "Philips", "ACR": "Acer", "NEC": "NEC", "CMO": "Innolux",
+        "CMN": "Innolux", "BOE": "BOE", "AUO": "AU Optronics",
+    }
+    result["manufacturer"] = _KNOWN.get(mfr_id, mfr_id)
+
+    # Physical size at 21-22 (cm)
+    w_cm, h_cm = edid[21], edid[22]
+    if w_cm and h_cm:
+        import math
+        diag = round(math.sqrt(w_cm**2 + h_cm**2) / 2.54, 1)
+        result["display_size"] = f'{diag}"'
+
+    # Descriptor blocks at 54, 72, 90, 108 — look for model (0xFC) and serial (0xFF)
+    for offset in (54, 72, 90, 108):
+        if len(edid) < offset + 18:
+            break
+        hdr = edid[offset:offset + 3]
+        block_type = edid[offset + 3]
+        text = edid[offset + 5:offset + 18].decode("cp437", errors="replace").rstrip()
+        text = text.replace("\n", "").strip()
+        if block_type == 0xFC:   # Monitor name
+            result["model"] = text
+        elif block_type == 0xFF: # Serial number string
+            result["serial_number"] = text
+
+    return result
+
+
+def _collect_monitors() -> list[dict]:
+    """Collect monitor info from Windows registry EDID — works in Service Session 0.
+
+    Reads EDID from HKLM\\SYSTEM\\CurrentControlSet\\Enum\\DISPLAY\\*\\*\\Device Parameters
+    and parses manufacturer code, model name, serial, physical size. Falls back to
+    empty list on non-Windows or VMs with no monitor registry entries.
     """
     if os.name != "nt":
         return []
 
-    ps_script = r"""
-$ErrorActionPreference = 'SilentlyContinue'
-$result = @()
-
-# Helper: convert WMI byte array to string
-function ConvertFrom-WmiBytes($arr) {
-    if (-not $arr) { return "" }
-    $bytes = $arr | Where-Object { $_ -ne 0 }
-    if (-not $bytes) { return "" }
-    try { return [System.Text.Encoding]::ASCII.GetString([byte[]]$bytes).Trim() } catch { return "" }
-}
-
-# Connection type map
-$connMap = @{0="VGA";1="S-Video";2="Composite";3="Component";4="DVI";5="HDMI";
-             6="LVDS";8="D-Jpn";9="SDI";10="DisplayPort";11="UDI";16="Internal (laptop)"}
-
-# Collect monitors from WmiMonitorID
-$wmiMons = Get-WmiObject -Namespace 'root\wmi' -Class WmiMonitorID 2>$null
-if (-not $wmiMons) { '[]'; exit }
-
-# size lookup
-$sizeMap = @{}
-$bParams = Get-WmiObject -Namespace 'root\wmi' -Class WmiMonitorBasicDisplayParams 2>$null
-foreach ($bp in $bParams) {
-    $key = $bp.InstanceName -replace '_\d+$',''
-    $w = $bp.MaxHorizontalImageSize; $h = $bp.MaxVerticalImageSize
-    if ($w -and $h -and $w -gt 0 -and $h -gt 0) {
-        $d = [Math]::Round([Math]::Sqrt($w*$w + $h*$h) / 2.54, 1)
-        $sizeMap[$key.ToUpper()] = "$d`""
-    }
-}
-
-# connection type lookup
-$connTypeMap = @{}
-$cParams = Get-WmiObject -Namespace 'root\wmi' -Class WmiMonitorConnectionParams 2>$null
-foreach ($cp in $cParams) {
-    $key = ($cp.InstanceName -replace '_\d+$','').ToUpper()
-    $t = $cp.VideoOutputTechnology
-    $connTypeMap[$key] = if ($connMap.ContainsKey([int]$t)) { $connMap[[int]$t] } else { "Unknown" }
-}
-
-# resolution from VideoController
-$resolutions = @()
-$vcs = Get-WmiObject -Class Win32_VideoController 2>$null
-foreach ($vc in $vcs) {
-    if ($vc.CurrentHorizontalResolution -and $vc.CurrentVerticalResolution) {
-        $resolutions += "$($vc.CurrentHorizontalResolution)x$($vc.CurrentVerticalResolution)"
-    }
-}
-
-$idx = 0
-foreach ($mon in $wmiMons) {
-    $key = ($mon.InstanceName -replace '_\d+$','').ToUpper()
-    $mfr   = ConvertFrom-WmiBytes $mon.ManufacturerName
-    $model = ConvertFrom-WmiBytes $mon.UserFriendlyName
-    $ser   = ConvertFrom-WmiBytes $mon.SerialNumberID
-    $size  = if ($sizeMap.ContainsKey($key)) { $sizeMap[$key] } else { "" }
-    $conn  = if ($connTypeMap.ContainsKey($key)) { $connTypeMap[$key] } else { "" }
-    $res   = if ($idx -lt $resolutions.Count) { $resolutions[$idx] } elseif ($resolutions.Count -gt 0) { $resolutions[0] } else { "" }
-    $result += [PSCustomObject]@{
-        display_index=$idx+1; manufacturer=$mfr; model=$model; serial_number=$ser;
-        display_size=$size; resolution=$res; connection_type=$conn;
-        refresh_rate=""; color_depth=""; hdr_support=$false
-    }
-    $idx++
-}
-$result | ConvertTo-Json -Compress
-"""
-
-    import json, subprocess
+    monitors: list[dict] = []
     try:
-        r = subprocess.run(
-            ["powershell", "-NonInteractive", "-NoProfile", "-Command", ps_script],
-            capture_output=True, text=True, timeout=20,
-        )
-        raw = (r.stdout or "").strip()
-        if not raw or raw == "[]":
+        import winreg  # only available on Windows
+
+        # Get resolution from Win32_VideoController (accessible from SYSTEM)
+        vc_resolutions: list[str] = []
+        try:
+            if wmi:
+                c = wmi.WMI()
+                for vc in c.Win32_VideoController():
+                    w = getattr(vc, "CurrentHorizontalResolution", None)
+                    h = getattr(vc, "CurrentVerticalResolution", None)
+                    if w and h:
+                        vc_resolutions.append(f"{w}x{h}")
+        except Exception:
+            pass
+
+        # Walk DISPLAY registry tree for EDID data
+        enum_path = r"SYSTEM\CurrentControlSet\Enum\DISPLAY"
+        try:
+            enum_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, enum_path)
+        except OSError:
             return []
-        data = json.loads(raw)
-        # PowerShell returns a dict (not list) when there's only 1 item
-        if isinstance(data, dict):
-            data = [data]
-        out = []
-        for item in data:
-            out.append({
-                "display_index":   int(item.get("display_index", 1)),
-                "manufacturer":    str(item.get("manufacturer") or ""),
-                "model":           str(item.get("model") or ""),
-                "serial_number":   str(item.get("serial_number") or ""),
-                "display_size":    str(item.get("display_size") or ""),
-                "resolution":      str(item.get("resolution") or ""),
-                "connection_type": str(item.get("connection_type") or ""),
-                "refresh_rate":    "",
-                "color_depth":     "",
-                "hdr_support":     False,
-            })
-        return out
+
+        idx = 0
+        mon_idx = 0
+        while True:
+            try:
+                vendor_name = winreg.EnumKey(enum_key, idx)
+                idx += 1
+            except OSError:
+                break
+
+            vendor_key = winreg.OpenKey(enum_key, vendor_name)
+            sub_idx = 0
+            while True:
+                try:
+                    instance_name = winreg.EnumKey(vendor_key, sub_idx)
+                    sub_idx += 1
+                except OSError:
+                    break
+
+                try:
+                    params_path = f"{vendor_name}\\{instance_name}\\Device Parameters"
+                    params_key = winreg.OpenKey(enum_key, params_path)
+                    edid_data, _ = winreg.QueryValueEx(params_key, "EDID")
+                    winreg.CloseKey(params_key)
+
+                    parsed = _parse_edid(bytes(edid_data))
+                    # Skip generic/empty entries (e.g. headless VMs return blank EDID)
+                    if not parsed["manufacturer"] and not parsed["model"]:
+                        continue
+
+                    resolution = (vc_resolutions[mon_idx]
+                                  if mon_idx < len(vc_resolutions)
+                                  else (vc_resolutions[0] if vc_resolutions else ""))
+                    monitors.append({
+                        "display_index":   mon_idx + 1,
+                        "manufacturer":    parsed["manufacturer"],
+                        "model":           parsed["model"],
+                        "serial_number":   parsed["serial_number"],
+                        "display_size":    parsed["display_size"],
+                        "resolution":      resolution,
+                        "connection_type": "",
+                        "refresh_rate":    "",
+                        "color_depth":     "",
+                        "hdr_support":     False,
+                    })
+                    mon_idx += 1
+                except (OSError, KeyError):
+                    pass
+
+            winreg.CloseKey(vendor_key)
+
+        winreg.CloseKey(enum_key)
     except Exception:
-        return []
+        pass
+
+    return monitors
 
 
 def _safe(callable_obj, fallback: Any = "") -> Any:
