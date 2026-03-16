@@ -15,6 +15,12 @@ async def lifespan(app: FastAPI):
     # Create all tables on startup if they don't exist
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Inline schema migrations for new columns on existing tables
+        await conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE monitor_info ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(255) DEFAULT ''"
+            )
+        )
     yield
 
 
