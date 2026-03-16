@@ -1,7 +1,31 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-15T19:38:00Z",
+  "generated_at": "2026-03-16T17:35:00Z",
   "releases": [
+    {
+      "version": "1.0.4",
+      "tag": "agent-v1.0.4",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.4-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.4/nocko-agent-1.0.4-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13640677,
+          "notes": "Remote rename command dispatch — correct build (v1.0.3 was built from old code)"
+        },
+        {
+          "format": "msi",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.4-x64.msi",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.4/nocko-agent-1.0.4-x64.msi",
+          "sha256": "",
+          "size_bytes": 32768,
+          "notes": "Remote rename command dispatch — correct build"
+        }
+      ]
+    },
     {
       "version": "1.0.3",
       "tag": "agent-v1.0.3",
@@ -13,7 +37,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64-portable.exe",
           "sha256": "",
           "size_bytes": 13638645,
-          "notes": "Remote rename command support added"
+          "notes": "NOTE: Built from old code — command dispatcher NOT included"
         },
         {
           "format": "msi",
@@ -22,7 +46,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64.msi",
           "sha256": "",
           "size_bytes": 32768,
-          "notes": "Remote rename command support added"
+          "notes": "NOTE: Built from old code — command dispatcher NOT included"
         }
       ]
     },
