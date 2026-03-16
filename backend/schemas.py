@@ -166,8 +166,10 @@ class DeviceListOut(BaseModel):
     customer_id: str
     device_name: str
     platform: str
+    os_version: str
     owner: str
     enrollment_method: str
+    agent_version: str
     status: str
     enrolled_at: Optional[datetime]
     last_checkin: Optional[datetime]

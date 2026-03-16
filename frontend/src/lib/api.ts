@@ -31,8 +31,10 @@ export interface DeviceListItem {
   customer_id: string;
   device_name: string;
   platform: string;
+  os_version: string;
   owner: string;
   enrollment_method: string;
+  agent_version: string;
   status: string;
   enrolled_at: string | null;
   last_checkin: string | null;
