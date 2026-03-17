@@ -52,6 +52,7 @@ export interface NetworkInfo {
 
 export interface MonitorInfo {
   display_index: number;
+  manufacturer: string;
   model: string;
   serial_number: string;
   display_size: string;
@@ -73,6 +74,10 @@ export interface HardwareInventory {
   memory_module_count: number | null;
   machine_class: string;
   chassis_type: string;
+  gpu_model: string;
+  gpu_manufacturer: string;
+  gpu_vram_gb: number | null;
+  gpu_driver_version: string;
 }
 
 export interface PhysicalDiskInfo {

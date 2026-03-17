@@ -108,6 +108,10 @@ class HardwareInventory(Base):
     memory_module_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     machine_class: Mapped[str] = mapped_column(String(50), default="")
     chassis_type: Mapped[str] = mapped_column(String(50), default="")
+    gpu_model: Mapped[str] = mapped_column(String(255), default="")
+    gpu_manufacturer: Mapped[str] = mapped_column(String(100), default="")
+    gpu_vram_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    gpu_driver_version: Mapped[str] = mapped_column(String(100), default="")
 
     device: Mapped["Device"] = relationship(back_populates="hardware_inventory")
 

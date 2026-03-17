@@ -21,6 +21,14 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE monitor_info ADD COLUMN IF NOT EXISTS manufacturer VARCHAR(255) DEFAULT ''"
             )
         )
+        # GPU info columns on hardware_inventory
+        for col_ddl in [
+            "ALTER TABLE hardware_inventory ADD COLUMN IF NOT EXISTS gpu_model VARCHAR(255) DEFAULT ''",
+            "ALTER TABLE hardware_inventory ADD COLUMN IF NOT EXISTS gpu_manufacturer VARCHAR(100) DEFAULT ''",
+            "ALTER TABLE hardware_inventory ADD COLUMN IF NOT EXISTS gpu_vram_gb FLOAT",
+            "ALTER TABLE hardware_inventory ADD COLUMN IF NOT EXISTS gpu_driver_version VARCHAR(100) DEFAULT ''",
+        ]:
+            await conn.execute(__import__("sqlalchemy").text(col_ddl))
     yield
 
 

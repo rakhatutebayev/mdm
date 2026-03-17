@@ -306,6 +306,12 @@ export default function DeviceDetailPage() {
     'Memory Modules': device.hardware_inventory.memory_module_count != null ? String(device.hardware_inventory.memory_module_count) : '—',
     'Machine Class': device.hardware_inventory.machine_class || '—',
     'Chassis Type': device.hardware_inventory.chassis_type || '—',
+    ...(device.hardware_inventory.gpu_model ? {
+      'GPU Model': device.hardware_inventory.gpu_model,
+      'GPU Manufacturer': device.hardware_inventory.gpu_manufacturer || '—',
+      'GPU VRAM': device.hardware_inventory.gpu_vram_gb != null ? `${device.hardware_inventory.gpu_vram_gb} GB` : '—',
+      'GPU Driver': device.hardware_inventory.gpu_driver_version || '—',
+    } : {}),
   } : { 'Hardware Info': 'No hardware inventory data available' };
 
   const mdmSec: Record<string, string> = {
@@ -318,22 +324,17 @@ export default function DeviceDetailPage() {
 
   const monitorSections = device.monitors.length === 0
     ? [{ title: 'Monitor Summary', data: { 'Monitor Info': 'No monitor data available' } }]
-    : device.monitors.length === 1
-      ? [{ title: 'Monitor Summary', data: {
-          'Model':         device.monitors[0].model || '—',
-          'Serial Number': device.monitors[0].serial_number || '—',
-          'Resolution':    device.monitors[0].resolution || '—',
-          'Refresh Rate':  device.monitors[0].refresh_rate || '—',
-          'HDR Support':   device.monitors[0].hdr_support ? 'Yes' : 'No',
-        }}]
-      : [{ title: 'Monitor Summary', data: {
-          'Number of Displays': String(device.monitors.length),
-          ...Object.fromEntries(device.monitors.flatMap((m) => [
-            [`Monitor ${m.display_index} — Model`,      m.model || '—'],
-            [`Monitor ${m.display_index} — Resolution`, m.resolution || '—'],
-            [`Monitor ${m.display_index} — HDR`,        m.hdr_support ? 'Yes' : 'No'],
-          ]))
-        }}];
+    : [{ title: 'Monitor Summary', data: {
+        'Number of Displays': String(device.monitors.length),
+        ...Object.fromEntries(device.monitors.flatMap((m) => [
+          [`Monitor ${m.display_index} — Manufacturer`, (m as any).manufacturer || '—'],
+          [`Monitor ${m.display_index} — Model`,         m.model || '—'],
+          [`Monitor ${m.display_index} — Serial Number`, m.serial_number || '—'],
+          [`Monitor ${m.display_index} — Size`,          m.display_size || '—'],
+          [`Monitor ${m.display_index} — Resolution`,    m.resolution || '—'],
+          [`Monitor ${m.display_index} — Connection`,    m.connection_type || '—'],
+        ]))
+      }}];
 
   const physicalDiskSections = device.physical_disks.length === 0
     ? [{ title: 'Physical Disks', data: { 'Physical Disks': 'No physical disk data available' } }]

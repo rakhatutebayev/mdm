@@ -56,6 +56,10 @@ class HardwareInventoryOut(BaseModel):
     memory_module_count: Optional[int]
     machine_class: str
     chassis_type: str
+    gpu_model: str = ""
+    gpu_manufacturer: str = ""
+    gpu_vram_gb: Optional[float] = None
+    gpu_driver_version: str = ""
     model_config = {"from_attributes": True}
 
 
@@ -119,6 +123,10 @@ class HardwareInventoryCreateIn(BaseModel):
     memory_module_count: Optional[int] = None
     machine_class: str = ""
     chassis_type: str = ""
+    gpu_model: str = ""
+    gpu_manufacturer: str = ""
+    gpu_vram_gb: Optional[float] = None
+    gpu_driver_version: str = ""
 
 
 class PhysicalDiskCreateIn(BaseModel):

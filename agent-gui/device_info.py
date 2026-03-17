@@ -339,6 +339,32 @@ def _collect_windows_inventory() -> dict[str, Any]:
         slot_count = sum(int(getattr(arr, "MemoryDevices", 0) or 0) for arr in memory_arrays) or None
         slots_used = sum(1 for module in memory_modules if int(getattr(module, "Capacity", 0) or 0) > 0) or None
 
+        # GPU info via Win32_VideoController (accessible from SYSTEM session)
+        gpu_model = ""
+        gpu_manufacturer = ""
+        gpu_vram_gb = None
+        gpu_driver_version = ""
+        try:
+            vcs = client.Win32_VideoController()
+            if vcs:
+                vc = vcs[0]  # primary GPU
+                gpu_model = str(getattr(vc, "Name", "") or "").strip()
+                gpu_driver_version = str(getattr(vc, "DriverVersion", "") or "").strip()
+                ram_bytes = int(getattr(vc, "AdapterRAM", 0) or 0)
+                if ram_bytes > 0:
+                    gpu_vram_gb = round(ram_bytes / (1024 ** 3), 1)
+                name_upper = gpu_model.upper()
+                if "NVIDIA" in name_upper:
+                    gpu_manufacturer = "NVIDIA"
+                elif "AMD" in name_upper or "RADEON" in name_upper:
+                    gpu_manufacturer = "AMD"
+                elif "INTEL" in name_upper:
+                    gpu_manufacturer = "Intel"
+                else:
+                    gpu_manufacturer = str(getattr(vc, "AdapterCompatibility", "") or "").strip()
+        except Exception:
+            pass
+
         hardware_inventory = {
             "processor_model": processor_model,
             "processor_vendor": processor_vendor,
@@ -350,6 +376,10 @@ def _collect_windows_inventory() -> dict[str, Any]:
             "memory_module_count": len(memory_modules) or None,
             "machine_class": machine_class,
             "chassis_type": chassis_type,
+            "gpu_model": gpu_model,
+            "gpu_manufacturer": gpu_manufacturer,
+            "gpu_vram_gb": gpu_vram_gb,
+            "gpu_driver_version": gpu_driver_version,
         }
 
         physical_disk_items = []
