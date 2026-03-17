@@ -74,6 +74,10 @@ class HardwareInventoryPayload(BaseModel):
     memory_module_count: Optional[int] = None
     machine_class: str = ""
     chassis_type: str = ""
+    gpu_model: str = ""
+    gpu_manufacturer: str = ""
+    gpu_vram_gb: Optional[float] = None
+    gpu_driver_version: str = ""
 
 
 class PhysicalDiskPayload(BaseModel):
@@ -243,6 +247,10 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
             device.hardware_inventory.memory_module_count = hw.memory_module_count
             device.hardware_inventory.machine_class = hw.machine_class
             device.hardware_inventory.chassis_type = hw.chassis_type
+            device.hardware_inventory.gpu_model = hw.gpu_model
+            device.hardware_inventory.gpu_manufacturer = hw.gpu_manufacturer
+            device.hardware_inventory.gpu_vram_gb = hw.gpu_vram_gb
+            device.hardware_inventory.gpu_driver_version = hw.gpu_driver_version
         else:
             db.add(HardwareInventory(
                 device_id=device.id,
@@ -256,6 +264,10 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
                 memory_module_count=hw.memory_module_count,
                 machine_class=hw.machine_class,
                 chassis_type=hw.chassis_type,
+                gpu_model=hw.gpu_model,
+                gpu_manufacturer=hw.gpu_manufacturer,
+                gpu_vram_gb=hw.gpu_vram_gb,
+                gpu_driver_version=hw.gpu_driver_version,
             ))
 
     if body.physical_disks is not None:
