@@ -3,7 +3,7 @@
  * to the FastAPI backend. Works both locally and in Docker.
  *
  * Correctly forwards Content-Type and Content-Disposition so binary
- * downloads (MSI, EXE, ZIP) arrive with the right filename and MIME type.
+ * downloads (EXE, ZIP) arrive with the right filename and MIME type.
  */
 import { NextRequest, NextResponse } from "next/server";
 
@@ -45,7 +45,7 @@ async function proxy(req: NextRequest, context: Context) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // Read raw bytes so binary files (MSI, EXE, ZIP) are not corrupted
+    // Read raw bytes so binary files (EXE, ZIP) are not corrupted
     const bytes = await res.arrayBuffer();
 
     // Build response headers — pass through Content-Type and Content-Disposition

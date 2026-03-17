@@ -16,8 +16,6 @@ Implemented now:
 - enrollment and check-in against `/api/v1/mdm/windows/*`
 - embedded bootstrap config reader for single-file EXE delivery
 - PyInstaller build to `dist/NOCKO-Agent.exe`
-- Inno Setup installer
-- WiX MSI definition
 
 Planned next:
 
@@ -86,17 +84,7 @@ python make_icons.py
 pyinstaller agent.spec --noconfirm
 ```
 
-### Setup EXE
-
-```powershell
-ISCC installer\setup.iss
-```
-
-### MSI
-
-```powershell
-wix build installer\setup.wxs -arch x64 -o release-assets\nocko-agent-x64.msi
-```
+The build regenerates `agent-gui/assets/favicon.ico` before packaging.
 
 ## Project Structure
 
@@ -108,12 +96,10 @@ agent-gui/
 ├── device_info.py
 ├── service_runtime.py
 ├── agent.spec
+├── assets/
 ├── config.example.json
 ├── make_icons.py
 ├── requirements.txt
 ├── modules/
 │   └── mdm.py
-└── installer/
-    ├── setup.iss
-    └── setup.wxs
 ```

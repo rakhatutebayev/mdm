@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from urllib.error import URLError
 from urllib.request import urlopen
 import hashlib
 
@@ -55,6 +56,17 @@ def _download_or_cache(url: str, sha256_expected: str | None, fmt: str) -> bytes
             detail=f"Could not download prebuilt {fmt.upper()} artifact: {e.reason}",
         ) from e
 
+    if sha256_expected:
+        actual = hashlib.sha256(data).hexdigest()
+        if actual != sha256_expected:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    f"Downloaded prebuilt {fmt.upper()} artifact failed integrity verification. "
+                    "Please republish the release artifact."
+                ),
+            )
+
     # Save to cache
     try:
         cache_file.write_bytes(data)
@@ -67,7 +79,7 @@ def _download_or_cache(url: str, sha256_expected: str | None, fmt: str) -> bytes
 
 class PackageRequest(BaseModel):
     customer_id: str          # UUID or slug
-    format: str               # "zip" | "exe" | "msi"
+    format: str               # "zip" | "exe"
     arch: str = "x64"         # "x64" | "x86"
     server_url: Optional[str] = None   # override if needed
     install_mode: str = "silent"       # "silent" | "interactive"
@@ -151,6 +163,8 @@ async def get_package_catalog(customer_id: str, db: AsyncSession = Depends(get_d
             arch = artifact.get("arch")
             if not all([url, filename, fmt, arch]):
                 continue
+            if fmt != "exe":
+                continue
 
             artifacts.append(
                 PackageArtifact(
@@ -180,7 +194,7 @@ async def get_package_catalog(customer_id: str, db: AsyncSession = Depends(get_d
 
 @router.post("/generate")
 async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_db)):
-    """Return a ZIP bootstrap package or proxy a prebuilt MSI/EXE release artifact."""
+    """Return a ZIP bootstrap package or personalize a prebuilt EXE release artifact."""
     customer, token_row = await _resolve_customer_and_token(body.customer_id, db)
     package_settings = await get_agent_package_settings(db)
     server_url = (body.server_url or package_settings["server_url"]).rstrip("/")
@@ -206,9 +220,11 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     )
 
     fmt = body.format.lower()
+    if fmt not in {"zip", "exe"}:
+        raise HTTPException(status_code=400, detail=f"Unknown format '{fmt}'. Use: zip, exe")
 
     # Resolve artifact version up-front so bootstrap_config carries it
-    _catalog_release, _catalog_artifact = find_artifact(fmt if fmt in {"exe", "msi"} else "exe", body.arch)
+    _catalog_release, _catalog_artifact = find_artifact("exe", body.arch)
     _agent_version = str(_catalog_release.get("version", "")) if _catalog_release else ""
 
     # Derive MQTT host from server_url (same hostname, port 1883)
@@ -249,7 +265,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
             mime      = "application/zip"
             filename  = f"nocko-mdm-bootstrap-{customer.slug}-{_agent_version or 'latest'}.zip"
 
-        elif fmt in {"exe", "msi"}:
+        elif fmt == "exe":
             release, artifact = find_artifact(fmt, body.arch)
             if not release or not artifact:
                 raise HTTPException(
@@ -267,16 +283,9 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
                 fmt=fmt,
             )
 
-            if fmt == "exe":
-                data = embed_bootstrap_config(data, bootstrap_config)
-                filename = f"nocko-mdm-agent-{customer.slug}-{_agent_version or release.get('version', 'latest')}.exe"
-            else:
-                filename = str(artifact.get("filename") or f"nocko-mdm-agent.{fmt}")
-
+            data = embed_bootstrap_config(data, bootstrap_config)
+            filename = f"nocko-mdm-agent-{customer.slug}-{_agent_version or release.get('version', 'latest')}.exe"
             mime = "application/octet-stream"
-
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown format '{fmt}'. Use: zip, exe, msi")
 
     except HTTPException:
         raise

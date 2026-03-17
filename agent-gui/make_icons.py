@@ -17,7 +17,7 @@ def main() -> None:
     draw.rounded_rectangle((56, 56, 200, 200), radius=32, fill="#0f172a")
     draw.text((82, 82), "N", fill="#e2e8f0")
     image.save(ASSETS / "nocko-agent.png")
-    image.save(ASSETS / "nocko-agent.ico", sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
+    image.save(ASSETS / "favicon.ico", sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
 
 
 if __name__ == "__main__":

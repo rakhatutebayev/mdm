@@ -4,36 +4,23 @@ from pathlib import Path
 
 block_cipher = None
 root = Path.cwd()
-icon_path = root / "assets" / "nocko-agent.ico"
+icon_path = root / "assets" / "favicon.ico"
 
 a = Analysis(
     ["main.py"],
     pathex=[str(root)],
     binaries=[],
-    datas=[
-        (str(root / "config.example.json"), "."),
-        (str(root / "README.md"), "."),
-    ],
+    datas=[],
     hiddenimports=[
-        "requests",
-        "psutil",
         "win32timezone",
         "servicemanager",
         "win32service",
         "win32serviceutil",
         "win32event",
-        "win32con",
-        "win32api",
         "pywintypes",
-        "paho",
-        "paho.mqtt",
         "paho.mqtt.client",
         "paho.mqtt.properties",
         "paho.mqtt.packettypes",
-        "winreg",
-        "csv",
-        "io",
-        "subprocess",
     ],
     hookspath=[],
     hooksconfig={},
@@ -42,6 +29,8 @@ a = Analysis(
     excludes=[
         "tkinter", "_tkinter",
         "matplotlib", "numpy", "scipy", "pandas",
+        "PyQt5", "PyQt6", "PySide2", "PySide6",
+        "PIL",
         "PIL._tkinter_finder",
         "test", "unittest", "doctest", "pdb", "pydoc",
         "xmlrpc", "ftplib", "imaplib", "poplib", "smtplib",

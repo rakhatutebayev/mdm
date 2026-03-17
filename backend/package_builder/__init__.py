@@ -1,6 +1,4 @@
-"""NOCKO MDM — Agent Package Builder."""
+"""NOCKO MDM package generation helpers."""
 from .zip_builder import build_zip
-from .exe_builder import build_exe
-from .msi_builder import build_msi
 
-__all__ = ["build_zip", "build_exe", "build_msi"]
+__all__ = ["build_zip"]

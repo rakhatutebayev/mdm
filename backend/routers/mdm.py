@@ -799,7 +799,7 @@ class DecommissionPayload(BaseModel):
 
 @router.post("/decommission")
 async def decommission(body: DecommissionPayload, db: AsyncSession = Depends(get_db)):
-    """Called by uninstall.ps1 when the MSI agent is removed from the device."""
+    """Called when the Windows agent is removed from the device."""
     result = await db.execute(select(Device).where(Device.id == body.device_id))
     device = result.scalar_one_or_none()
     if not device:

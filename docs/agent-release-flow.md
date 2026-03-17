@@ -1,6 +1,6 @@
 # NOCKO MDM Agent Release Flow
 
-NOCKO MDM no longer builds `MSI` or `EXE` installers on the production server.
+NOCKO MDM no longer builds Windows installers on the production server.
 The main end-user delivery path is now a single customer-specific `EXE` file with
 embedded bootstrap configuration.
 
@@ -45,12 +45,6 @@ Manifest format:
           "size_bytes": 12345678,
           "notes": "Optional human note"
         },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.2.3-x64.msi",
-          "url": "https://github.com/org/repo/releases/download/agent-v1.2.3/nocko-agent-1.2.3-x64.msi"
-        }
       ]
     }
   ]
@@ -62,6 +56,7 @@ Convention: newest release goes first.
 ## Portal Behavior
 
 - The main portal action generates one customer-specific `EXE`.
+- The visible self-service path is currently `x64` only.
 - The backend downloads the latest base `EXE`, embeds tenant bootstrap JSON into the file, and returns the personalized result.
 - `ZIP` can still exist as a fallback bootstrap path for internal use.
 - If no base `EXE` artifact exists for the selected architecture, the portal blocks the download and shows an actionable error.
@@ -70,7 +65,7 @@ Convention: newest release goes first.
 
 - run backend/frontend tests
 - build the Windows agent on `windows-latest`
-- package `.msi` and `.exe`
+- package the portable `.exe`
 - upload assets to GitHub Releases
 - update `backend/package_builder/agent_releases.json`
 
@@ -80,12 +75,12 @@ Repository workflow added:
 
 Current prerequisite:
 
-- the actual agent source files must exist in `agent-gui/` (`main.py`, `agent.spec`, `make_icons.py`, installer files)
-- right now the repository only contains `agent-gui/README.md`, so the workflow is intentionally set to fail early with a clear error until the source is added
+- the actual agent source files must exist in `agent-gui/` (`main.py`, `agent.spec`, `make_icons.py`)
+- the repository already contains the agent source, so the workflow should build real release artifacts instead of intentionally failing
 
 ## Production Responsibilities
 
 - pull latest code
 - deploy containers
 - expose the package catalog and package download endpoints
-- never install `nsis`, `wixl`, or other Windows packaging tools for runtime package generation
+- never install Windows packaging tools for runtime package generation

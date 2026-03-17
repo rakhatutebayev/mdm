@@ -13,7 +13,7 @@ import {
 import styles from './page.module.css';
 
 const INSTALL_MODES = ['Silent', 'Interactive'] as const;
-const ARCH_OPTIONS = ['x64 (64-bit)', 'x86 (32-bit)', 'Both'] as const;
+const ARCH_OPTIONS = ['x64 (64-bit)'] as const;
 const PACKAGE_FORMATS = ['Single EXE Installer'] as const;
 
 export default function DeploymentPackagePage() {
@@ -110,7 +110,6 @@ export default function DeploymentPackagePage() {
   };
 
   const archToAPI = (label: string): string => {
-    if (label.startsWith('x86')) return 'x86';
     return 'x64';
   };
 
@@ -297,6 +296,9 @@ export default function DeploymentPackagePage() {
                 <select className={styles.select} value={form.arch} onChange={(e) => set('arch', e.target.value)}>
                   {ARCH_OPTIONS.map((a) => <option key={a}>{a}</option>)}
                 </select>
+                <div style={{ marginTop: 10, fontSize: 12, color: '#94a3b8' }}>
+                  Current published agent releases are x64 only.
+                </div>
               </div>
             </div>
             <div className={styles.formRow}>

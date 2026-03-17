@@ -38,15 +38,6 @@
           "sha256": "5ea18b69809da1ab9fc699d0bd5256822c1d528ef648a8bfcac132dfd8274b2c",
           "size_bytes": 13761825,
           "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.6.0-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.6.0/nocko-agent-1.6.0-x64.msi",
-          "sha256": "516984a6f6fd8192c586cf5d6c6bcb82f149513202eaa1ff75a16d0a0b1b7e07",
-          "size_bytes": 32768,
-          "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]
     },
@@ -61,15 +52,6 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.5.0/nocko-agent-1.5.0-x64-portable.exe",
           "sha256": "c74a49956a5e9520a3e7bcbd7400ae18b029430282da9380d40061865f9ef45e",
           "size_bytes": 13758007,
-          "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.5.0-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.5.0/nocko-agent-1.5.0-x64.msi",
-          "sha256": "c881e793468e8d24e667ee32ffec5df8408d6f00d9ec1d8ab44f0d8233b2d1ce",
-          "size_bytes": 32768,
           "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]
@@ -86,15 +68,6 @@
           "sha256": "595d1987d056484e65934e3ae71e35d5d2a3d5dbfadc3cb1b44a3a4ce25f53ee",
           "size_bytes": 13761349,
           "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.4.0-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.4.0/nocko-agent-1.4.0-x64.msi",
-          "sha256": "3627b69d28f11389862becec485b399cb24c88368d1b16df6a7572e373cd8660",
-          "size_bytes": 32768,
-          "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]
     },
@@ -110,15 +83,6 @@
           "sha256": "f72bd6f46c9bdb03dbe7cc7350fa06ae5450b9051a21d392f22083dc761f9efb",
           "size_bytes": 13760690,
           "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.3.0-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.3.0/nocko-agent-1.3.0-x64.msi",
-          "sha256": "cc40ffe70cdbc5f2824023156117417985dbf80915ac957da32af19ef2a0c9ed",
-          "size_bytes": 32768,
-          "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]
     },
@@ -133,15 +97,6 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.2.0/nocko-agent-1.2.0-x64-portable.exe",
           "sha256": "50e38c94b05b1564def9f078559742b1e062a786b9e3df5b3497a0e7605c2037",
           "size_bytes": 13760534,
-          "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.2.0-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.2.0/nocko-agent-1.2.0-x64.msi",
-          "sha256": "3afab9c313d238cbef3659283624d851654858cc106450185dc9fec5e0038134",
-          "size_bytes": 32768,
           "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]
@@ -233,15 +188,6 @@
           "sha256": "",
           "size_bytes": 13643214,
           "notes": "Windows 10/11 correct detection; registry EDID monitors; inventory_interval=600s"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.8-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.8/nocko-agent-1.0.8-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
-          "notes": "Windows 10/11 correct detection"
         }
       ]
     },
@@ -257,15 +203,6 @@
           "sha256": "",
           "size_bytes": 13645749,
           "notes": "Registry EDID monitor collection; inventory_interval=600s"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.7-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.7/nocko-agent-1.0.7-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
-          "notes": "Registry EDID monitor collection"
         }
       ]
     },
@@ -281,15 +218,6 @@
           "sha256": "",
           "size_bytes": 13640454,
           "notes": "PowerShell WMI monitor collection (reliable in service context)"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.6-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.6/nocko-agent-1.0.6-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
-          "notes": "PowerShell WMI monitor collection"
         }
       ]
     },
@@ -305,15 +233,6 @@
           "sha256": "",
           "size_bytes": 13638380,
           "notes": "WMI monitor collection: manufacturer, model, serial, size, resolution, connection type"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.5-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.5/nocko-agent-1.0.5-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
-          "notes": "WMI monitor collection"
         }
       ]
     },
@@ -329,15 +248,6 @@
           "sha256": "",
           "size_bytes": 13640677,
           "notes": "Remote rename command dispatch \u2014 correct build (v1.0.3 was built from old code)"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.4-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.4/nocko-agent-1.0.4-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
-          "notes": "Remote rename command dispatch \u2014 correct build"
         }
       ]
     },
@@ -352,15 +262,6 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64-portable.exe",
           "sha256": "",
           "size_bytes": 13638645,
-          "notes": "NOTE: Built from old code \u2014 command dispatcher NOT included"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.3-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
           "notes": "NOTE: Built from old code \u2014 command dispatcher NOT included"
         }
       ]
@@ -377,15 +278,6 @@
           "sha256": "",
           "size_bytes": 13638645,
           "notes": "Uninstall fix and reinstall detection"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.2-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.2/nocko-agent-1.0.2-x64.msi",
-          "sha256": "",
-          "size_bytes": 32768,
-          "notes": "Uninstall fix and reinstall detection"
         }
       ]
     },
@@ -401,15 +293,6 @@
           "sha256": "810c16fc1577bf831451cb7db6275076b7794ba85b4f0d11e8f42b6dcfc45dea",
           "size_bytes": 13628391,
           "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.1-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.1/nocko-agent-1.0.1-x64.msi",
-          "sha256": "267c65863a17bb706411f454b70e615d778d5900c91f2ddeabf3c919cf20f4bf",
-          "size_bytes": 32768,
-          "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]
     },
@@ -424,15 +307,6 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.0/nocko-agent-1.0.0-x64-portable.exe",
           "sha256": "ac9483edc4db8203569ef353400928aa00b7416f49b70d99fcdaa821cabdede6",
           "size_bytes": 10107231,
-          "notes": "Published by GitHub Actions Windows release workflow"
-        },
-        {
-          "format": "msi",
-          "arch": "x64",
-          "filename": "nocko-agent-1.0.0-x64.msi",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.0/nocko-agent-1.0.0-x64.msi",
-          "sha256": "8987919f26803e567c0cc2f25eb340e70ba2df924d5c81ab654ec5e38fd89389",
-          "size_bytes": 32768,
           "notes": "Published by GitHub Actions Windows release workflow"
         }
       ]

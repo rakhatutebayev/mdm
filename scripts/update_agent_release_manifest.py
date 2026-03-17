@@ -24,8 +24,8 @@ def parse_asset(value: str) -> dict[str, str]:
         )
 
     fmt, arch, path = parts
-    if fmt not in {"exe", "msi"}:
-        raise argparse.ArgumentTypeError("Asset format must be 'exe' or 'msi'")
+    if fmt != "exe":
+        raise argparse.ArgumentTypeError("Asset format must be 'exe'")
     if arch not in {"x64", "x86"}:
         raise argparse.ArgumentTypeError("Asset arch must be 'x64' or 'x86'")
 

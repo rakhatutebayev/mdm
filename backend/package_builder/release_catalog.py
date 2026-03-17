@@ -1,6 +1,6 @@
 """Helpers for reading prebuilt agent release artifacts.
 
-Production no longer builds MSI/EXE installers on demand. Instead, the backend
+Production no longer builds Windows installers on demand. Instead, the backend
 reads a release manifest that points to already-built artifacts published by CI.
 """
 from __future__ import annotations

@@ -135,7 +135,7 @@ export interface EnrollmentToken {
 }
 
 export interface PackageArtifact {
-  format: "zip" | "msi" | "exe";
+  format: "zip" | "exe";
   arch: "x64" | "x86";
   version: string;
   filename: string;
