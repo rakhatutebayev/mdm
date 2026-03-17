@@ -70,7 +70,7 @@ export default function TopNav() {
       {/* Logo */}
       <Link href="/" className={styles.logo}>
         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: '50%', background: '#fff', flexShrink: 0 }}>
-          <img src="/favicon.ico" alt="NOCKO" width={18} height={18} style={{ display: 'block' }} />
+          <img src="/icon" alt="NOCKO" width={18} height={18} style={{ display: 'block' }} />
         </span>
         <span className={styles.logoText}>NOCKO MDM</span>
         <span className={styles.logoBadge}>MSP</span>

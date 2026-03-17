@@ -28,8 +28,10 @@ jobs:
             cd /opt/nocko-mdm
             git pull origin main || git pull origin master
 
+            echo "==> Refreshing Docker builder cache..."
+            docker builder prune -af || true
+
             echo "==> Restarting application services with Docker Compose..."
-            docker compose down --remove-orphans || true
             docker compose pull
             docker compose up -d --build --force-recreate --remove-orphans
 

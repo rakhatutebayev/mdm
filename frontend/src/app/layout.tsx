@@ -6,6 +6,11 @@ import TopNav from '@/components/TopNav/TopNav';
 export const metadata: Metadata = {
   title: 'NOCKO MDM',
   description: 'Mobile Device Management Platform',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
