@@ -1,7 +1,22 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-17T09:35:00Z",
+  "generated_at": "2026-03-17T10:00:00Z",
   "releases": [
+    {
+      "version": "1.1.0",
+      "tag": "agent-v1.1.0",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.1.0-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.1.0/nocko-agent-1.1.0-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13649607,
+          "notes": "Real network info (DNS/gateway/WiFi via WMI); printer list via Win32_Printer; NVMe disk fix via MSFT_PhysicalDisk"
+        }
+      ]
+    },
     {
       "version": "1.0.9",
       "tag": "agent-v1.0.9",
