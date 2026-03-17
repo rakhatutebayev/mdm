@@ -1,7 +1,31 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-16T19:20:00Z",
+  "generated_at": "2026-03-17T09:20:00Z",
   "releases": [
+    {
+      "version": "1.0.8",
+      "tag": "agent-v1.0.8",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.8-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.8/nocko-agent-1.0.8-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13643214,
+          "notes": "Windows 10/11 correct detection; registry EDID monitors; inventory_interval=600s"
+        },
+        {
+          "format": "msi",
+          "arch": "x64",
+          "filename": "nocko-agent-1.0.8-x64.msi",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.8/nocko-agent-1.0.8-x64.msi",
+          "sha256": "",
+          "size_bytes": 32768,
+          "notes": "Windows 10/11 correct detection"
+        }
+      ]
+    },
     {
       "version": "1.0.7",
       "tag": "agent-v1.0.7",
