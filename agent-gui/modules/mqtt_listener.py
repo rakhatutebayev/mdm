@@ -50,12 +50,18 @@ class MqttListener:
         host = getattr(self._config, "mqtt_host", "")
         if host:
             return host
-        # Extract hostname from server_url e.g. https://mdm.nocko.com → mdm.nocko.com
         url = self._config.server_url.rstrip("/")
         for scheme in ("https://", "http://"):
             if url.startswith(scheme):
                 url = url[len(scheme):]
         return url.split("/")[0]
+
+    def _use_tls(self) -> bool:
+        """Use TLS if server_url starts with https and no explicit mqtt_host override."""
+        explicit_host = getattr(self._config, "mqtt_host", "")
+        if explicit_host:
+            return False  # explicit host — don't assume TLS
+        return self._config.server_url.startswith("https://")
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, daemon=True, name="mqtt-listener")
@@ -72,8 +78,11 @@ class MqttListener:
             log.warning("paho-mqtt not installed — MQTT listener disabled. Using HTTP polling only.")
             return
 
-        host = self._broker_host()
-        port = getattr(self._config, "mqtt_port", 1883)
+        host      = self._broker_host()
+        port      = getattr(self._config, "mqtt_port",      443)
+        transport = getattr(self._config, "mqtt_transport", "websockets")
+        ws_path   = getattr(self._config, "mqtt_path",      "/mqtt")
+        use_tls   = getattr(self._config, "mqtt_tls",       self._use_tls())
         device_id = self._config.device_id
         topic = f"mdm/devices/{device_id}/commands"
         backoff = 5
@@ -81,7 +90,7 @@ class MqttListener:
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
                 client.subscribe(topic, qos=1)
-                log.info("MQTT connected → subscribed to %s", topic)
+                log.info("MQTT connected → subscribed to %s (transport=%s)", topic, transport)
             else:
                 log.warning("MQTT connect failed rc=%s", rc)
 
@@ -93,7 +102,6 @@ class MqttListener:
                     log.debug("MQTT: duplicate command %s — skipped", cmd_id)
                     return
                 log.info("MQTT command received: %s (id=%s)", payload.get("type"), cmd_id)
-                # Wrap in list to match _dispatch_commands signature
                 self._dispatch([payload], self._config, self._client_ref)
             except Exception as exc:
                 log.exception("MQTT message processing error: %s", exc)
@@ -102,7 +110,14 @@ class MqttListener:
             client = mqtt.Client(
                 client_id=f"nocko-agent-{device_id}",
                 clean_session=False,
+                transport=transport,
             )
+            if transport == "websockets":
+                client.ws_set_options(path=ws_path)
+            if use_tls:
+                import ssl as _ssl
+                client.tls_set(cert_reqs=_ssl.CERT_NONE)
+                client.tls_insecure_set(True)  # server cert verified by OS trust store
             client.on_connect = on_connect
             client.on_message = on_message
             client.reconnect_delay_set(min_delay=1, max_delay=30)

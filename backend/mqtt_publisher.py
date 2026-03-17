@@ -13,8 +13,10 @@ from typing import Any
 
 log = logging.getLogger("mqtt")
 
-_MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
-_MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+_MQTT_HOST      = os.getenv("MQTT_HOST",      "localhost")
+_MQTT_PORT      = int(os.getenv("MQTT_PORT",  "8083"))
+_MQTT_TRANSPORT = os.getenv("MQTT_TRANSPORT", "websockets")  # 'websockets' or 'tcp'
+_MQTT_PATH      = os.getenv("MQTT_PATH",      "/mqtt")       # WebSocket endpoint path
 _MQTT_AVAILABLE = False  # set True once aiomqtt import succeeds
 
 _client: Any = None
@@ -77,11 +79,15 @@ class MqttPublisher:
                     port=_MQTT_PORT,
                     identifier="nocko-mdm-backend",
                     keepalive=60,
+                    websocket_path=_MQTT_PATH if _MQTT_TRANSPORT == "websockets" else None,
                 ) as client:
                     _client = client
                     backoff = 2
-                    log.info("MQTT publisher connected to %s:%s", _MQTT_HOST, _MQTT_PORT)
-                    await asyncio.Event().wait()  # block until cancelled
+                    log.info(
+                        "MQTT publisher connected → %s:%s (transport=%s)",
+                        _MQTT_HOST, _MQTT_PORT, _MQTT_TRANSPORT,
+                    )
+                    await asyncio.Event().wait()
             except asyncio.CancelledError:
                 _client = None
                 break

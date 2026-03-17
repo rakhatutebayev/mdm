@@ -40,10 +40,13 @@ class AgentConfig:
     log_dir: str = r"C:\ProgramData\NOCKO-Agent\logs"
     start_immediately: bool = True
     agent_display_name: str = "NOCKO MDM Agent"
-    # MQTT settings (for real-time command delivery)
-    mqtt_enabled: bool = True
-    mqtt_host: str = ""      # if empty, derived from server_url hostname
-    mqtt_port: int = 1883
+    # MQTT settings (for real-time command delivery via WebSocket/WSS)
+    mqtt_enabled:   bool = True
+    mqtt_host:      str  = ""         # if empty, derived from server_url hostname
+    mqtt_port:      int  = 443         # 443 via WSS (Nginx proxy) or 1883 for raw TCP
+    mqtt_transport: str  = "websockets" # 'websockets' or 'tcp'
+    mqtt_path:      str  = "/mqtt"     # WebSocket endpoint path
+    mqtt_tls:       bool = True        # True when using wss:// (port 443)
 
     @classmethod
     def base_dir(cls) -> Path:

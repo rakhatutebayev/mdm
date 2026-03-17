@@ -1,6 +1,5 @@
-# EMQX MQTT Broker — optional service for real-time command delivery
-# Start with:  docker compose -f docker-compose.yml -f docker-compose.mqtt.yml up -d
-# Stop with:   docker compose -f docker-compose.yml -f docker-compose.mqtt.yml down
+# EMQX MQTT Broker — WSS (MQTT over WebSocket on port 443)
+# Start: docker compose -f docker-compose.yml -f docker-compose.mqtt.yml up -d
 
 version: "3.9"
 
@@ -12,15 +11,17 @@ services:
       EMQX_NAME: nocko_mdm
       EMQX_ALLOW_ANONYMOUS: "true"
     ports:
-      - "1883:1883"    # MQTT — agents connect here
-      - "18083:18083"  # EMQX Dashboard (admin/public)
+      # Expose 8083 only to localhost — Nginx proxies /mqtt → 8083
+      - "127.0.0.1:8083:8083"
     volumes:
       - emqxdata:/opt/emqx/data
 
   backend:
     environment:
       MQTT_HOST: emqx
-      MQTT_PORT: "1883"
+      MQTT_PORT: "8083"
+      MQTT_TRANSPORT: "websockets"
+      MQTT_PATH: "/mqtt"
 
 volumes:
   emqxdata:
