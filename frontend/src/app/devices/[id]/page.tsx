@@ -217,7 +217,7 @@ export default function DeviceDetailPage() {
   const [updating, setUpdating]               = useState(false);
   const [latestAgentVersion, setLatestAgentVersion] = useState<string | null>(null);
   const [updateStatus, setUpdateStatus]       = useState<null | {
-    phase: 'queued' | 'pending' | 'sent' | 'acked' | 'failed' | 'timeout';
+    phase: 'queued' | 'pending' | 'sent' | 'acked' | 'verifying' | 'updated' | 'failed' | 'timeout';
     commandId: string;
     result?: string | null;
     targetVersion: string;
@@ -227,6 +227,16 @@ export default function DeviceDetailPage() {
   const stopUpdatePolling = useCallback(() => {
     if (updatePollRef.current) { clearInterval(updatePollRef.current); updatePollRef.current = null; }
   }, []);
+
+  // Detect when agent version matches the targeted update version → mark as 'updated'
+  useEffect(() => {
+    if (!device || !updateStatus) return;
+    if (updateStatus.phase === 'verifying' && device.agent_version === updateStatus.targetVersion) {
+      stopUpdatePolling();
+      setUpdateStatus(s => s ? { ...s, phase: 'updated' } : null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [device?.agent_version, updateStatus?.phase]);
 
   const startUpdatePolling = useCallback((commandId: string, targetVersion: string) => {
     const startedAt = Date.now();
@@ -242,10 +252,25 @@ export default function DeviceDetailPage() {
         const d = await r.json();
         const phase = d.status as 'pending' | 'sent' | 'acked' | 'failed';
         setUpdateStatus({ phase, commandId, result: d.result, targetVersion });
-        if (phase === 'acked' || phase === 'failed') stopUpdatePolling();
+        if (phase === 'failed') { stopUpdatePolling(); return; }
+        if (phase === 'acked') {
+          // Switch to version-verification polling — calls loadDevice every 10s
+          stopUpdatePolling();
+          setUpdateStatus({ phase: 'verifying', commandId, result: null, targetVersion });
+          const verifyStart = Date.now();
+          updatePollRef.current = setInterval(() => {
+            if (Date.now() - verifyStart > 3 * 60 * 1000) {
+              stopUpdatePolling();
+              setUpdateStatus(s => s ? { ...s, phase: 'timeout' } : null);
+              return;
+            }
+            void loadDevice();  // triggers device state update → useEffect below detects version match
+          }, 10000);
+        }
       } catch { /* keep polling */ }
     }, 5000);
-  }, [stopUpdatePolling]);
+  }, [stopUpdatePolling, loadDevice]);
+
 
   const handleUpdateAgent = async () => {
     if (!device) return;
@@ -649,28 +674,45 @@ export default function DeviceDetailPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ fontSize: 16 }}>
-                    {updateStatus.phase === 'sent' || updateStatus.phase === 'acked' || updateStatus.phase === 'failed' ? '📡' : '🔄'}
+                    {['sent','acked','verifying','updated','failed'].includes(updateStatus.phase) ? '📡' : '🔄'}
                   </span>
-                  <span style={{ fontSize: 13, color: updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? '#64748b' : '#cbd5e1' }}>
-                    {updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? 'Waiting for agent to pick up…' : 'Agent received command'}
+                  <span style={{ fontSize: 13, color: ['queued','pending'].includes(updateStatus.phase) ? '#64748b' : '#cbd5e1' }}>
+                    {['queued','pending'].includes(updateStatus.phase) ? 'Waiting for agent to pick up…' : 'Agent received command'}
                   </span>
-                  {(updateStatus.phase === 'sent' || updateStatus.phase === 'acked' || updateStatus.phase === 'failed') && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>}
-                  {(updateStatus.phase === 'queued' || updateStatus.phase === 'pending') && <span style={{ marginLeft: 'auto', color: '#f59e0b', fontSize: 11 }}>⏳</span>}
+                  {['sent','acked','verifying','updated','failed'].includes(updateStatus.phase) && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>}
+                  {['queued','pending'].includes(updateStatus.phase) && <span style={{ marginLeft: 'auto', color: '#f59e0b', fontSize: 11 }}>⏳</span>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ fontSize: 16 }}>
-                    {updateStatus.phase === 'acked' ? '✅' : updateStatus.phase === 'failed' ? '❌' : updateStatus.phase === 'timeout' ? '⏱️' : '⬇️'}
+                    {['acked','verifying','updated'].includes(updateStatus.phase) ? '🔄' : updateStatus.phase === 'failed' ? '❌' : updateStatus.phase === 'timeout' ? '⏱️' : '⬇️'}
                   </span>
-                  <span style={{ fontSize: 13, color: updateStatus.phase === 'acked' ? '#22c55e' : updateStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
-                    {updateStatus.phase === 'acked'
-                      ? `Update to v${updateStatus.targetVersion} started. Agent is restarting…`
+                  <span style={{ fontSize: 13, color: ['acked','verifying','updated'].includes(updateStatus.phase) ? '#22c55e' : updateStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
+                    {['acked','verifying','updated'].includes(updateStatus.phase)
+                      ? `Installing v${updateStatus.targetVersion}… service restarting`
                       : updateStatus.phase === 'failed'
                       ? `Error: ${updateStatus.result || 'unknown error'}`
                       : updateStatus.phase === 'timeout'
-                      ? 'No response (agent offline or outdated)'
-                      : `Downloading and installing v${updateStatus.targetVersion}…`}
+                      ? 'No response from agent (may still be updating)'
+                      : `Downloading v${updateStatus.targetVersion}…`}
                   </span>
-                  {(updateStatus.phase === 'queued' || updateStatus.phase === 'pending' || updateStatus.phase === 'sent') && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>⏳</span>}
+                  {['acked','verifying','updated'].includes(updateStatus.phase) && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>}
+                  {['queued','pending','sent'].includes(updateStatus.phase) && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>⏳</span>}
+                </div>
+                {/* Step 3: version confirmation */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>
+                    {updateStatus.phase === 'updated' ? '✅' : updateStatus.phase === 'timeout' ? '⏱️' : updateStatus.phase === 'failed' ? '❌' : '🔍'}
+                  </span>
+                  <span style={{ fontSize: 13, color: updateStatus.phase === 'updated' ? '#22c55e' : updateStatus.phase === 'timeout' ? '#f59e0b' : updateStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
+                    {updateStatus.phase === 'updated'
+                      ? `✅ Updated to v${updateStatus.targetVersion} — agent is online!`
+                      : updateStatus.phase === 'timeout'
+                      ? `Agent may still be restarting. Refresh in a minute.`
+                      : updateStatus.phase === 'failed'
+                      ? `Update failed`
+                      : `Waiting for agent to come back online…`}
+                  </span>
+                  {updateStatus.phase === 'verifying' && <span style={{ marginLeft: 'auto', color: '#f59e0b', fontSize: 11 }}>⏳</span>}
                 </div>
               </div>
             )}

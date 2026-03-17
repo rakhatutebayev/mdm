@@ -76,44 +76,64 @@ def _handle_rename_computer(
 
 
 def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger) -> tuple[str, str]:
-    """Download the latest agent EXE and re-run it elevated to self-update.
+    """Download the latest agent EXE and replace the installed binary via PowerShell.
 
-    ACKs immediately — the current process will be killed when the new installer
-    stops/removes the old Windows service.
+    Runs entirely in the SYSTEM context (no UAC dialog needed).
+    Existing config.json is preserved — customer_id and enrollment_token remain.
     """
-    import ctypes
     import os
-    import tempfile
-    import urllib.request
+    import sys
 
-    payload      = cmd.get("payload", {})
-    download_url: str   = payload.get("download_url", "").strip()
-    target_version: str = payload.get("target_version", "unknown")
+    payload        = cmd.get("payload", {})
+    download_url   = payload.get("download_url", "").strip()
+    target_version = payload.get("target_version", "unknown")
 
     if not download_url:
         return "failed", "download_url is missing in payload"
 
+    # Installed EXE path — this is where the service binary lives
+    installed_exe = sys.executable  # service runs from the installed location
+
     try:
-        import ssl
+        # PowerShell script:
+        # 1. Download new EXE to a temp file
+        # 2. Stop the service (graceful)
+        # 3. Overwrite the installed binary
+        # 4. Start the service again
+        # Running as SYSTEM so no UAC or ShellExecute needed.
+        ps_script = f"""
+$ErrorActionPreference = 'Stop'
+$tempExe = [System.IO.Path]::GetTempFileName() + '.exe'
+try {{
+    # Download new agent
+    $wc = New-Object System.Net.WebClient
+    $wc.Headers.Add('User-Agent', 'NOCKO-Agent/{target_version}-updater')
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $wc.DownloadFile('{download_url}', $tempExe)
 
-        logger.info("Downloading agent update v%s from %s", target_version, download_url)
-        tmp_dir  = tempfile.mkdtemp(prefix="nocko_update_")
-        exe_path = os.path.join(tmp_dir, f"nocko-agent-{target_version}.exe")
+    # Stop current service gracefully
+    Stop-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 3
 
-        # Skip SSL verification — Windows Python often lacks corporate CA bundle
-        ssl_ctx = ssl._create_unverified_context()
-        with urllib.request.urlopen(download_url, context=ssl_ctx, timeout=120) as resp:
-            with open(exe_path, "wb") as f:
-                f.write(resp.read())
-        logger.info("Downloaded %d bytes to %s", os.path.getsize(exe_path), exe_path)
+    # Replace binary
+    Copy-Item -Path $tempExe -Destination '{installed_exe}' -Force
 
-        # Launch elevated — new EXE detects existing install and reinstalls
-        ret = ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", exe_path, None, None, 1
+    # Start updated service
+    Start-Service -Name 'NOCKOAgent' -ErrorAction SilentlyContinue
+}} finally {{
+    Remove-Item -Path $tempExe -Force -ErrorAction SilentlyContinue
+}}
+"""
+        import subprocess
+        proc = subprocess.Popen(
+            ["powershell", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
-        if ret <= 32:
-            return "failed", f"ShellExecuteW failed (ret={ret})"
-
+        # Don't wait — service will be stopped when PS script runs Stop-Service.
+        # Agent ACKs the command before the service stops so the portal gets the response.
+        logger.info("Update to v%s started via PowerShell (pid=%s)", target_version, proc.pid)
         return "acked", f"Update to v{target_version} started. Agent will restart shortly."
 
     except Exception as exc:

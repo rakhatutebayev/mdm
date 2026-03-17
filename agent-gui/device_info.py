@@ -623,6 +623,50 @@ def _collect_printers() -> list[dict[str, Any]]:
     return printers
 
 
+def _collect_printers() -> list[dict]:
+    """Collect installed printers via WMI Win32_Printer.
+
+    Returns fields that match the backend PrinterInfo model:
+    name, driver_name, port_name, is_default, is_network, status.
+    """
+    if os.name != "nt" or not wmi:
+        return []
+    try:
+        if pythoncom:
+            pythoncom.CoInitialize()
+        c = wmi.WMI()
+        printers = []
+        for p in c.Win32_Printer():
+            try:
+                name        = str(getattr(p, "Name",       "") or "").strip()
+                driver_name = str(getattr(p, "DriverName", "") or "").strip()
+                port_name   = str(getattr(p, "PortName",   "") or "").strip()
+                is_default  = bool(getattr(p, "Default",   False))
+                # Network printers have "\\SERVER\" in PortName or are shared
+                is_network  = (port_name.startswith("\\\\") or
+                               bool(getattr(p, "Shared", False)) or
+                               "IP_" in port_name or
+                               "WSD" in port_name)
+                # PrinterStatus: 1=Other,2=Unknown,3=Idle,4=Printing,5=Warmup
+                _STATUS_MAP = {3: "Idle", 4: "Printing", 5: "Warmup"}
+                raw_status = getattr(p, "PrinterStatus", 0) or 0
+                status = _STATUS_MAP.get(int(raw_status), "Unknown")
+                if name:
+                    printers.append({
+                        "name":        name,
+                        "driver_name": driver_name,
+                        "port_name":   port_name,
+                        "is_default":  is_default,
+                        "is_network":  is_network,
+                        "status":      status,
+                    })
+            except Exception:
+                continue
+        return printers
+    except Exception:
+        return []
+
+
 def collect_enrollment_payload(config) -> dict[str, Any]:
     return {
         "customer_id": config.customer_id,
@@ -668,4 +712,5 @@ def collect_inventory_payload(config) -> dict[str, Any]:
         **_identity_payload(config),
         **_network_payload(),
         "monitors": _collect_monitors(),
+        "printers": _collect_printers(),
     }
