@@ -185,3 +185,13 @@ jobs:
           } else {
             Write-Host "Manifest already up to date."
           }
+
+      - name: Trigger portal deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          # GitHub Actions bot commits don't auto-trigger deploy.yml (GITHUB_TOKEN limitation).
+          # Explicitly dispatch deploy workflow so the portal gets the new agent version.
+          gh workflow run deploy.yml --repo ${{ github.repository }} --ref main
+          Write-Host "Portal deploy triggered for v${{ inputs.version }}"
