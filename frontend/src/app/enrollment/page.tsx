@@ -341,16 +341,11 @@ export default function EnrollmentDevicesPage() {
                       ) : col.key === 'owner' ? d.owner
                       : col.key === 'enrollmentMethod' ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <span style={{
-                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                            background: d.enrollment_method === 'agent' ? '#1e3a5f' : '#2a2d3a',
-                            color: d.enrollment_method === 'agent' ? '#60a5fa' : '#94a3b8',
-                            textTransform: 'capitalize',
-                          }}>
+                          <span style={{ fontSize: 12, color: '#94a3b8' }}>
                             {d.enrollment_method === 'agent' ? 'Agent' : d.enrollment_method || '—'}
                           </span>
                           {d.enrollment_method === 'agent' && d.agent_version && (
-                            <span style={{ fontSize: 12, color: '#94a3b8' }}>v{d.agent_version}</span>
+                            <span style={{ fontSize: 12, color: '#64748b' }}>v{d.agent_version}</span>
                           )}
                         </span>
                       ) : col.key === 'enrolledTime' ? (d.enrolled_at ? new Date(d.enrolled_at).toLocaleString() : '—')
