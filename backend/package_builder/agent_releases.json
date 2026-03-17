@@ -1,7 +1,22 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-17T10:00:00Z",
+  "generated_at": "2026-03-17T10:05:00Z",
   "releases": [
+    {
+      "version": "1.1.1",
+      "tag": "agent-v1.1.1",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.1.1-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.1.1/nocko-agent-1.1.1-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13650859,
+          "notes": "Correct floppy disk detection (A:/B:); CD-ROM shown as logical disk"
+        }
+      ]
+    },
     {
       "version": "1.1.0",
       "tag": "agent-v1.1.0",
