@@ -31,9 +31,38 @@ jobs:
             echo "==> Refreshing Docker builder cache..."
             docker builder prune -af || true
 
-            echo "==> Restarting application services with Docker Compose..."
+            echo "==> Building updated application images while current containers stay online..."
             docker compose pull
-            docker compose up -d --build --force-recreate --remove-orphans
+            docker compose build backend frontend
+
+            echo "==> Switching application services to the new images..."
+            docker compose up -d --remove-orphans backend frontend
+
+            echo "==> Waiting for backend health..."
+            for i in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+                echo "Backend is healthy"
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "Backend did not become healthy in time" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+
+            echo "==> Waiting for frontend readiness..."
+            for i in $(seq 1 60); do
+              if curl -fsS http://127.0.0.1:3002 >/dev/null; then
+                echo "Frontend is ready"
+                break
+              fi
+              if [ "$i" -eq 60 ]; then
+                echo "Frontend did not become ready in time" >&2
+                exit 1
+              fi
+              sleep 2
+            done
 
             echo "==> Starting EMQX (MQTT broker)..."
             docker compose -f docker-compose.mqtt.yml up -d --remove-orphans || true
