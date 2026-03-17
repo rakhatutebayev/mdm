@@ -51,13 +51,29 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pywin32 wmi PyQt6 psutil requests pillow paho-mqtt
+          pip install -r agent-gui/requirements.txt
+
+      - name: Cache Inno Setup
+        id: cache-innosetup
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files (x86)\Inno Setup 6
+          key: innosetup-6-${{ runner.os }}
 
       - name: Install Inno Setup
+        if: steps.cache-innosetup.outputs.cache-hit != 'true'
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
+      - name: Cache WiX tool
+        id: cache-wix
+        uses: actions/cache@v4
+        with:
+          path: ~/.dotnet/tools
+          key: wix-tool-${{ runner.os }}
+
       - name: Install WiX Toolset
+        if: steps.cache-wix.outputs.cache-hit != 'true'
         shell: pwsh
         run: dotnet tool install --global wix
 

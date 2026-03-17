@@ -1,5 +1,8 @@
-requests
-psutil
-pywin32; platform_system == "Windows"
-WMI; platform_system == "Windows"
-Pillow
+pyinstaller>=6.0
+pywin32>=306
+wmi>=1.5.1
+PyQt6>=6.6
+psutil>=5.9
+requests>=2.31
+pillow>=10.0
+paho-mqtt>=1.6
