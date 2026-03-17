@@ -1,13 +1,7 @@
 """MQTT publisher — singleton async client for the FastAPI backend.
 
-Usage:
-    from mqtt_publisher import publish_command, MqttPublisher
-
-    # In lifespan startup:
-    await MqttPublisher.connect()
-
-    # Publishing a command:
-    await publish_command(device_id, {"id": cmd_id, "type": "rename_computer", "payload": {...}})
+Gracefully degrades if aiomqtt is not installed or EMQX is unreachable.
+In that case, commands are still persisted in DB and delivered via HTTP polling.
 """
 from __future__ import annotations
 
@@ -21,8 +15,9 @@ log = logging.getLogger("mqtt")
 
 _MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 _MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+_MQTT_AVAILABLE = False  # set True once aiomqtt import succeeds
 
-_client: Any = None  # aiomqtt.Client instance
+_client: Any = None
 _lock = asyncio.Lock()
 
 
@@ -31,8 +26,7 @@ async def publish_command(device_id: str, command: dict) -> None:
 
     Silently skips if MQTT is not connected — HTTP polling is the fallback.
     """
-    global _client
-    if _client is None:
+    if not _MQTT_AVAILABLE or _client is None:
         return
     topic = f"mdm/devices/{device_id}/commands"
     try:
@@ -64,8 +58,16 @@ class MqttPublisher:
 
     @classmethod
     async def _run(cls) -> None:
-        global _client
-        import aiomqtt  # deferred so startup doesn't fail if not installed
+        global _client, _MQTT_AVAILABLE
+
+        try:
+            import aiomqtt  # noqa: F401  — check availability
+            _MQTT_AVAILABLE = True
+        except ImportError:
+            log.warning("aiomqtt not installed — MQTT publisher disabled. HTTP polling only.")
+            return
+
+        import aiomqtt  # type: ignore
 
         backoff = 2
         while True:
@@ -77,10 +79,12 @@ class MqttPublisher:
                     keepalive=60,
                 ) as client:
                     _client = client
-                    backoff = 2  # reset on success
+                    backoff = 2
                     log.info("MQTT publisher connected to %s:%s", _MQTT_HOST, _MQTT_PORT)
-                    # Keep the connection alive indefinitely
-                    await asyncio.Event().wait()
+                    await asyncio.Event().wait()  # block until cancelled
+            except asyncio.CancelledError:
+                _client = None
+                break
             except Exception as exc:
                 _client = None
                 log.warning("MQTT connection lost (%s). Retrying in %ss…", exc, backoff)
