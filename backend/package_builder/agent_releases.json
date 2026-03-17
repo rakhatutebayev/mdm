@@ -1,7 +1,22 @@
 {
   "channel": "stable",
-  "generated_at": "2026-03-17T10:05:00Z",
+  "generated_at": "2026-03-17T10:20:00Z",
   "releases": [
+    {
+      "version": "1.1.2",
+      "tag": "agent-v1.1.2",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.1.2-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.1.2/nocko-agent-1.1.2-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 13650856,
+          "notes": "NVMe always detected from model name; normalized serial for MSFT_PhysicalDisk matching"
+        }
+      ]
+    },
     {
       "version": "1.1.1",
       "tag": "agent-v1.1.1",
