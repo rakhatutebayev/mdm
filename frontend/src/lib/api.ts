@@ -103,8 +103,13 @@ export interface PrinterInfo {
   name: string;
   driver_name: string;
   port_name: string;
+  ip_address: string;
   is_default: boolean;
   is_network: boolean;
+  is_shared: boolean;
+  work_offline: boolean;
+  job_count: number | null;
+  connection_type: string;
   status: string;
 }
 

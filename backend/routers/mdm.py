@@ -458,6 +458,23 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
                 used_gb=disk.used_gb,
             ))
 
+    if body.printers:
+        for printer in body.printers:
+            db.add(PrinterInfo(
+                device_id=device.id,
+                name=printer.name,
+                driver_name=printer.driver_name,
+                port_name=printer.port_name,
+                ip_address=printer.ip_address,
+                is_default=printer.is_default,
+                is_network=printer.is_network,
+                is_shared=printer.is_shared,
+                work_offline=printer.work_offline,
+                job_count=printer.job_count,
+                connection_type=printer.connection_type,
+                status=printer.status,
+            ))
+
     await db.commit()
     return {
         "device_id": device.id,
@@ -552,6 +569,7 @@ async def inventory(body: InventoryPayload, db: AsyncSession = Depends(get_db)):
             selectinload(Device.hardware_inventory),
             selectinload(Device.physical_disks),
             selectinload(Device.logical_disks),
+            selectinload(Device.printers),
         )
         .where(Device.id == body.device_id)
     )

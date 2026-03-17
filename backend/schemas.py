@@ -88,8 +88,13 @@ class PrinterInfoOut(BaseModel):
     name: str
     driver_name: str
     port_name: str
+    ip_address: str = ""
     is_default: bool
     is_network: bool
+    is_shared: bool = False
+    work_offline: bool = False
+    job_count: Optional[int] = None
+    connection_type: str = ""
     status: str
     model_config = {"from_attributes": True}
 
@@ -98,8 +103,13 @@ class PrinterCreateIn(BaseModel):
     name: str = ""
     driver_name: str = ""
     port_name: str = ""
+    ip_address: str = ""
     is_default: bool = False
     is_network: bool = False
+    is_shared: bool = False
+    work_offline: bool = False
+    job_count: Optional[int] = None
+    connection_type: str = ""
     status: str = ""
 
 
@@ -187,6 +197,7 @@ class DeviceCreate(BaseModel):
     hardware_inventory: Optional[HardwareInventoryCreateIn] = None
     physical_disks: Optional[list[PhysicalDiskCreateIn]] = None
     logical_disks: Optional[list[LogicalDiskCreateIn]] = None
+    printers: Optional[list[PrinterCreateIn]] = None
 
 class DeviceListOut(BaseModel):
     id: str

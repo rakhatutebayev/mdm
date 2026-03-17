@@ -82,7 +82,7 @@ async def get_device(device_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=DeviceDetailOut, status_code=201)
 async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
-    from models import HardwareInventory, LogicalDisk, MonitorInfo, NetworkInfo, PhysicalDisk, EnrollmentToken
+    from models import HardwareInventory, LogicalDisk, MonitorInfo, NetworkInfo, PhysicalDisk, EnrollmentToken, PrinterInfo
 
     # ── Validate enrollment token ─────────────────────────────────────────────
     if body.enrollment_token:
@@ -98,7 +98,15 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
     # ── Create Device row ─────────────────────────────────────────────────────
     device_fields = {
         k: v for k, v in body.model_dump().items()
-        if k not in ("network", "monitors", "enrollment_token")
+        if k not in (
+            "network",
+            "monitors",
+            "hardware_inventory",
+            "physical_disks",
+            "logical_disks",
+            "printers",
+            "enrollment_token",
+        )
     }
     device_fields["status"] = "Pending"
     device_fields["enrolled_at"] = datetime.utcnow()
@@ -179,6 +187,18 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
                 size_gb=disk.size_gb,
                 free_gb=disk.free_gb,
                 used_gb=disk.used_gb,
+            ))
+
+    if body.printers:
+        for printer in body.printers:
+            db.add(PrinterInfo(
+                device_id=device.id,
+                name=printer.name,
+                driver_name=printer.driver_name,
+                port_name=printer.port_name,
+                is_default=printer.is_default,
+                is_network=printer.is_network,
+                status=printer.status,
             ))
 
     await db.commit()
