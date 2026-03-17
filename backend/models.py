@@ -56,6 +56,7 @@ class Device(Base):
     physical_disks: Mapped[list["PhysicalDisk"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     logical_disks: Mapped[list["LogicalDisk"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     metrics: Mapped[list["DeviceMetrics"]] = relationship(back_populates="device", cascade="all, delete-orphan", order_by="DeviceMetrics.recorded_at.desc()")
+    printers: Mapped[list["PrinterInfo"]] = relationship(back_populates="device", cascade="all, delete-orphan")
 
 
 class NetworkInfo(Base):
@@ -145,6 +146,21 @@ class LogicalDisk(Base):
     used_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     device: Mapped["Device"] = relationship(back_populates="logical_disks")
+
+
+class PrinterInfo(Base):
+    __tablename__ = "printer_info"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255), default="")
+    driver_name: Mapped[str] = mapped_column(String(255), default="")
+    port_name: Mapped[str] = mapped_column(String(255), default="")
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_network: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(100), default="")
+
+    device: Mapped["Device"] = relationship(back_populates="printers")
 
 
 class DeviceMetrics(Base):

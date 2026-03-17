@@ -84,6 +84,25 @@ class LogicalDiskOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PrinterInfoOut(BaseModel):
+    name: str
+    driver_name: str
+    port_name: str
+    is_default: bool
+    is_network: bool
+    status: str
+    model_config = {"from_attributes": True}
+
+
+class PrinterCreateIn(BaseModel):
+    name: str = ""
+    driver_name: str = ""
+    port_name: str = ""
+    is_default: bool = False
+    is_network: bool = False
+    status: str = ""
+
+
 # ── Device ────────────────────────────────────────────────────────────────────
 class NetworkCreateIn(BaseModel):
     ip_address: str = ""
@@ -207,6 +226,7 @@ class DeviceDetailOut(BaseModel):
     hardware_inventory: Optional[HardwareInventoryOut]
     physical_disks: list[PhysicalDiskOut]
     logical_disks: list[LogicalDiskOut]
+    printers: list[PrinterInfoOut] = []
     customer_name: str
     model_config = {"from_attributes": True}
 

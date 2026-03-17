@@ -27,6 +27,7 @@ from models import (
     MonitorInfo,
     NetworkInfo,
     PhysicalDisk,
+    PrinterInfo,
 )
 from package_builder.release_catalog import find_artifact
 
@@ -89,6 +90,15 @@ class PhysicalDiskPayload(BaseModel):
     size_gb: Optional[float] = None
 
 
+class PrinterPayload(BaseModel):
+    name: str = ""
+    driver_name: str = ""
+    port_name: str = ""
+    is_default: bool = False
+    is_network: bool = False
+    status: str = ""
+
+
 class LogicalDiskPayload(BaseModel):
     name: str = ""
     volume_name: str = ""
@@ -121,6 +131,7 @@ class EnrollPayload(BaseModel):
     hardware_inventory: Optional[HardwareInventoryPayload] = None
     physical_disks: Optional[list[PhysicalDiskPayload]] = None
     logical_disks: Optional[list[LogicalDiskPayload]] = None
+    printers: Optional[list[PrinterPayload]] = None
 
 
 class CheckinPayload(BaseModel):
@@ -162,6 +173,7 @@ class InventoryPayload(BaseModel):
     hardware_inventory: Optional[HardwareInventoryPayload] = None
     physical_disks: Optional[list[PhysicalDiskPayload]] = None
     logical_disks: Optional[list[LogicalDiskPayload]] = None
+    printers: Optional[list[PrinterPayload]] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -297,6 +309,20 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
                 size_gb=disk.size_gb,
                 free_gb=disk.free_gb,
                 used_gb=disk.used_gb,
+            ))
+
+    if body.printers is not None:
+        for existing in list(device.printers):
+            await db.delete(existing)
+        for p in body.printers:
+            db.add(PrinterInfo(
+                device_id=device.id,
+                name=p.name,
+                driver_name=p.driver_name,
+                port_name=p.port_name,
+                is_default=p.is_default,
+                is_network=p.is_network,
+                status=p.status,
             ))
 
 

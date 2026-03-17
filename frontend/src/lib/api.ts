@@ -99,6 +99,15 @@ export interface LogicalDiskInfo {
   used_gb: number | null;
 }
 
+export interface PrinterInfo {
+  name: string;
+  driver_name: string;
+  port_name: string;
+  is_default: boolean;
+  is_network: boolean;
+  status: string;
+}
+
 export interface DeviceDetail extends DeviceListItem {
   device_type: string;
   model: string;
@@ -115,6 +124,7 @@ export interface DeviceDetail extends DeviceListItem {
   hardware_inventory: HardwareInventory | null;
   physical_disks: PhysicalDiskInfo[];
   logical_disks: LogicalDiskInfo[];
+  printers: PrinterInfo[];
   customer_name: string;
 }
 

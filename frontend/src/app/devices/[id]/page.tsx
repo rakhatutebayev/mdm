@@ -368,6 +368,21 @@ export default function DeviceDetailPage() {
         },
       }];
 
+  const printerSections = !device.printers?.length
+    ? [{ title: 'Printers', data: { 'Printers': 'No printers found' } }]
+    : [{
+        title: 'Printers',
+        data: {
+          'Printer Count': String(device.printers.length),
+          ...Object.fromEntries(device.printers.flatMap((p) => [
+            [`${p.name} — Driver`, p.driver_name || '—'],
+            [`${p.name} — Port`, p.port_name || '—'],
+            [`${p.name} — Type`, p.is_network ? 'Network' : 'Local'],
+            [`${p.name} — Status`, (p.is_default ? '★ Default  ' : '') + (p.status || '—')],
+          ])),
+        },
+      }];
+
   const sections = [
     { title: 'Device Summary',  data: summarySec },
     { title: 'Hardware Summary', data: hardwareSec },
@@ -376,6 +391,7 @@ export default function DeviceDetailPage() {
     ...physicalDiskSections,
     ...logicalDiskSections,
     ...monitorSections,
+    ...printerSections,
   ];
 
   const statusClass =

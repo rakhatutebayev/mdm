@@ -40,6 +40,7 @@ async def get_device(device_id: str, db: AsyncSession = Depends(get_db)):
             selectinload(Device.hardware_inventory),
             selectinload(Device.physical_disks),
             selectinload(Device.logical_disks),
+            selectinload(Device.printers),
             selectinload(Device.customer),
         )
         .where(Device.id == device_id)
@@ -74,6 +75,7 @@ async def get_device(device_id: str, db: AsyncSession = Depends(get_db)):
         hardware_inventory=d.hardware_inventory,
         physical_disks=d.physical_disks,
         logical_disks=d.logical_disks,
+        printers=d.printers,
         customer_name=d.customer.name if d.customer else "",
     )
 

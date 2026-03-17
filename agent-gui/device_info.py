@@ -382,15 +382,40 @@ def _collect_windows_inventory() -> dict[str, Any]:
             "gpu_driver_version": gpu_driver_version,
         }
 
+        # Build MSFT_PhysicalDisk index for accurate MediaType/BusType (NVMe vs SCSI etc.)
+        msft_disk_map: dict[str, tuple[str, str]] = {}  # serial -> (media_type, bus_type)
+        try:
+            msft_wmi = wmi.WMI(namespace="root\\microsoft\\windows\\storage")
+            _media = {3: "HDD", 4: "SSD", 5: "SCM"}
+            _bus   = {3: "SCSI", 4: "ATAPI", 5: "ATA", 7: "USB", 8: "RAID",
+                      10: "SAS", 11: "SATA", 12: "SATA", 13: "SATA", 14: "SD",
+                      15: "MMC", 17: "NVMe", 18: "Virtual"}
+            for pd in msft_wmi.MSFT_PhysicalDisk():
+                sn = str(getattr(pd, "SerialNumber", "") or "").strip()
+                mt = _media.get(int(getattr(pd, "MediaType", 0) or 0), "")
+                bt = _bus.get(int(getattr(pd, "BusType", 0) or 0), "")
+                if sn:
+                    msft_disk_map[sn] = (mt, bt)
+        except Exception:
+            pass
+
         physical_disk_items = []
         for disk in physical_disks:
+            sn = str(getattr(disk, "SerialNumber", "") or "").strip()
+            fallback_media = str(getattr(disk, "MediaType", "") or "").strip()
+            fallback_iface = str(getattr(disk, "InterfaceType", "") or "").strip()
+            msft_media, msft_iface = msft_disk_map.get(sn, ("", ""))
+            # If model name contains NVMe keyword, always use NVMe
+            model_name = str(getattr(disk, "Model", "") or "").strip()
+            if not msft_iface and "nvme" in model_name.lower():
+                msft_iface = "NVMe"
             physical_disk_items.append({
-                "disk_index": int(getattr(disk, "Index", 0)) if str(getattr(disk, "Index", "")).isdigit() else None,
-                "model": str(getattr(disk, "Model", "") or "").strip(),
-                "serial_number": str(getattr(disk, "SerialNumber", "") or "").strip(),
-                "media_type": str(getattr(disk, "MediaType", "") or "").strip(),
-                "interface_type": str(getattr(disk, "InterfaceType", "") or "").strip(),
-                "size_gb": _to_gb(getattr(disk, "Size", 0)),
+                "disk_index":   int(getattr(disk, "Index", 0)) if str(getattr(disk, "Index", "")).isdigit() else None,
+                "model":        model_name,
+                "serial_number": sn,
+                "media_type":   msft_media or fallback_media,
+                "interface_type": msft_iface or fallback_iface,
+                "size_gb":      _to_gb(getattr(disk, "Size", 0)),
             })
 
         logical_disk_items = []
@@ -445,21 +470,140 @@ def _identity_payload(config) -> dict[str, Any]:
         "hardware_inventory": windows_inventory.get("hardware_inventory"),
         "physical_disks": windows_inventory.get("physical_disks", []),
         "logical_disks": windows_inventory.get("logical_disks", []),
+        "monitors": _collect_monitors(),
+        "printers": _collect_printers(),
     }
 
 
 def _network_payload() -> dict[str, Any]:
+    """Collect real network info via WMI Win32_NetworkAdapterConfiguration."""
+    ip_address   = _first_ipv4()
+    mac_address  = _first_mac()
+    hostname     = socket.gethostname()
+    dns_server   = ""
+    gateway      = ""
+    conn_type    = "Ethernet"
+    wifi_ssid    = ""
+
+    if os.name == "nt" and wmi is not None:
+        try:
+            initialized = False
+            if pythoncom is not None:
+                try:
+                    pythoncom.CoInitialize()
+                    initialized = True
+                except Exception:
+                    pass
+            try:
+                c = wmi.WMI()
+                adapters = c.Win32_NetworkAdapterConfiguration(IPEnabled=True)
+                for adapter in adapters:
+                    # Pick the adapter that owns our primary IP
+                    ips = list(getattr(adapter, "IPAddress", None) or [])
+                    if ip_address and ip_address not in ips:
+                        continue
+                    # DNS
+                    dns_list = list(getattr(adapter, "DNSServerSearchOrder", None) or [])
+                    if dns_list:
+                        dns_server = ", ".join(dns_list[:2])
+                    # Default gateway
+                    gw_list = list(getattr(adapter, "DefaultIPGateway", None) or [])
+                    if gw_list:
+                        gateway = gw_list[0]
+                    # Connection type — check adapter description for Wireless keywords
+                    desc = str(getattr(adapter, "Description", "") or "").lower()
+                    if any(k in desc for k in ("wireless", "wi-fi", "wifi", "802.11", "wlan")):
+                        conn_type = "Wi-Fi"
+                    break
+                # If no match by IP, use the first enabled adapter's data
+                if not dns_server and adapters:
+                    dns_list = list(getattr(adapters[0], "DNSServerSearchOrder", None) or [])
+                    if dns_list:
+                        dns_server = ", ".join(dns_list[:2])
+                    gw_list = list(getattr(adapters[0], "DefaultIPGateway", None) or [])
+                    if gw_list:
+                        gateway = gw_list[0]
+            finally:
+                if initialized and pythoncom is not None:
+                    try:
+                        pythoncom.CoUninitialize()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # WiFi SSID via netsh (works in SYSTEM context)
+        if conn_type == "Wi-Fi":
+            try:
+                import subprocess
+                r = subprocess.run(
+                    ["netsh", "wlan", "show", "interfaces"],
+                    capture_output=True, text=True, timeout=5
+                )
+                for line in r.stdout.splitlines():
+                    if "SSID" in line and "BSSID" not in line:
+                        parts = line.split(":", 1)
+                        if len(parts) == 2:
+                            wifi_ssid = parts[1].strip()
+                            break
+            except Exception:
+                pass
+
     return {
         "network": {
-            "ip_address": _first_ipv4(),
-            "mac_address": _first_mac(),
-            "hostname": socket.gethostname(),
-            "wifi_ssid": "",
-            "connection_type": "Ethernet",
-            "dns_server": "",
-            "default_gateway": "",
+            "ip_address":       ip_address,
+            "mac_address":      mac_address,
+            "hostname":         hostname,
+            "wifi_ssid":        wifi_ssid,
+            "connection_type":  conn_type,
+            "dns_server":       dns_server,
+            "default_gateway":  gateway,
         },
     }
+
+
+
+def _collect_printers() -> list[dict[str, Any]]:
+    """Collect installed printers via Win32_Printer WMI (accessible from Session 0)."""
+    printers: list[dict[str, Any]] = []
+    if os.name != "nt" or wmi is None:
+        return printers
+    initialized = False
+    if pythoncom is not None:
+        try:
+            pythoncom.CoInitialize()
+            initialized = True
+        except Exception:
+            pass
+    try:
+        c = wmi.WMI()
+        status_map = {
+            0: "Unknown", 1: "Other", 2: "No Error", 3: "Low Paper",
+            4: "No Paper", 5: "Low Toner", 6: "No Toner", 7: "Door Open",
+            8: "Jammed", 9: "Offline", 10: "Service Requested", 11: "Output Bin Full",
+        }
+        for printer in c.Win32_Printer():
+            attr = getattr
+            port = str(attr(printer, "PortName", "") or "")
+            is_net = port.startswith("\\\\") or port.upper().startswith("IP_") or port.upper().startswith("WSD")
+            status_code = int(attr(printer, "PrinterStatus", 0) or 0)
+            printers.append({
+                "name":        str(attr(printer, "Name", "") or "").strip(),
+                "driver_name": str(attr(printer, "DriverName", "") or "").strip(),
+                "port_name":   port.strip(),
+                "is_default":  bool(attr(printer, "Default", False)),
+                "is_network":  is_net,
+                "status":      status_map.get(status_code, "Unknown"),
+            })
+    except Exception:
+        pass
+    finally:
+        if initialized and pythoncom is not None:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+    return printers
 
 
 def collect_enrollment_payload(config) -> dict[str, Any]:
@@ -469,6 +613,7 @@ def collect_enrollment_payload(config) -> dict[str, Any]:
         **_identity_payload(config),
         **_network_payload(),
         "monitors": _collect_monitors(),
+        "printers": _collect_printers(),
     }
 
 
