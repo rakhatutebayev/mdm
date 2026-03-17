@@ -262,7 +262,13 @@ def _chassis_type(chassis_codes: list[int], machine_class: str) -> str:
     return "Desktop" if os.name == "nt" else "Unknown"
 
 
-def _drive_type_name(code: Any) -> str:
+def _drive_type_name(code: Any, device_id: str = "") -> str:
+    """Map Win32_LogicalDisk.DriveType code to a human-readable string.
+    device_id is the drive letter (e.g. 'C:') used to detect floppy drives (A:, B:).
+    """
+    code_int = int(code) if str(code).isdigit() else 0
+    if code_int == 2 and device_id.upper().startswith(("A:", "B:")):
+        return "Floppy Disk"
     return {
         0: "Unknown",
         1: "No Root Directory",
@@ -271,7 +277,7 @@ def _drive_type_name(code: Any) -> str:
         4: "Network",
         5: "CD-ROM",
         6: "RAM Disk",
-    }.get(int(code), "Unknown")
+    }.get(code_int, "Unknown")
 
 
 def _logical_disk_telemetry() -> list[dict[str, Any]]:
@@ -427,7 +433,7 @@ def _collect_windows_inventory() -> dict[str, Any]:
                 "name": str(getattr(disk, "DeviceID", "") or "").strip(),
                 "volume_name": str(getattr(disk, "VolumeName", "") or "").strip(),
                 "file_system": str(getattr(disk, "FileSystem", "") or "").strip(),
-                "drive_type": _drive_type_name(getattr(disk, "DriveType", 0)),
+                "drive_type": _drive_type_name(getattr(disk, "DriveType", 0), str(getattr(disk, "DeviceID", "") or "")),
                 "size_gb": size_gb,
                 "free_gb": free_gb,
                 "used_gb": used_gb,
