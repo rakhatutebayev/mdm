@@ -621,6 +621,159 @@ _PS_STATUS = {
 }
 
 
+def _printer_key(name: str) -> str:
+    return " ".join(name.split()).strip().casefold()
+
+
+def _collect_user_profile_printers() -> list[dict]:
+    """Fallback printer discovery for user-scoped printers invisible to SYSTEM.
+
+    The agent runs as a Windows service, so Win32_Printer can miss printers
+    installed only in a signed-in user's profile. We scan loaded HKU hives and
+    merge any user-scoped printers into the inventory with best-effort metadata.
+    """
+    if os.name != "nt":
+        return []
+
+    try:
+        import winreg
+    except Exception:
+        return []
+
+    printers: dict[str, dict] = {}
+
+    def add_printer(name: str, *, port_name: str = "", is_default: bool = False,
+                    is_network: bool = False, is_shared: bool = False,
+                    connection_type: str = "UserProfile") -> None:
+        clean_name = str(name or "").strip()
+        if not clean_name:
+            return
+        key = _printer_key(clean_name)
+        if key in printers:
+            existing = printers[key]
+            existing["is_default"] = existing["is_default"] or is_default
+            existing["is_network"] = existing["is_network"] or is_network
+            existing["is_shared"] = existing["is_shared"] or is_shared
+            if not existing["port_name"]:
+                existing["port_name"] = port_name
+            if existing["connection_type"] in ("", "Unknown", "UserProfile"):
+                existing["connection_type"] = connection_type
+            return
+
+        printers[key] = {
+            "name": clean_name,
+            "driver_name": "",
+            "port_name": port_name,
+            "ip_address": "",
+            "is_default": is_default,
+            "is_network": is_network,
+            "is_shared": is_shared,
+            "work_offline": False,
+            "job_count": 0,
+            "connection_type": connection_type,
+            "status": "Unknown",
+        }
+
+    sid_idx = 0
+    while True:
+        try:
+            sid = winreg.EnumKey(winreg.HKEY_USERS, sid_idx)
+        except OSError:
+            break
+        sid_idx += 1
+
+        if sid.endswith("_Classes") or not sid.startswith("S-1-5-21-"):
+            continue
+
+        default_printer = ""
+        try:
+            windows_key = winreg.OpenKey(
+                winreg.HKEY_USERS,
+                rf"{sid}\Software\Microsoft\Windows NT\CurrentVersion\Windows",
+            )
+            device_value, _ = winreg.QueryValueEx(windows_key, "Device")
+            winreg.CloseKey(windows_key)
+            default_printer = str(device_value or "").split(",", 1)[0].strip()
+        except OSError:
+            pass
+
+        try:
+            devices_key = winreg.OpenKey(
+                winreg.HKEY_USERS,
+                rf"{sid}\Software\Microsoft\Windows NT\CurrentVersion\Devices",
+            )
+        except OSError:
+            devices_key = None
+
+        if devices_key is not None:
+            value_idx = 0
+            while True:
+                try:
+                    printer_name, port_value, _ = winreg.EnumValue(devices_key, value_idx)
+                except OSError:
+                    break
+                value_idx += 1
+
+                port_name = str(port_value or "")
+                upper_port = port_name.upper()
+                connection_type = "UserProfile"
+                is_network = printer_name.startswith("\\\\")
+                is_shared = printer_name.startswith("\\\\")
+
+                if upper_port.startswith("WINSPOOL,IP_") or upper_port.startswith("IP_"):
+                    connection_type = "TCPIP"
+                    is_network = True
+                elif upper_port.startswith("WINSPOOL,WSD") or upper_port.startswith("WSD"):
+                    connection_type = "WSD"
+                    is_network = True
+                elif upper_port.startswith("WINSPOOL,USB") or upper_port.startswith("USB"):
+                    connection_type = "USB"
+                elif is_network:
+                    connection_type = "Shared"
+
+                add_printer(
+                    printer_name,
+                    port_name=port_name,
+                    is_default=_printer_key(printer_name) == _printer_key(default_printer),
+                    is_network=is_network,
+                    is_shared=is_shared,
+                    connection_type=connection_type,
+                )
+
+            winreg.CloseKey(devices_key)
+
+        try:
+            conn_root = winreg.OpenKey(winreg.HKEY_USERS, rf"{sid}\Printers\Connections")
+        except OSError:
+            conn_root = None
+
+        if conn_root is not None:
+            conn_idx = 0
+            while True:
+                try:
+                    conn_name = winreg.EnumKey(conn_root, conn_idx)
+                except OSError:
+                    break
+                conn_idx += 1
+
+                parts = [part for part in conn_name.split(",") if part]
+                if len(parts) >= 2:
+                    server_name = parts[-2]
+                    share_name = parts[-1]
+                    display_name = f"\\\\{server_name}\\{share_name}"
+                    add_printer(
+                        display_name,
+                        is_default=_printer_key(display_name) == _printer_key(default_printer),
+                        is_network=True,
+                        is_shared=True,
+                        connection_type="Shared",
+                    )
+
+            winreg.CloseKey(conn_root)
+
+    return list(printers.values())
+
+
 def _collect_printers() -> list[dict]:
     """Collect installed printers via PowerShell Get-CimInstance Win32_Printer.
 
@@ -631,6 +784,11 @@ def _collect_printers() -> list[dict]:
     """
     if os.name != "nt":
         return []
+    printers: dict[str, dict] = {
+        _printer_key(p["name"]): p for p in _collect_user_profile_printers()
+        if p.get("name")
+    }
+
     try:
         import subprocess as _sp, json as _json
         result = _sp.run(
@@ -641,32 +799,33 @@ def _collect_printers() -> list[dict]:
         )
         raw_out = (result.stdout or "").strip()
         if not raw_out or raw_out == "null":
-            return []
+            return sorted(printers.values(), key=lambda p: p["name"].casefold())
         raw = _json.loads(raw_out)
         if isinstance(raw, dict):
             raw = [raw]
-        printers: list[dict] = []
         for p in raw:
             name = str(p.get("Name") or "").strip()
             if not name:
                 continue
             status_code = int(p.get("Status") or 0)
-            printers.append({
+            key = _printer_key(name)
+            existing = printers.get(key, {})
+            printers[key] = {
                 "name":            name,
                 "driver_name":     str(p.get("Driver") or "").strip(),
                 "port_name":       str(p.get("Port") or "").strip(),
                 "ip_address":      str(p.get("IP") or "").strip(),
-                "is_default":      bool(p.get("Default")),
-                "is_network":      bool(p.get("Network")) or bool(p.get("Shared")),
-                "is_shared":       bool(p.get("Shared")),
+                "is_default":      bool(p.get("Default")) or bool(existing.get("is_default")),
+                "is_network":      bool(p.get("Network")) or bool(p.get("Shared")) or bool(existing.get("is_network")),
+                "is_shared":       bool(p.get("Shared")) or bool(existing.get("is_shared")),
                 "work_offline":    bool(p.get("WorkOffline")),
                 "job_count":       int(p.get("Jobs") or 0),
-                "connection_type": str(p.get("Connection") or "Unknown"),
+                "connection_type": str(p.get("Connection") or existing.get("connection_type") or "Unknown"),
                 "status":          _PS_STATUS.get(status_code, "Unknown"),
-            })
-        return printers
+            }
+        return sorted(printers.values(), key=lambda p: (not p["is_default"], p["name"].casefold()))
     except Exception:
-        return []
+        return sorted(printers.values(), key=lambda p: p["name"].casefold())
 
 
 def collect_enrollment_payload(config) -> dict[str, Any]:

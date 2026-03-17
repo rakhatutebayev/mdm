@@ -196,8 +196,13 @@ async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db)):
                 name=printer.name,
                 driver_name=printer.driver_name,
                 port_name=printer.port_name,
+                ip_address=printer.ip_address,
                 is_default=printer.is_default,
                 is_network=printer.is_network,
+                is_shared=printer.is_shared,
+                work_offline=printer.work_offline,
+                job_count=printer.job_count,
+                connection_type=printer.connection_type,
                 status=printer.status,
             ))
 
