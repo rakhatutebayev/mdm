@@ -96,8 +96,13 @@ class PrinterPayload(BaseModel):
     name: str = ""
     driver_name: str = ""
     port_name: str = ""
+    ip_address: str = ""
     is_default: bool = False
     is_network: bool = False
+    is_shared: bool = False
+    work_offline: bool = False
+    job_count: int = 0
+    connection_type: str = ""
     status: str = ""
 
 
@@ -323,8 +328,13 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
                 name=p.name,
                 driver_name=p.driver_name,
                 port_name=p.port_name,
+                ip_address=p.ip_address,
                 is_default=p.is_default,
                 is_network=p.is_network,
+                is_shared=p.is_shared,
+                work_offline=p.work_offline,
+                job_count=p.job_count,
+                connection_type=p.connection_type,
                 status=p.status,
             ))
 

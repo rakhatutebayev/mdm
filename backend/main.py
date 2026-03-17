@@ -30,19 +30,16 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE hardware_inventory ADD COLUMN IF NOT EXISTS gpu_driver_version VARCHAR(100) DEFAULT ''",
         ]:
             await conn.execute(__import__("sqlalchemy").text(col_ddl))
-        # printer_info table (created via create_all above, explicit fallback)
-        await conn.execute(__import__("sqlalchemy").text("""
-            CREATE TABLE IF NOT EXISTS printer_info (
-                id SERIAL PRIMARY KEY,
-                device_id VARCHAR(36) REFERENCES devices(id) ON DELETE CASCADE,
-                name VARCHAR(255) DEFAULT '',
-                driver_name VARCHAR(255) DEFAULT '',
-                port_name VARCHAR(255) DEFAULT '',
-                is_default BOOLEAN DEFAULT FALSE,
-                is_network BOOLEAN DEFAULT FALSE,
-                status VARCHAR(100) DEFAULT ''
-            )
-        """))
+        # printer_info — new columns added for CimInstance fields
+        for col_ddl in [
+            "ALTER TABLE printer_info ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45) DEFAULT ''",
+            "ALTER TABLE printer_info ADD COLUMN IF NOT EXISTS is_shared BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE printer_info ADD COLUMN IF NOT EXISTS work_offline BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE printer_info ADD COLUMN IF NOT EXISTS job_count INTEGER",
+            "ALTER TABLE printer_info ADD COLUMN IF NOT EXISTS connection_type VARCHAR(50) DEFAULT ''",
+        ]:
+            await conn.execute(__import__("sqlalchemy").text(col_ddl))
+
     # Start MQTT publisher (non-blocking background task)
     await MqttPublisher.connect()
     yield

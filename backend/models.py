@@ -156,8 +156,13 @@ class PrinterInfo(Base):
     name: Mapped[str] = mapped_column(String(255), default="")
     driver_name: Mapped[str] = mapped_column(String(255), default="")
     port_name: Mapped[str] = mapped_column(String(255), default="")
+    ip_address: Mapped[str] = mapped_column(String(45), default="")
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     is_network: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
+    work_offline: Mapped[bool] = mapped_column(Boolean, default=False)
+    job_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    connection_type: Mapped[str] = mapped_column(String(50), default="")
     status: Mapped[str] = mapped_column(String(100), default="")
 
     device: Mapped["Device"] = relationship(back_populates="printers")

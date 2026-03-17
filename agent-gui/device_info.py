@@ -580,92 +580,91 @@ def _network_payload() -> dict[str, Any]:
 
 
 
-def _collect_printers() -> list[dict]:
-    """Collect installed printers from Windows registry.
 
-    Reads HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Printers which
-    contains ALL printers regardless of user session — works from SYSTEM context.
-    Falls back to 'wmic printer get' if registry read fails.
+_PRINTER_PS = r"""
+$printers = Get-CimInstance Win32_Printer -ErrorAction SilentlyContinue
+$ports    = Get-CimInstance Win32_TCPIPPrinterPort -ErrorAction SilentlyContinue
+$jobs     = Get-CimInstance Win32_PrintJob -ErrorAction SilentlyContinue
+
+$result = foreach ($p in $printers) {
+    $port = $ports | Where-Object { $_.Name -eq $p.PortName }
+    $jobCount = ($jobs | Where-Object { $_.Name -like "$($p.Name)*" }).Count
+
+    $conn = "Unknown"
+    if     ($p.PortName -like "IP_*")  { $conn = "TCPIP" }
+    elseif ($p.PortName -like "WSD*")  { $conn = "WSD" }
+    elseif ($p.PortName -like "USB*")  { $conn = "USB" }
+    elseif ($p.Network)                { $conn = "Network" }
+    elseif ($p.Shared)                 { $conn = "Shared" }
+    else                               { $conn = "Local" }
+
+    [PSCustomObject]@{
+        Name        = $p.Name
+        Driver      = $p.DriverName
+        Port        = $p.PortName
+        IP          = if ($port) { $port.HostAddress } else { "" }
+        Network     = [bool]$p.Network
+        Shared      = [bool]$p.Shared
+        Default     = [bool]$p.Default
+        Status      = [int]$p.PrinterStatus
+        WorkOffline = [bool]$p.WorkOffline
+        Jobs        = [int]$jobCount
+        Connection  = $conn
+    }
+}
+$result | ConvertTo-Json -Depth 3 -Compress
+""".strip()
+
+_PS_STATUS = {
+    1: "Other", 2: "Unknown", 3: "Idle", 4: "Printing",
+    5: "Warmup", 6: "Stopped", 7: "Offline",
+}
+
+
+def _collect_printers() -> list[dict]:
+    """Collect installed printers via PowerShell Get-CimInstance Win32_Printer.
+
+    Uses the modern CIM interface which works correctly from Windows SYSTEM
+    service context. Also joins Win32_TCPIPPrinterPort (IP address) and
+    Win32_PrintJob (active job count). Returns fields matching the backend
+    PrinterInfo model.
     """
     if os.name != "nt":
         return []
-
-    # ── Primary: read from registry (always works from SYSTEM) ──────────────
     try:
-        import winreg
-        _REG_PATH = r"SYSTEM\CurrentControlSet\Control\Print\Printers"
-        printers: list[dict] = []
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, _REG_PATH) as root:
-            idx = 0
-            while True:
-                try:
-                    printer_name = winreg.EnumKey(root, idx)
-                    idx += 1
-                except OSError:
-                    break
-                try:
-                    with winreg.OpenKey(root, printer_name) as pkey:
-                        def _rv(key_name: str, default=""):
-                            try:
-                                v, _ = winreg.QueryValueEx(pkey, key_name)
-                                return v
-                            except OSError:
-                                return default
-                        driver = str(_rv("Printer Driver") or "").strip()
-                        port   = str(_rv("Port") or "").strip()
-                        attrs  = int(_rv("Attributes") or 0)
-                        # Bit flags from PRINTER_ATTRIBUTE_* constants
-                        is_default = bool(attrs & 0x0004)   # PRINTER_ATTRIBUTE_DEFAULT
-                        is_network = bool(attrs & 0x0010) or \
-                                     port.startswith("\\\\") or \
-                                     port.upper().startswith("IP_") or \
-                                     port.upper().startswith("WSD")
-                        printers.append({
-                            "name":        printer_name,
-                            "driver_name": driver,
-                            "port_name":   port,
-                            "is_default":  is_default,
-                            "is_network":  is_network,
-                            "status":      "Idle",
-                        })
-                except Exception:
-                    continue
-        if printers:
-            return printers
-    except Exception:
-        pass
-
-    # ── Fallback: wmic printer (available on all Windows without extra modules)
-    try:
-        import subprocess as _sp, csv as _csv, io as _io
+        import subprocess as _sp, json as _json
         result = _sp.run(
-            ["wmic", "printer", "get",
-             "Name,DriverName,PortName,Default,Shared,PrinterStatus",
-             "/format:csv"],
-            capture_output=True, text=True, timeout=20,
+            ["powershell", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+             "-Command", _PRINTER_PS],
+            capture_output=True, text=True, timeout=30,
             creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0),
         )
-        printers2: list[dict] = []
-        if result.returncode == 0 and result.stdout.strip():
-            reader = _csv.DictReader(_io.StringIO(result.stdout.strip()))
-            for row in reader:
-                name = (row.get("Name") or "").strip()
-                if not name:
-                    continue
-                port = (row.get("PortName") or "").strip()
-                is_net = (port.startswith("\\\\") or
-                          (row.get("Shared") or "").upper() == "TRUE" or
-                          port.upper().startswith("IP_") or
-                          port.upper().startswith("WSD"))
-                printers2.append({
-                    "name":        name,
-                    "driver_name": (row.get("DriverName") or "").strip(),
-                    "port_name":   port,
-                    "is_default":  (row.get("Default") or "").upper() == "TRUE",
-                    "is_network":  is_net,
-                    "status":      "Idle",
-                })
-        return printers2
+        raw_out = (result.stdout or "").strip()
+        if not raw_out or raw_out == "null":
+            return []
+        raw = _json.loads(raw_out)
+        if isinstance(raw, dict):
+            raw = [raw]
+        printers: list[dict] = []
+        for p in raw:
+            name = str(p.get("Name") or "").strip()
+            if not name:
+                continue
+            status_code = int(p.get("Status") or 0)
+            printers.append({
+                "name":            name,
+                "driver_name":     str(p.get("Driver") or "").strip(),
+                "port_name":       str(p.get("Port") or "").strip(),
+                "ip_address":      str(p.get("IP") or "").strip(),
+                "is_default":      bool(p.get("Default")),
+                "is_network":      bool(p.get("Network")) or bool(p.get("Shared")),
+                "is_shared":       bool(p.get("Shared")),
+                "work_offline":    bool(p.get("WorkOffline")),
+                "job_count":       int(p.get("Jobs") or 0),
+                "connection_type": str(p.get("Connection") or "Unknown"),
+                "status":          _PS_STATUS.get(status_code, "Unknown"),
+            })
+        return printers
     except Exception:
         return []
 
