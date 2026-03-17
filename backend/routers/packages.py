@@ -211,6 +211,9 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     _catalog_release, _catalog_artifact = find_artifact(fmt if fmt in {"exe", "msi"} else "exe", body.arch)
     _agent_version = str(_catalog_release.get("version", "")) if _catalog_release else ""
 
+    # Derive MQTT host from server_url (same hostname, port 1883)
+    _mqtt_host = server_url.replace("https://", "").replace("http://", "").split("/")[0]
+
     bootstrap_config = {
         "server_url": server_url,
         "enrollment_token": token_row.token,
@@ -230,6 +233,10 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         "log_dir": body.log_dir,
         "start_immediately": body.start_immediately,
         "agent_display_name": body.agent_display_name,
+        # MQTT — instant command delivery (< 1 sec vs 45 sec HTTP polling)
+        "mqtt_enabled": True,
+        "mqtt_host": _mqtt_host,
+        "mqtt_port": 1883,
     }
 
     # ── Build package ─────────────────────────────────────────────────────────
