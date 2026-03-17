@@ -40,6 +40,10 @@ class AgentConfig:
     log_dir: str = r"C:\ProgramData\NOCKO-Agent\logs"
     start_immediately: bool = True
     agent_display_name: str = "NOCKO MDM Agent"
+    # MQTT settings (for real-time command delivery)
+    mqtt_enabled: bool = True
+    mqtt_host: str = ""      # if empty, derived from server_url hostname
+    mqtt_port: int = 1883
 
     @classmethod
     def base_dir(cls) -> Path:

@@ -8,6 +8,7 @@ from routers.packages import router as packages_router
 from routers.dashboard import router as dashboard_router
 from routers.mdm import router as mdm_router
 from routers.settings import router as settings_router
+from mqtt_publisher import MqttPublisher
 
 
 @asynccontextmanager
@@ -42,7 +43,10 @@ async def lifespan(app: FastAPI):
                 status VARCHAR(100) DEFAULT ''
             )
         """))
+    # Start MQTT publisher (non-blocking background task)
+    await MqttPublisher.connect()
     yield
+    await MqttPublisher.disconnect()
 
 
 app = FastAPI(

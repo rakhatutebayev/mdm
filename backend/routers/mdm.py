@@ -13,6 +13,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
+import asyncio
+from mqtt_publisher import publish_command as _mqtt_publish
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -684,6 +686,11 @@ async def portal_rename_computer(body: RenameCommandPayload, db: AsyncSession = 
     )
     db.add(cmd)
     await db.commit()
+    # Publish via MQTT for instant delivery (fallback: agent HTTP poll)
+    asyncio.create_task(_mqtt_publish(
+        body.device_id,
+        {"id": cmd.id, "type": "rename_computer", "payload": {"new_name": new_name, "restart_after": body.restart_after}},
+    ))
     return {"status": "queued", "command_id": cmd.id, "new_name": new_name}
 
 
@@ -732,6 +739,10 @@ async def portal_update_agent(body: UpdateAgentPayload, db: AsyncSession = Depen
     )
     db.add(cmd)
     await db.commit()
+    asyncio.create_task(_mqtt_publish(
+        body.device_id,
+        {"id": cmd.id, "type": "update_agent", "payload": {"download_url": download_url, "target_version": target_version}},
+    ))
     return {"status": "queued", "command_id": cmd.id, "target_version": target_version}
 
 
@@ -754,6 +765,10 @@ async def portal_restart_agent(body: RestartAgentPayload, db: AsyncSession = Dep
     )
     db.add(cmd)
     await db.commit()
+    asyncio.create_task(_mqtt_publish(
+        body.device_id,
+        {"id": cmd.id, "type": "restart_agent", "payload": {}},
+    ))
     return {"status": "queued", "command_id": cmd.id}
 
 

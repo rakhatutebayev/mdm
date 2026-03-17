@@ -8,6 +8,7 @@ import time
 
 from config import AgentConfig
 from modules.mdm import MdmAgentClient
+from modules.mqtt_listener import MqttListener, mark_seen
 
 
 def _next_due(now: float, interval: int) -> float:
@@ -209,11 +210,24 @@ def run_agent_loop(
     )
 
     client.enroll_if_needed()
+
+    # ── Start MQTT listener (instant command delivery) ────────────────────────
+    mqtt_listener: MqttListener | None = None
+    if getattr(config, "mqtt_enabled", True):
+        def _mqtt_dispatch(commands, cfg, cli):
+            """Adapter: MqttListener calls with (commands, config, client)."""
+            _dispatch_commands(commands, cli, cfg, logger)
+
+        mqtt_listener = MqttListener(config, _mqtt_dispatch, client_ref=client)
+        mqtt_listener.start()
+    else:
+        logger.info("MQTT listener disabled by config — using HTTP polling only")
+
     now = time.monotonic()
     next_heartbeat = now
-    next_metrics = now
+    next_metrics   = now
     next_inventory = now
-    next_commands = now
+    next_commands  = now
 
     while not stop_event.is_set():
         now = time.monotonic()
@@ -243,7 +257,10 @@ def run_agent_loop(
             try:
                 commands = client.fetch_commands()
                 if commands:
-                    _dispatch_commands(commands, client, config, logger)
+                    # Deduplicate: skip commands already delivered via MQTT
+                    new_cmds = [c for c in commands if mark_seen(c.get("id", ""))]
+                    if new_cmds:
+                        _dispatch_commands(new_cmds, client, config, logger)
             except Exception as exc:
                 logger.exception("Command polling failed: %s", exc)
             next_commands = _next_due(now, int(config.commands_interval))
@@ -254,4 +271,6 @@ def run_agent_loop(
         )
         stop_event.wait(wait_for)
 
+    if mqtt_listener:
+        mqtt_listener.stop()
     logger.info("Agent loop stopped")
