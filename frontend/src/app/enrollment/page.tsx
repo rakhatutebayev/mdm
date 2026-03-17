@@ -340,24 +340,19 @@ export default function EnrollmentDevicesPage() {
                         </div>
                       ) : col.key === 'owner' ? d.owner
                       : col.key === 'enrollmentMethod' ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <span style={{ fontSize: 12, color: '#cbd5e1' }}>
-                            {d.platform}{d.os_version ? ` · ${d.os_version.replace('Windows-', 'Windows ').split('-')[0]}` : ''}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
+                            background: d.enrollment_method === 'agent' ? '#1e3a5f' : '#2a2d3a',
+                            color: d.enrollment_method === 'agent' ? '#60a5fa' : '#94a3b8',
+                            textTransform: 'capitalize',
+                          }}>
+                            {d.enrollment_method === 'agent' ? 'Agent' : d.enrollment_method || '—'}
                           </span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{
-                              fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4,
-                              background: d.enrollment_method === 'agent' ? '#1e3a5f' : '#2a2d3a',
-                              color: d.enrollment_method === 'agent' ? '#60a5fa' : '#94a3b8',
-                              textTransform: 'capitalize',
-                            }}>
-                              {d.enrollment_method === 'agent' ? '🤖 Agent' : d.enrollment_method || '—'}
-                            </span>
-                            {d.enrollment_method === 'agent' && d.agent_version && (
-                              <span style={{ fontSize: 11, color: '#64748b' }}>v{d.agent_version}</span>
-                            )}
-                          </span>
-                        </div>
+                          {d.enrollment_method === 'agent' && d.agent_version && (
+                            <span style={{ fontSize: 12, color: '#94a3b8' }}>v{d.agent_version}</span>
+                          )}
+                        </span>
                       ) : col.key === 'enrolledTime' ? (d.enrolled_at ? new Date(d.enrolled_at).toLocaleString() : '—')
                       : col.key === 'lastUpdate' ? (d.last_checkin ? new Date(d.last_checkin).toLocaleString() : '—')
                       : null}
