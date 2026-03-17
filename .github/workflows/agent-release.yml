@@ -49,7 +49,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller pywin32 wmi PyQt6 psutil requests pillow
+          pip install pyinstaller pywin32 wmi PyQt6 psutil requests pillow paho-mqtt
 
       - name: Install Inno Setup
         shell: pwsh
