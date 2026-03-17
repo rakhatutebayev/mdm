@@ -1,0 +1,26 @@
+# EMQX MQTT Broker — optional service for real-time command delivery
+# Start with:  docker compose -f docker-compose.yml -f docker-compose.mqtt.yml up -d
+# Stop with:   docker compose -f docker-compose.yml -f docker-compose.mqtt.yml down
+
+version: "3.9"
+
+services:
+  emqx:
+    image: emqx/emqx:5
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: nocko_mdm
+      EMQX_ALLOW_ANONYMOUS: "true"
+    ports:
+      - "1883:1883"    # MQTT — agents connect here
+      - "18083:18083"  # EMQX Dashboard (admin/public)
+    volumes:
+      - emqxdata:/opt/emqx/data
+
+  backend:
+    environment:
+      MQTT_HOST: emqx
+      MQTT_PORT: "1883"
+
+volumes:
+  emqxdata:

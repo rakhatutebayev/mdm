@@ -16,37 +16,17 @@ services:
       timeout: 5s
       retries: 10
 
-  emqx:
-    image: emqx/emqx:5
-    restart: unless-stopped
-    environment:
-      EMQX_NAME: nocko_mdm
-      EMQX_ALLOW_ANONYMOUS: "true"
-    ports:
-      - "1883:1883"    # MQTT — agents connect here
-      - "18083:18083"  # EMQX Dashboard
-    volumes:
-      - emqxdata:/opt/emqx/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:18083/api/v5/status || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 12
-      start_period: 30s
-
   backend:
     build: ./backend
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://mdm:${POSTGRES_PASSWORD:-mdmpassword}@postgres:5432/nocko_mdm
       MDM_SERVER_URL: ${MDM_SERVER_URL:-https://mdm.nocko.com}
-      MQTT_HOST: emqx
-      MQTT_PORT: "1883"
+      MQTT_HOST: ${MQTT_HOST:-localhost}
+      MQTT_PORT: ${MQTT_PORT:-1883}
     depends_on:
       postgres:
         condition: service_healthy
-      emqx:
-        condition: service_started   # backend starts immediately; MQTT publisher reconnects if needed
     ports:
       - "8000:8000"
     command: >
@@ -71,4 +51,3 @@ services:
 
 volumes:
   pgdata:
-  emqxdata:
