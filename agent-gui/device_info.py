@@ -580,88 +580,49 @@ def _network_payload() -> dict[str, Any]:
 
 
 
-def _collect_printers() -> list[dict[str, Any]]:
-    """Collect installed printers via Win32_Printer WMI (accessible from Session 0)."""
-    printers: list[dict[str, Any]] = []
-    if os.name != "nt" or wmi is None:
-        return printers
-    initialized = False
-    if pythoncom is not None:
-        try:
-            pythoncom.CoInitialize()
-            initialized = True
-        except Exception:
-            pass
-    try:
-        c = wmi.WMI()
-        status_map = {
-            0: "Unknown", 1: "Other", 2: "No Error", 3: "Low Paper",
-            4: "No Paper", 5: "Low Toner", 6: "No Toner", 7: "Door Open",
-            8: "Jammed", 9: "Offline", 10: "Service Requested", 11: "Output Bin Full",
-        }
-        for printer in c.Win32_Printer():
-            attr = getattr
-            port = str(attr(printer, "PortName", "") or "")
-            is_net = port.startswith("\\\\") or port.upper().startswith("IP_") or port.upper().startswith("WSD")
-            status_code = int(attr(printer, "PrinterStatus", 0) or 0)
-            printers.append({
-                "name":        str(attr(printer, "Name", "") or "").strip(),
-                "driver_name": str(attr(printer, "DriverName", "") or "").strip(),
-                "port_name":   port.strip(),
-                "is_default":  bool(attr(printer, "Default", False)),
-                "is_network":  is_net,
-                "status":      status_map.get(status_code, "Unknown"),
-            })
-    except Exception:
-        pass
-    finally:
-        if initialized and pythoncom is not None:
-            try:
-                pythoncom.CoUninitialize()
-            except Exception:
-                pass
-    return printers
-
-
 def _collect_printers() -> list[dict]:
-    """Collect installed printers via WMI Win32_Printer.
+    """Collect installed printers via PowerShell Get-Printer.
 
-    Returns fields that match the backend PrinterInfo model:
-    name, driver_name, port_name, is_default, is_network, status.
+    PowerShell Get-Printer works correctly from Windows SYSTEM service context,
+    unlike WMI Win32_Printer which often misses user-installed printers in Session 0.
+    Returns fields matching the backend PrinterInfo model.
     """
-    if os.name != "nt" or not wmi:
+    if os.name != "nt":
         return []
     try:
-        if pythoncom:
-            pythoncom.CoInitialize()
-        c = wmi.WMI()
-        printers = []
-        for p in c.Win32_Printer():
-            try:
-                name        = str(getattr(p, "Name",       "") or "").strip()
-                driver_name = str(getattr(p, "DriverName", "") or "").strip()
-                port_name   = str(getattr(p, "PortName",   "") or "").strip()
-                is_default  = bool(getattr(p, "Default",   False))
-                # Network printers have "\\SERVER\" in PortName or are shared
-                is_network  = (port_name.startswith("\\\\") or
-                               bool(getattr(p, "Shared", False)) or
-                               "IP_" in port_name or
-                               "WSD" in port_name)
-                # PrinterStatus: 1=Other,2=Unknown,3=Idle,4=Printing,5=Warmup
-                _STATUS_MAP = {3: "Idle", 4: "Printing", 5: "Warmup"}
-                raw_status = getattr(p, "PrinterStatus", 0) or 0
-                status = _STATUS_MAP.get(int(raw_status), "Unknown")
-                if name:
-                    printers.append({
-                        "name":        name,
-                        "driver_name": driver_name,
-                        "port_name":   port_name,
-                        "is_default":  is_default,
-                        "is_network":  is_network,
-                        "status":      status,
-                    })
-            except Exception:
+        import subprocess as _sp, json as _json
+        result = _sp.run(
+            ["powershell", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+             "Get-Printer | Select-Object Name,DriverName,PortName,Default,Shared,PrinterStatus | ConvertTo-Json -Depth 2"],
+            capture_output=True, text=True, timeout=30,
+            creationflags=getattr(_sp, "CREATE_NO_WINDOW", 0),
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+        raw = _json.loads(result.stdout)
+        if isinstance(raw, dict):   # single printer → wrap in list
+            raw = [raw]
+        _STATUS = {0: "Unknown", 1: "Paused", 2: "Error", 3: "Deleting",
+                   4: "Paper Jam", 5: "Paper Out", 6: "Offline"}
+        printers: list[dict] = []
+        for p in raw:
+            name = str(p.get("Name") or "").strip()
+            if not name:
                 continue
+            port = str(p.get("PortName") or "").strip()
+            is_network = (port.startswith("\\\\") or
+                          bool(p.get("Shared")) or
+                          port.upper().startswith("IP_") or
+                          port.upper().startswith("WSD"))
+            status_code = int(p.get("PrinterStatus") or 0)
+            printers.append({
+                "name":        name,
+                "driver_name": str(p.get("DriverName") or "").strip(),
+                "port_name":   port,
+                "is_default":  bool(p.get("Default")),
+                "is_network":  is_network,
+                "status":      _STATUS.get(status_code, "Idle"),
+            })
         return printers
     except Exception:
         return []
