@@ -17,7 +17,10 @@ def _next_due(now: float, interval: int) -> float:
 
 # ── Command handlers ──────────────────────────────────────────────────────────
 
-def _handle_rename_computer(cmd: dict, config: AgentConfig, logger: logging.Logger) -> tuple[str, str]:
+def _handle_rename_computer(
+    cmd: dict, config: AgentConfig, logger: logging.Logger,
+    client: "MdmAgentClient | None" = None,
+) -> tuple[str, str]:
     """Rename this Windows computer. Returns (status, result_message)."""
     payload = cmd.get("payload", {})
     new_name: str = payload.get("new_name", "").strip()
@@ -38,6 +41,22 @@ def _handle_rename_computer(cmd: dict, config: AgentConfig, logger: logging.Logg
             return "failed", f"Rename-Computer failed (rc={result.returncode}): {err}"
 
         logger.info("Computer renamed to '%s' successfully", new_name)
+
+        # Push inventory immediately so the portal reflects the new name right away.
+        # We temporarily patch socket.gethostname so collect_inventory_payload picks
+        # up the new name before the OS restart applies it.
+        if client is not None:
+            try:
+                import socket as _socket
+                _orig_gethostname = _socket.gethostname
+                _socket.gethostname = lambda: new_name  # type: ignore[assignment]
+                try:
+                    client.send_inventory()
+                    logger.info("Inventory pushed with new name '%s'", new_name)
+                finally:
+                    _socket.gethostname = _orig_gethostname  # type: ignore[assignment]
+            except Exception as inv_exc:
+                logger.warning("Immediate inventory push failed (non-fatal): %s", inv_exc)
 
         if restart_after:
             # Delayed restart so the agent can ack the command first
@@ -101,9 +120,48 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
         return "failed", str(exc)
 
 
+def _handle_restart_agent(
+    cmd: dict, config: AgentConfig, logger: logging.Logger,
+    client: "MdmAgentClient | None" = None,
+) -> tuple[str, str]:
+    """Restart the NOCKO MDM agent service.
+
+    Before restarting, pushes a full inventory so the portal is up to date.
+    On startup the agent loop sets next_inventory=now, so inventory is sent
+    immediately after the restart as well.
+    """
+    # Push a fresh inventory snapshot before the restart
+    if client is not None:
+        try:
+            client.send_inventory()
+            logger.info("Pre-restart inventory pushed successfully")
+        except Exception as exc:
+            logger.warning("Pre-restart inventory push failed (non-fatal): %s", exc)
+
+    try:
+        # Prefer restarting the Windows service (runs in elevated SYSTEM context)
+        ps_cmd = (
+            "Start-Sleep 5; "
+            "Restart-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue; "
+            # Fallback: trigger the scheduled task directly if service is not installed
+            "if (-not (Get-Service 'NOCKOAgent' -ErrorAction SilentlyContinue)) { "
+            "  Start-ScheduledTask -TaskName 'NOCKO MDM Agent Check-In' -ErrorAction SilentlyContinue; "
+            "}"
+        )
+        subprocess.Popen(
+            ["powershell", "-NonInteractive", "-Command", ps_cmd],
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return "acked", "Agent restart scheduled in 5 seconds. Full inventory will be sent on next checkin."
+    except Exception as exc:
+        logger.exception("restart_agent error: %s", exc)
+        return "failed", str(exc)
+
+
 _COMMAND_HANDLERS = {
     "rename_computer": _handle_rename_computer,
     "update_agent":    _handle_update_agent,
+    "restart_agent":   _handle_restart_agent,
 }
 
 
@@ -120,7 +178,13 @@ def _dispatch_commands(commands: list[dict], client: MdmAgentClient,
 
         logger.info("Executing command '%s' (id=%s)", cmd_type, cmd_id)
         try:
-            status, result_msg = handler(cmd, config, logger)
+            # Pass client to handlers that need to push data back to the server
+            import inspect as _inspect
+            sig = _inspect.signature(handler)
+            if "client" in sig.parameters:
+                status, result_msg = handler(cmd, config, logger, client=client)
+            else:
+                status, result_msg = handler(cmd, config, logger)
             client.ack_command(cmd_id, status=status, result=result_msg)
             logger.info("Command '%s' → %s: %s", cmd_type, status, result_msg)
         except Exception as exc:

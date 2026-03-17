@@ -173,10 +173,16 @@ export default function DeviceDetailPage() {
         const d = await r.json();
         const phase = d.status as 'pending' | 'sent' | 'acked' | 'failed';
         setCmdStatus({ phase, commandId, result: d.result, newName });
-        if (phase === 'acked' || phase === 'failed') stopPolling();
+        if (phase === 'acked') {
+          stopPolling();
+          // Re-fetch device so the name in the header reflects the new value from the server
+          void loadDevice();
+        } else if (phase === 'failed') {
+          stopPolling();
+        }
       } catch { /* keep polling */ }
     }, 5000);
-  }, [stopPolling]);
+  }, [stopPolling, loadDevice]);
 
   const handleRename = async () => {
     if (!renameValue.trim() || !device) return;
@@ -195,9 +201,12 @@ export default function DeviceDetailPage() {
       const cid = data.command_id as string;
       setCmdStatus({ phase: 'queued', commandId: cid, newName: nm });
       setRenameValue('');
+      setRenameOpen(false); // close modal immediately
       startPolling(cid, nm);
     } catch (e: unknown) {
-      setCmdStatus({ phase: 'failed', commandId: '', newName: renameValue, result: e instanceof Error ? e.message : 'Error' });
+      const errMsg = e instanceof Error ? e.message : 'Error';
+      setCmdStatus({ phase: 'failed', commandId: '', newName: renameValue, result: errMsg });
+      setRenameOpen(false); // close modal even on error — show error inline
     } finally {
       setRenaming(false);
     }
@@ -261,7 +270,80 @@ export default function DeviceDetailPage() {
     }
   };
 
-  useEffect(() => () => { stopPolling(); stopUpdatePolling(); }, [stopPolling, stopUpdatePolling]);
+  // ── Restart Agent state ───────────────────────────────────────────────────
+  const [restartOpen, setRestartOpen]       = useState(false);
+  const [restarting, setRestarting]         = useState(false);
+  const [restartStatus, setRestartStatus]   = useState<null | {
+    phase: 'queued' | 'pending' | 'sent' | 'acked' | 'failed' | 'timeout';
+    commandId: string;
+    result?: string | null;
+  }>(null);
+  const restartPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopRestartPolling = useCallback(() => {
+    if (restartPollRef.current) { clearInterval(restartPollRef.current); restartPollRef.current = null; }
+  }, []);
+
+  const startRestartPolling = useCallback((commandId: string) => {
+    const startedAt = Date.now();
+    restartPollRef.current = setInterval(async () => {
+      if (Date.now() - startedAt > 2 * 60 * 1000) {
+        stopRestartPolling();
+        setRestartStatus(s => s ? { ...s, phase: 'timeout' } : null);
+        return;
+      }
+      try {
+        const r = await fetch(`/api/mdm/mdm/windows/portal/commands/${commandId}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const phase = d.status as 'pending' | 'sent' | 'acked' | 'failed';
+        setRestartStatus({ phase, commandId, result: d.result });
+        if (phase === 'acked') {
+          stopRestartPolling();
+          void loadDevice(); // refresh device info after restart
+        } else if (phase === 'failed') {
+          stopRestartPolling();
+        }
+      } catch { /* keep polling */ }
+    }, 5000);
+  }, [stopRestartPolling, loadDevice]);
+
+  const handleRestartAgent = async () => {
+    if (!device) return;
+    setRestarting(true);
+    setRestartStatus(null);
+    stopRestartPolling();
+    try {
+      const res = await fetch('/api/mdm/mdm/windows/portal/commands/restart-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: device.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed');
+      const cid = data.command_id as string;
+      setRestartStatus({ phase: 'queued', commandId: cid });
+      startRestartPolling(cid);
+    } catch (e: unknown) {
+      setRestartStatus({ phase: 'failed', commandId: '', result: e instanceof Error ? e.message : 'Error' });
+    } finally {
+      setRestarting(false);
+    }
+  };
+
+  // ── Actions dropdown ──────────────────────────────────────────────────────
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setActionsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [actionsOpen]);
+
+  useEffect(() => () => { stopPolling(); stopUpdatePolling(); stopRestartPolling(); }, [stopPolling, stopUpdatePolling, stopRestartPolling]);
 
   if (error || !device) {
     return (
@@ -421,28 +503,99 @@ export default function DeviceDetailPage() {
             </svg>
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 className={styles.pageTitle}>{device.device_name}</h1>
-              <button
-                title="Rename computer"
-                onClick={() => { setRenameOpen(true); setCmdStatus(null); stopPolling(); setRenameValue(''); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center' }}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 5.63l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 000-1.41z"/>
-                </svg>
-              </button>
-              {/* Update Agent button */}
-              <button
-                title="Update agent"
-                onClick={() => { setUpdateOpen(true); setUpdateStatus(null); stopUpdatePolling(); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f59e0b', padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3 }}
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
-                </svg>
-                <span style={{ fontSize: 11 }}>Update</span>
-              </button>
+
+              {/* ── Inline rename status chip ── */}
+              {cmdStatus && (() => {
+                const phase = cmdStatus.phase;
+                if (phase === 'queued' || phase === 'pending' || phase === 'sent') return (
+                  <span title={`Renaming to "${cmdStatus.newName}"…`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 20, padding: '2px 10px', cursor: 'default' }}>
+                    <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>⏳</span>
+                    → {cmdStatus.newName}
+                  </span>
+                );
+                if (phase === 'acked') return (
+                  <span title="Rename complete" onClick={() => setCmdStatus(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 20, padding: '2px 10px', cursor: 'pointer' }}>
+                    ✅ Renamed
+                  </span>
+                );
+                if (phase === 'failed' || phase === 'timeout') return (
+                  <span title={cmdStatus.result || 'Error'} onClick={() => setCmdStatus(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 20, padding: '2px 10px', cursor: 'pointer' }}>
+                    ❌ {phase === 'timeout' ? 'No response' : 'Error'}
+                  </span>
+                );
+                return null;
+              })()}
+
+              {/* ── Restart status chip ── */}
+              {restartStatus && (() => {
+                const phase = restartStatus.phase;
+                if (phase === 'queued' || phase === 'pending' || phase === 'sent') return (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 20, padding: '2px 10px' }}>
+                    <span style={{ animation: 'spin 1.2s linear infinite', display: 'inline-block' }}>⏳</span>
+                    Restarting agent…
+                  </span>
+                );
+                if (phase === 'acked') return (
+                  <span onClick={() => setRestartStatus(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#22c55e', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 20, padding: '2px 10px', cursor: 'pointer' }}>
+                    ✅ Agent restarted
+                  </span>
+                );
+                if (phase === 'failed' || phase === 'timeout') return (
+                  <span title={restartStatus.result || 'Error'} onClick={() => setRestartStatus(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 20, padding: '2px 10px', cursor: 'pointer' }}>
+                    ❌ Restart failed
+                  </span>
+                );
+                return null;
+              })()}
+
+              {/* ── ⋯ Actions dropdown ── */}
+              <div ref={actionsRef} style={{ position: 'relative', marginLeft: 4 }}>
+                <button
+                  onClick={() => setActionsOpen(o => !o)}
+                  title="Device actions"
+                  style={{ background: actionsOpen ? 'rgba(74,124,255,0.15)' : 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#94a3b8', padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 2, fontSize: 18, lineHeight: 1, fontWeight: 700, letterSpacing: 1 }}
+                >
+                  ⋯
+                </button>
+                {actionsOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: '#1a1d2e', border: '1px solid #2a2d3a', borderRadius: 10, boxShadow: '0 12px 40px rgba(0,0,0,0.5)', zIndex: 300, minWidth: 200, overflow: 'hidden' }}>
+                    {/* Rename */}
+                    <button
+                      onClick={() => { setActionsOpen(false); setRenameOpen(true); setCmdStatus(null); stopPolling(); setRenameValue(''); }}
+                      style={{ width: '100%', background: 'none', border: 'none', color: '#cbd5e1', padding: '11px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, textAlign: 'left' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(74,124,255,0.12)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="#94a3b8"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 5.63l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83a1 1 0 000-1.41z"/></svg>
+                      Rename Computer
+                    </button>
+                    <div style={{ height: 1, background: '#2a2d3a', margin: '0 12px' }} />
+                    {/* Update Agent */}
+                    <button
+                      onClick={() => { setActionsOpen(false); setUpdateOpen(true); setUpdateStatus(null); stopUpdatePolling(); }}
+                      style={{ width: '100%', background: 'none', border: 'none', color: '#cbd5e1', padding: '11px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, textAlign: 'left' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(74,124,255,0.12)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="#f59e0b"><path d="M21 10.12h-6.78l2.74-2.82c-2.73-2.7-7.15-2.8-9.88-.1-2.73 2.71-2.73 7.08 0 9.79s7.15 2.71 9.88 0C18.32 15.65 19 14.08 19 12.1h2c0 1.98-.88 4.55-2.64 6.29-3.51 3.48-9.21 3.48-12.72 0-3.5-3.47-3.53-9.11-.02-12.58s9.14-3.47 12.65 0L21 3v7.12z"/></svg>
+                      Update Agent
+                    </button>
+                    <div style={{ height: 1, background: '#2a2d3a', margin: '0 12px' }} />
+                    {/* Restart Agent */}
+                    <button
+                      onClick={() => { setActionsOpen(false); setRestartOpen(true); setRestartStatus(null); stopRestartPolling(); }}
+                      style={{ width: '100%', background: 'none', border: 'none', color: '#cbd5e1', padding: '11px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, textAlign: 'left' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(74,124,255,0.12)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="#a78bfa"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                      Restart Agent
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className={styles.metaRow}>
               <span className={styles.metaText}>{device.model}</span>
@@ -460,17 +613,17 @@ export default function DeviceDetailPage() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={(e) => e.target === e.currentTarget && setUpdateOpen(false)}>
           <div style={{ background: '#1a1d2e', border: '1px solid #2a2d3a', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-            <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🔄 Удалённое обновление агента</h3>
+            <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🔄 Remote Agent Update</h3>
             <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 13 }}>
-              Текущая версия: <strong style={{ color: '#cbd5e1' }}>{device.agent_version || '—'}</strong><br/>
-              Сервер отправит команду установить последнюю версию. Агент скачает обновление и переустановит себя.
+              Current version: <strong style={{ color: '#cbd5e1' }}>{device.agent_version || '—'}</strong><br/>
+              The server will send a command to install the latest version. The agent will download and reinstall itself.
             </p>
             {/* Live status tracker */}
             {updateStatus && (
               <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #2a2d3a', padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ fontSize: 16 }}>📤</span>
-                  <span style={{ fontSize: 13, color: '#cbd5e1' }}>Команда отправлена на сервер</span>
+                  <span style={{ fontSize: 13, color: '#cbd5e1' }}>Command sent to server</span>
                   <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -478,7 +631,7 @@ export default function DeviceDetailPage() {
                     {updateStatus.phase === 'sent' || updateStatus.phase === 'acked' || updateStatus.phase === 'failed' ? '📡' : '🔄'}
                   </span>
                   <span style={{ fontSize: 13, color: updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? '#64748b' : '#cbd5e1' }}>
-                    {updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? 'Ожидание получения агентом…' : 'Агент получил команду'}
+                    {updateStatus.phase === 'queued' || updateStatus.phase === 'pending' ? 'Waiting for agent to pick up…' : 'Agent received command'}
                   </span>
                   {(updateStatus.phase === 'sent' || updateStatus.phase === 'acked' || updateStatus.phase === 'failed') && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>}
                   {(updateStatus.phase === 'queued' || updateStatus.phase === 'pending') && <span style={{ marginLeft: 'auto', color: '#f59e0b', fontSize: 11 }}>⏳</span>}
@@ -489,12 +642,12 @@ export default function DeviceDetailPage() {
                   </span>
                   <span style={{ fontSize: 13, color: updateStatus.phase === 'acked' ? '#22c55e' : updateStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
                     {updateStatus.phase === 'acked'
-                      ? `Обновление до v${updateStatus.targetVersion} запущено. Агент перезапускается…`
+                      ? `Update to v${updateStatus.targetVersion} started. Agent is restarting…`
                       : updateStatus.phase === 'failed'
-                      ? `Ошибка: ${updateStatus.result || 'unknown error'}`
+                      ? `Error: ${updateStatus.result || 'unknown error'}`
                       : updateStatus.phase === 'timeout'
-                      ? 'Нет ответа (агент недоступен или устарел)'
-                      : `Скачивание и установка v${updateStatus.targetVersion}…`}
+                      ? 'No response (agent offline or outdated)'
+                      : `Downloading and installing v${updateStatus.targetVersion}…`}
                   </span>
                   {(updateStatus.phase === 'queued' || updateStatus.phase === 'pending' || updateStatus.phase === 'sent') && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>⏳</span>}
                 </div>
@@ -503,13 +656,73 @@ export default function DeviceDetailPage() {
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => { setUpdateOpen(false); stopUpdatePolling(); setUpdateStatus(null); }}
                 style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
-                {updateStatus?.phase === 'acked' ? 'Закрыть' : 'Отмена'}
+                {updateStatus?.phase === 'acked' ? 'Close' : 'Cancel'}
               </button>
               <button
                 onClick={handleUpdateAgent}
                 disabled={updating || !!updateStatus}
                 style={{ background: '#f59e0b', border: 'none', borderRadius: 6, color: '#000', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (updating || !!updateStatus) ? 0.5 : 1 }}>
-                {updating ? 'Отправка…' : '⬆️ Обновить агент'}
+                {updating ? 'Sending…' : '⬆️ Update Agent'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Restart Agent Modal ── */}
+      {restartOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => e.target === e.currentTarget && setRestartOpen(false)}>
+          <div style={{ background: '#1a1d2e', border: '1px solid #2a2d3a', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🔁 Restart Agent</h3>
+            <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 13 }}>
+              The agent will push a fresh inventory snapshot, then restart itself.<br/>
+              After restart, it will immediately re-send all device information to the portal.
+            </p>
+            {restartStatus && (
+              <div style={{ marginBottom: 16, borderRadius: 8, border: '1px solid #2a2d3a', padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 16 }}>📤</span>
+                  <span style={{ fontSize: 13, color: '#cbd5e1' }}>Command sent to server</span>
+                  <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 16 }}>
+                    {restartStatus.phase === 'sent' || restartStatus.phase === 'acked' || restartStatus.phase === 'failed' ? '📡' : '🔄'}
+                  </span>
+                  <span style={{ fontSize: 13, color: restartStatus.phase === 'queued' || restartStatus.phase === 'pending' ? '#64748b' : '#cbd5e1' }}>
+                    {restartStatus.phase === 'queued' || restartStatus.phase === 'pending' ? 'Waiting for agent to pick up…' : 'Agent received command'}
+                  </span>
+                  {(restartStatus.phase === 'sent' || restartStatus.phase === 'acked' || restartStatus.phase === 'failed') && <span style={{ marginLeft: 'auto', color: '#22c55e', fontSize: 12 }}>✓</span>}
+                  {(restartStatus.phase === 'queued' || restartStatus.phase === 'pending') && <span style={{ marginLeft: 'auto', color: '#f59e0b', fontSize: 11 }}>⏳</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>
+                    {restartStatus.phase === 'acked' ? '✅' : restartStatus.phase === 'failed' ? '❌' : restartStatus.phase === 'timeout' ? '⏱️' : '🔁'}
+                  </span>
+                  <span style={{ fontSize: 13, color: restartStatus.phase === 'acked' ? '#22c55e' : restartStatus.phase === 'failed' ? '#ef4444' : '#64748b' }}>
+                    {restartStatus.phase === 'acked'
+                      ? 'Agent restarted. Device info refreshed.'
+                      : restartStatus.phase === 'failed'
+                      ? `Error: ${restartStatus.result || 'unknown error'}`
+                      : restartStatus.phase === 'timeout'
+                      ? 'No response (agent offline or outdated)'
+                      : 'Sending inventory snapshot, restarting…'}
+                  </span>
+                  {(restartStatus.phase === 'queued' || restartStatus.phase === 'pending' || restartStatus.phase === 'sent') && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>⏳</span>}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setRestartOpen(false); stopRestartPolling(); setRestartStatus(null); }}
+                style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                {restartStatus?.phase === 'acked' ? 'Close' : 'Cancel'}
+              </button>
+              <button
+                onClick={handleRestartAgent}
+                disabled={restarting || !!restartStatus}
+                style={{ background: '#a78bfa', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (restarting || !!restartStatus) ? 0.5 : 1 }}>
+                {restarting ? 'Sending…' : '🔁 Restart Agent'}
               </button>
             </div>
           </div>
@@ -517,6 +730,7 @@ export default function DeviceDetailPage() {
       )}
 
       {/* ── Rename Modal ── */}
+
       {renameOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={(e) => e.target === e.currentTarget && setRenameOpen(false)}>

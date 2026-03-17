@@ -142,6 +142,7 @@ class CheckinPayload(BaseModel):
     agent_version: str = ""
     os_version: str = ""
     ip_address: str = ""
+    device_name: str = ""  # sent after rename/reboot so the portal updates immediately
     # Telemetry — all optional, accept float for robustness (PowerShell quirks)
     cpu_pct: Optional[float] = None         # 0–100
     ram_used_gb: Optional[float] = None
@@ -477,6 +478,8 @@ async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
         device.os_version = body.os_version
     if body.ip_address and device.network:
         device.network.ip_address = body.ip_address
+    if body.device_name:
+        device.device_name = body.device_name
 
     # Save metrics snapshot if any telemetry provided
     has_metrics = any([
@@ -730,6 +733,28 @@ async def portal_update_agent(body: UpdateAgentPayload, db: AsyncSession = Depen
     db.add(cmd)
     await db.commit()
     return {"status": "queued", "command_id": cmd.id, "target_version": target_version}
+
+
+class RestartAgentPayload(BaseModel):
+    device_id: str
+
+
+@router.post("/portal/commands/restart-agent")
+async def portal_restart_agent(body: RestartAgentPayload, db: AsyncSession = Depends(get_db)):
+    """Portal: queue a restart_agent command — agent restarts and immediately sends full inventory."""
+    result = await db.execute(select(Device).where(Device.id == body.device_id))
+    device = result.scalar_one_or_none()
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    cmd = DeviceCommand(
+        device_id=body.device_id,
+        command_type="restart_agent",
+        payload=_json.dumps({}),
+    )
+    db.add(cmd)
+    await db.commit()
+    return {"status": "queued", "command_id": cmd.id}
 
 
 # ── Decommission ──────────────────────────────────────────────────────────────

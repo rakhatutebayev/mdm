@@ -640,6 +640,7 @@ def collect_heartbeat_payload(config) -> dict[str, Any]:
         "agent_version": config.agent_version,
         "os_version": _get_os_version(),
         "ip_address": _first_ipv4(),
+        "device_name": socket.gethostname(),  # keeps portal in sync after rename+reboot
     }
 
 
