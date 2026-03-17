@@ -20,6 +20,9 @@ jobs:
           port:     22
           script: |
             set -e
+            echo "==> Setting server timezone to Asia/Dubai (UTC+4)..."
+            timedatectl set-timezone Asia/Dubai || true
+
             echo "==> Pulling latest code..."
             cd /opt/nocko-mdm
             git pull origin main || git pull origin master
@@ -35,3 +38,4 @@ jobs:
 
             echo "==> Done! Services:"
             docker compose ps
+            echo "==> Server time: $(date)"
