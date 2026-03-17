@@ -223,11 +223,117 @@ def _first_mac() -> str:
     return ""
 
 
-def _to_gb(value: Any) -> float | None:
+def _to_gb(value: Any, precision: int = 2) -> float | None:
     try:
-        return round(int(value) / (1024 ** 3), 2)
+        return round(int(value) / (1024 ** 3), precision)
     except Exception:
         return None
+
+
+def _normalize_gpu_name(value: str) -> str:
+    return "".join(ch for ch in str(value or "").upper() if ch.isalnum())
+
+
+def _gpu_vram_gb_from_registry(preferred_name: str) -> float | None:
+    """Read dedicated GPU memory from the Windows video driver registry when available."""
+    if os.name != "nt":
+        return None
+
+    try:
+        import winreg
+    except Exception:
+        return None
+
+    preferred_norm = _normalize_gpu_name(preferred_name)
+    root_path = r"SYSTEM\CurrentControlSet\Control\Video"
+    best_match: tuple[int, float] | None = None
+
+    def _read_memory_gb(key) -> float | None:
+        for value_name in ("HardwareInformation.qwMemorySize", "HardwareInformation.MemorySize"):
+            try:
+                raw_value, _ = winreg.QueryValueEx(key, value_name)
+            except OSError:
+                continue
+
+            if isinstance(raw_value, int) and raw_value > 0:
+                return _to_gb(raw_value, precision=3)
+            if isinstance(raw_value, bytes) and raw_value:
+                try:
+                    return _to_gb(int.from_bytes(raw_value, byteorder="little"), precision=3)
+                except Exception:
+                    continue
+        return None
+
+    try:
+        root_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, root_path)
+    except OSError:
+        return None
+
+    root_index = 0
+    while True:
+        try:
+            adapter_branch = winreg.EnumKey(root_key, root_index)
+        except OSError:
+            break
+        root_index += 1
+
+        branch_key = None
+        try:
+            branch_key = winreg.OpenKey(root_key, adapter_branch)
+            child_index = 0
+            while True:
+                try:
+                    child_name = winreg.EnumKey(branch_key, child_index)
+                except OSError:
+                    break
+                child_index += 1
+
+                if not child_name.isdigit():
+                    continue
+
+                child_key = None
+                try:
+                    child_key = winreg.OpenKey(branch_key, child_name)
+                    memory_gb = _read_memory_gb(child_key)
+                    if memory_gb is None:
+                        continue
+
+                    descriptor_parts: list[str] = []
+                    for descriptor_name in ("DriverDesc", "HardwareInformation.AdapterString", "ProviderName"):
+                        try:
+                            descriptor_value, _ = winreg.QueryValueEx(child_key, descriptor_name)
+                        except OSError:
+                            continue
+                        descriptor_parts.append(str(descriptor_value or ""))
+
+                    descriptor_norm = _normalize_gpu_name(" ".join(descriptor_parts))
+                    score = 1 if descriptor_norm else 0
+                    if preferred_norm and preferred_norm and preferred_norm in descriptor_norm:
+                        score = 3
+                    elif preferred_norm and descriptor_norm and any(
+                        token and token in descriptor_norm for token in (
+                            preferred_norm[:24],
+                            preferred_norm[:16],
+                            preferred_norm[:12],
+                        )
+                    ):
+                        score = 2
+
+                    if best_match is None or score > best_match[0]:
+                        best_match = (score, memory_gb)
+                except OSError:
+                    continue
+                finally:
+                    if child_key is not None:
+                        winreg.CloseKey(child_key)
+        except OSError:
+            continue
+        finally:
+            if branch_key is not None:
+                winreg.CloseKey(branch_key)
+
+    winreg.CloseKey(root_key)
+    return best_match[1] if best_match is not None else None
 
 
 def _machine_class(manufacturer: str, model: str) -> str:
@@ -356,9 +462,11 @@ def _collect_windows_inventory() -> dict[str, Any]:
                 vc = vcs[0]  # primary GPU
                 gpu_model = str(getattr(vc, "Name", "") or "").strip()
                 gpu_driver_version = str(getattr(vc, "DriverVersion", "") or "").strip()
-                ram_bytes = int(getattr(vc, "AdapterRAM", 0) or 0)
-                if ram_bytes > 0:
-                    gpu_vram_gb = round(ram_bytes / (1024 ** 3), 1)
+                gpu_vram_gb = _gpu_vram_gb_from_registry(gpu_model)
+                if gpu_vram_gb is None:
+                    ram_bytes = int(getattr(vc, "AdapterRAM", 0) or 0)
+                    if ram_bytes > 0:
+                        gpu_vram_gb = _to_gb(ram_bytes, precision=3)
                 name_upper = gpu_model.upper()
                 if "NVIDIA" in name_upper:
                     gpu_manufacturer = "NVIDIA"
