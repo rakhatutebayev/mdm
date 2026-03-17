@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.1.1")
+AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.1.2")
 WINDOWS_SERVICE_NAME = "NOCKOAgent"
 EMBEDDED_CONFIG_MAGIC = b"NOCKO_CFG_V1"
 UNINSTALL_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOAgent"

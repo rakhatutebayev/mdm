@@ -388,8 +388,11 @@ def _collect_windows_inventory() -> dict[str, Any]:
             "gpu_driver_version": gpu_driver_version,
         }
 
-        # Build MSFT_PhysicalDisk index for accurate MediaType/BusType (NVMe vs SCSI etc.)
-        msft_disk_map: dict[str, tuple[str, str]] = {}  # serial -> (media_type, bus_type)
+        # Build MSFT_PhysicalDisk index: key = normalized serial (no spaces/underscores/dots)
+        def _norm_serial(s: str) -> str:
+            return "".join(c for c in s if c.isalnum()).upper()
+
+        msft_disk_map: dict[str, tuple[str, str]] = {}
         try:
             msft_wmi = wmi.WMI(namespace="root\\microsoft\\windows\\storage")
             _media = {3: "HDD", 4: "SSD", 5: "SCM"}
@@ -397,7 +400,7 @@ def _collect_windows_inventory() -> dict[str, Any]:
                       10: "SAS", 11: "SATA", 12: "SATA", 13: "SATA", 14: "SD",
                       15: "MMC", 17: "NVMe", 18: "Virtual"}
             for pd in msft_wmi.MSFT_PhysicalDisk():
-                sn = str(getattr(pd, "SerialNumber", "") or "").strip()
+                sn = _norm_serial(str(getattr(pd, "SerialNumber", "") or ""))
                 mt = _media.get(int(getattr(pd, "MediaType", 0) or 0), "")
                 bt = _bus.get(int(getattr(pd, "BusType", 0) or 0), "")
                 if sn:
@@ -407,21 +410,29 @@ def _collect_windows_inventory() -> dict[str, Any]:
 
         physical_disk_items = []
         for disk in physical_disks:
-            sn = str(getattr(disk, "SerialNumber", "") or "").strip()
+            raw_sn    = str(getattr(disk, "SerialNumber", "") or "").strip()
+            model_name = str(getattr(disk, "Model", "") or "").strip()
             fallback_media = str(getattr(disk, "MediaType", "") or "").strip()
             fallback_iface = str(getattr(disk, "InterfaceType", "") or "").strip()
-            msft_media, msft_iface = msft_disk_map.get(sn, ("", ""))
-            # If model name contains NVMe keyword, always use NVMe
-            model_name = str(getattr(disk, "Model", "") or "").strip()
-            if not msft_iface and "nvme" in model_name.lower():
+            msft_media, msft_iface = msft_disk_map.get(_norm_serial(raw_sn), ("", ""))
+
+            # Model name is the most reliable source — always overrides MSFT/WMI
+            mn_lower = model_name.lower()
+            if "nvme" in mn_lower:
                 msft_iface = "NVMe"
+                msft_media = msft_media or "SSD"
+            elif any(k in mn_lower for k in ("ssd", "solid state", "emmc")):
+                msft_media = msft_media or "SSD"
+                if not msft_iface or msft_iface == "SCSI":
+                    msft_iface = "SATA"
+
             physical_disk_items.append({
-                "disk_index":   int(getattr(disk, "Index", 0)) if str(getattr(disk, "Index", "")).isdigit() else None,
-                "model":        model_name,
-                "serial_number": sn,
-                "media_type":   msft_media or fallback_media,
+                "disk_index":     int(getattr(disk, "Index", 0)) if str(getattr(disk, "Index", "")).isdigit() else None,
+                "model":          model_name,
+                "serial_number":  raw_sn,
+                "media_type":     msft_media or fallback_media,
                 "interface_type": msft_iface or fallback_iface,
-                "size_gb":      _to_gb(getattr(disk, "Size", 0)),
+                "size_gb":        _to_gb(getattr(disk, "Size", 0)),
             })
 
         logical_disk_items = []
