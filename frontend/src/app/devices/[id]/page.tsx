@@ -46,8 +46,12 @@ function gaugeColor(p: number): string {
   return '#ef4444';
 }
 
-function formatGb(value: number | null | undefined) {
-  return value == null ? '—' : `${value.toFixed(2)} GB`;
+function formatStorage(valueGb: number | null | undefined) {
+  if (valueGb == null) return '—';
+  const abs = Math.abs(valueGb);
+  if (abs >= 1024) return `${(valueGb / 1024).toFixed(2)} TB`;
+  if (abs >= 1) return `${valueGb.toFixed(2)} GB`;
+  return `${Math.round(valueGb * 1024)} MB`;
 }
 
 // ── Gauge Component ───────────────────────────────────────────────────────────
@@ -61,7 +65,7 @@ function Gauge({ label, value, unit, used, total, colorByPct = true }: {
 }) {
   const color = colorByPct ? gaugeColor(value) : '#4a7cff';
   const subtitle = (used != null && total != null)
-    ? `${used.toFixed(1)} / ${total.toFixed(1)} ${unit ?? 'GB'}`
+    ? `${formatStorage(used)} / ${formatStorage(total)}`
     : `${value}${unit ?? '%'}`;
 
   return (
@@ -429,7 +433,7 @@ export default function DeviceDetailPage() {
     'Processor Vendor': device.hardware_inventory.processor_vendor || '—',
     'Physical Cores': device.hardware_inventory.physical_cores != null ? String(device.hardware_inventory.physical_cores) : '—',
     'Logical Processors': device.hardware_inventory.logical_processors != null ? String(device.hardware_inventory.logical_processors) : '—',
-    'Memory Total': formatGb(device.hardware_inventory.memory_total_gb),
+    'Memory Total': formatStorage(device.hardware_inventory.memory_total_gb),
     'Memory Slots': device.hardware_inventory.memory_slot_count != null ? String(device.hardware_inventory.memory_slot_count) : '—',
     'Memory Slots Used': device.hardware_inventory.memory_slots_used != null ? String(device.hardware_inventory.memory_slots_used) : '—',
     'Memory Modules': device.hardware_inventory.memory_module_count != null ? String(device.hardware_inventory.memory_module_count) : '—',
@@ -438,7 +442,7 @@ export default function DeviceDetailPage() {
     ...(device.hardware_inventory.gpu_model ? {
       'GPU Model': device.hardware_inventory.gpu_model,
       'GPU Manufacturer': device.hardware_inventory.gpu_manufacturer || '—',
-      'GPU VRAM': device.hardware_inventory.gpu_vram_gb != null ? `${device.hardware_inventory.gpu_vram_gb} GB` : '—',
+      'GPU VRAM': formatStorage(device.hardware_inventory.gpu_vram_gb),
       'GPU Driver': device.hardware_inventory.gpu_driver_version || '—',
     } : {}),
   } : { 'Hardware Info': 'No hardware inventory data available' };
@@ -473,7 +477,7 @@ export default function DeviceDetailPage() {
           'Disk Count': String(device.physical_disks.length),
           ...Object.fromEntries(device.physical_disks.flatMap((disk, idx) => [
             [`Disk ${idx + 1} — Model`, disk.model || '—'],
-            [`Disk ${idx + 1} — Size`, formatGb(disk.size_gb)],
+            [`Disk ${idx + 1} — Size`, formatStorage(disk.size_gb)],
             [`Disk ${idx + 1} — Media Type`, disk.media_type || '—'],
             [`Disk ${idx + 1} — Interface`, disk.interface_type || '—'],
           ])),
@@ -490,9 +494,9 @@ export default function DeviceDetailPage() {
             [`${disk.name} — Volume`, disk.volume_name || '—'],
             [`${disk.name} — File System`, disk.file_system || '—'],
             [`${disk.name} — Drive Type`, disk.drive_type || '—'],
-            [`${disk.name} — Size`, formatGb(disk.size_gb)],
-            [`${disk.name} — Free`, formatGb(disk.free_gb)],
-            [`${disk.name} — Used`, formatGb(disk.used_gb)],
+            [`${disk.name} — Size`, formatStorage(disk.size_gb)],
+            [`${disk.name} — Free`, formatStorage(disk.free_gb)],
+            [`${disk.name} — Used`, formatStorage(disk.used_gb)],
           ])),
         },
       }];
@@ -950,15 +954,15 @@ export default function DeviceDetailPage() {
                   {metrics.logical_disks.flatMap((disk) => ([
                     <div key={`${disk.name}-used`} className={styles.dlRow}>
                       <dt className={styles.dt}>{disk.name} Used</dt>
-                      <dd className={styles.dd}>{formatGb(disk.used_gb)}</dd>
+                      <dd className={styles.dd}>{formatStorage(disk.used_gb)}</dd>
                     </div>,
                     <div key={`${disk.name}-free`} className={styles.dlRow}>
                       <dt className={styles.dt}>{disk.name} Free</dt>
-                      <dd className={styles.dd}>{formatGb(disk.free_gb)}</dd>
+                      <dd className={styles.dd}>{formatStorage(disk.free_gb)}</dd>
                     </div>,
                     <div key={`${disk.name}-total`} className={styles.dlRow}>
                       <dt className={styles.dt}>{disk.name} Total</dt>
-                      <dd className={styles.dd}>{formatGb(disk.size_gb)}</dd>
+                      <dd className={styles.dd}>{formatStorage(disk.size_gb)}</dd>
                     </div>,
                   ]))}
                 </dl>
