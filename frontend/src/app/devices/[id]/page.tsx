@@ -138,6 +138,14 @@ export default function DeviceDetailPage() {
     }
   }, [id, fetchMetrics]);
 
+  // Silent background refresh — does NOT set loading=true so modals stay visible
+  const refreshDeviceSilent = useCallback(async () => {
+    try {
+      const dev = await getDevice(id);
+      setDevice(dev);
+    } catch { /* ignore background errors */ }
+  }, [id]);
+
   useEffect(() => {
     void loadDevice();
   }, [loadDevice]);
@@ -264,12 +272,12 @@ export default function DeviceDetailPage() {
               setUpdateStatus(s => s ? { ...s, phase: 'timeout' } : null);
               return;
             }
-            void loadDevice();  // triggers device state update → useEffect below detects version match
+            void refreshDeviceSilent();  // silent poll — no loading spinner, modal stays visible
           }, 10000);
         }
       } catch { /* keep polling */ }
     }, 5000);
-  }, [stopUpdatePolling, loadDevice]);
+  }, [stopUpdatePolling, loadDevice, refreshDeviceSilent]);
 
 
   const handleUpdateAgent = async () => {
