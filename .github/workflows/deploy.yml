@@ -32,6 +32,20 @@ jobs:
             docker compose pull
             docker compose up -d --build --force-recreate --remove-orphans
 
+            echo "==> Starting EMQX (MQTT broker)..."
+            docker compose -f docker-compose.mqtt.yml up -d --remove-orphans || true
+
+            echo "==> Configuring Nginx for MQTT over WebSocket (WSS /mqtt)..."
+            NGINX_CONF=$(grep -rl "mdm.nocko.com" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1 || true)
+            if [ -z "$NGINX_CONF" ]; then
+              NGINX_CONF=$(grep -rl "mdm.nocko.com" /etc/nginx/ 2>/dev/null | grep -v ".bak" | head -1 || true)
+            fi
+            echo "Nginx config found: ${NGINX_CONF:-not found}"
+            if [ -n "$NGINX_CONF" ]; then
+              python3 /opt/nocko-mdm/scripts/inject_nginx_mqtt.py "$NGINX_CONF" || true
+            fi
+            nginx -t && nginx -s reload || true
+
             echo "==> Refreshing seed data (tables auto-created on startup)..."
             sleep 5
             docker compose exec -T backend python seed.py || true
