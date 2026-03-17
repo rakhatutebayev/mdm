@@ -772,6 +772,14 @@ async def portal_restart_agent(body: RestartAgentPayload, db: AsyncSession = Dep
     return {"status": "queued", "command_id": cmd.id}
 
 
+@router.get("/portal/latest-version")
+async def portal_latest_version():
+    """Return the latest agent version from the release catalog (for UI display)."""
+    from package_builder.release_catalog import find_artifact
+    release, _ = find_artifact("exe", "x64")
+    return {"version": str(release.get("version", "")) if release else None}
+
+
 # ── Decommission ──────────────────────────────────────────────────────────────
 
 class DecommissionPayload(BaseModel):

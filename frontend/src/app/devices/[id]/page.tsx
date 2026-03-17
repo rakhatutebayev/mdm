@@ -213,9 +213,10 @@ export default function DeviceDetailPage() {
   };
 
   // ── Update Agent state ─────────────────────────────────────────────────────
-  const [updateOpen, setUpdateOpen]       = useState(false);
-  const [updating, setUpdating]           = useState(false);
-  const [updateStatus, setUpdateStatus]   = useState<null | {
+  const [updateOpen, setUpdateOpen]           = useState(false);
+  const [updating, setUpdating]               = useState(false);
+  const [latestAgentVersion, setLatestAgentVersion] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus]       = useState<null | {
     phase: 'queued' | 'pending' | 'sent' | 'acked' | 'failed' | 'timeout';
     commandId: string;
     result?: string | null;
@@ -261,6 +262,7 @@ export default function DeviceDetailPage() {
       if (!res.ok) throw new Error(data.detail || 'Failed');
       const cid = data.command_id as string;
       const tv  = data.target_version as string;
+      setLatestAgentVersion(tv); // confirm actual version sent
       setUpdateStatus({ phase: 'queued', commandId: cid, targetVersion: tv });
       startUpdatePolling(cid, tv);
     } catch (e: unknown) {
@@ -268,6 +270,18 @@ export default function DeviceDetailPage() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const openUpdateModal = async () => {
+    setLatestAgentVersion(null);
+    setUpdateOpen(true);
+    try {
+      const r = await fetch('/api/mdm/mdm/windows/portal/latest-version');
+      if (r.ok) {
+        const d = await r.json();
+        setLatestAgentVersion(d.version || null);
+      }
+    } catch { /* non-fatal */ }
   };
 
   // ── Restart Agent state ───────────────────────────────────────────────────
@@ -574,7 +588,7 @@ export default function DeviceDetailPage() {
                     <div style={{ height: 1, background: '#2a2d3a', margin: '0 12px' }} />
                     {/* Update Agent */}
                     <button
-                      onClick={() => { setActionsOpen(false); setUpdateOpen(true); setUpdateStatus(null); stopUpdatePolling(); }}
+                      onClick={() => { setActionsOpen(false); setUpdateStatus(null); stopUpdatePolling(); openUpdateModal(); }}
                       style={{ width: '100%', background: 'none', border: 'none', color: '#cbd5e1', padding: '11px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, textAlign: 'left' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(74,124,255,0.12)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
@@ -616,7 +630,14 @@ export default function DeviceDetailPage() {
             <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🔄 Remote Agent Update</h3>
             <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 13 }}>
               Current version: <strong style={{ color: '#cbd5e1' }}>{device.agent_version || '—'}</strong><br/>
-              The server will send a command to install the latest version. The agent will download and reinstall itself.
+              {' → '}
+              {latestAgentVersion === null
+                ? <span style={{ color: '#64748b' }}>checking…</span>
+                : <strong style={{ color: device.agent_version === latestAgentVersion ? '#94a3b8' : '#22c55e' }}>
+                    {device.agent_version === latestAgentVersion ? `${latestAgentVersion} (already latest)` : latestAgentVersion}
+                  </strong>
+              }
+              <br/>The agent will download and reinstall itself automatically.
             </p>
             {/* Live status tracker */}
             {updateStatus && (
