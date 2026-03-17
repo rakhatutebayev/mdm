@@ -171,6 +171,35 @@ def _collect_monitors() -> list[dict]:
     return monitors
 
 
+def _get_os_version() -> str:
+    """Return a clean OS version string. Correctly distinguishes Windows 10 vs 11."""
+    import platform as _platform
+    if os.name != "nt":
+        return _platform.platform()
+
+    try:
+        build = int(_platform.version().split(".")[-1])
+        win_version = "Windows 11" if build >= 22000 else "Windows 10"
+
+        # Try to get edition (Pro/Home/Enterprise) from registry
+        edition = ""
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                 r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+            edition, _ = winreg.QueryValueEx(key, "EditionID")
+            winreg.CloseKey(key)
+        except Exception:
+            pass
+
+        if edition:
+            return f"{win_version} {edition} (Build {build})"
+        return f"{win_version} (Build {build})"
+    except Exception:
+        import platform as _platform
+        return _platform.platform()
+
+
 def _safe(callable_obj, fallback: Any = "") -> Any:
     try:
         return callable_obj()
@@ -378,7 +407,7 @@ def _identity_payload(config) -> dict[str, Any]:
         "manufacturer": windows_inventory.get("manufacturer") or platform.node(),
         "serial_number": windows_inventory.get("serial_number") or "",
         "udid": hex(uuid.getnode())[2:].upper(),
-        "os_version": platform.platform(),
+        "os_version": _get_os_version(),
         "architecture": platform.machine(),
         "owner": os.getenv("USERNAME", ""),
         "enrollment_method": "WindowsService",
@@ -417,7 +446,7 @@ def collect_heartbeat_payload(config) -> dict[str, Any]:
     return {
         "device_id": config.device_id,
         "agent_version": config.agent_version,
-        "os_version": platform.platform(),
+        "os_version": _get_os_version(),
         "ip_address": _first_ipv4(),
     }
 
