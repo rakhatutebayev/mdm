@@ -74,11 +74,17 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
         return "failed", "download_url is missing in payload"
 
     try:
+        import ssl
+
         logger.info("Downloading agent update v%s from %s", target_version, download_url)
         tmp_dir  = tempfile.mkdtemp(prefix="nocko_update_")
         exe_path = os.path.join(tmp_dir, f"nocko-agent-{target_version}.exe")
 
-        urllib.request.urlretrieve(download_url, exe_path)
+        # Skip SSL verification — Windows Python often lacks corporate CA bundle
+        ssl_ctx = ssl._create_unverified_context()
+        with urllib.request.urlopen(download_url, context=ssl_ctx, timeout=120) as resp:
+            with open(exe_path, "wb") as f:
+                f.write(resp.read())
         logger.info("Downloaded %d bytes to %s", os.path.getsize(exe_path), exe_path)
 
         # Launch elevated — new EXE detects existing install and reinstalls

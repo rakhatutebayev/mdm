@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 import requests
+import urllib3
 
 from config import AgentConfig
 from device_info import (
@@ -13,12 +14,17 @@ from device_info import (
     collect_metrics_payload,
 )
 
+# Suppress InsecureRequestWarning — we intentionally skip SSL verification
+# because Windows Python bundles often lack corporate/intermediate CA certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 class MdmAgentClient:
     def __init__(self, config: AgentConfig, logger: logging.Logger) -> None:
         self.config = config
         self.logger = logger
         self.session = requests.Session()
+        self.session.verify = False  # skip SSL cert chain validation
         self.session.headers.update({"User-Agent": f"NOCKO-Agent/{config.agent_version}"})
 
     @property
