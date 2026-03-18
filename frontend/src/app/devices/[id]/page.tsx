@@ -451,7 +451,7 @@ export default function DeviceDetailPage() {
     'Enrollment Method': device.enrollment_method,
     'Enrolled Time':     device.enrolled_at ? new Date(device.enrolled_at).toLocaleString() : '—',
     'MDM Status':        device.status,
-    'Agent Version':     device.agent_version || '—',
+    'Installed Agent Version': device.agent_version || '—',
     'Customer':          device.customer_name || customer,
   };
 
@@ -671,7 +671,7 @@ export default function DeviceDetailPage() {
           <div style={{ background: '#1a1d2e', border: '1px solid #2a2d3a', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
             <h3 style={{ margin: '0 0 6px', color: '#f1f5f9', fontSize: 16 }}>🔄 Remote Agent Update</h3>
             <p style={{ margin: '0 0 20px', color: '#94a3b8', fontSize: 13 }}>
-              Current version: <strong style={{ color: '#cbd5e1' }}>{device.agent_version || '—'}</strong><br/>
+              Installed version: <strong style={{ color: '#cbd5e1' }}>{device.agent_version || '—'}</strong><br/>
               {' → '}
               {latestAgentVersion === null
                 ? <span style={{ color: '#64748b' }}>checking…</span>
@@ -679,6 +679,12 @@ export default function DeviceDetailPage() {
                     {device.agent_version === latestAgentVersion ? `${latestAgentVersion} (already latest)` : latestAgentVersion}
                   </strong>
               }
+              {latestAgentVersion !== null && (
+                <>
+                  <br/>
+                  Latest available version: <strong style={{ color: '#cbd5e1' }}>{latestAgentVersion}</strong>
+                </>
+              )}
               <br/>The agent will download and reinstall itself automatically.
             </p>
             {/* Live status tracker */}
