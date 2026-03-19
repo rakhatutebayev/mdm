@@ -54,6 +54,12 @@ function formatStorage(valueGb: number | null | undefined) {
   return `${Math.round(valueGb * 1024)} MB`;
 }
 
+function formatEnrollmentMethod(platform: string | null | undefined, agentVersion: string | null | undefined) {
+  const platformLabel = (platform || '').trim() || 'Windows';
+  const versionLabel = (agentVersion || '').trim();
+  return versionLabel ? `${platformLabel} Agent ${versionLabel}` : `${platformLabel} Agent`;
+}
+
 // ── Gauge Component ───────────────────────────────────────────────────────────
 function Gauge({ label, value, unit, used, total, colorByPct = true }: {
   label: string;
@@ -448,7 +454,7 @@ export default function DeviceDetailPage() {
   } : { 'Hardware Info': 'No hardware inventory data available' };
 
   const mdmSec: Record<string, string> = {
-    'Enrollment Method': device.enrollment_method,
+    'Enrollment Method': formatEnrollmentMethod(device.platform, device.agent_version),
     'Enrolled Time':     device.enrolled_at ? new Date(device.enrolled_at).toLocaleString() : '—',
     'MDM Status':        device.status,
     'Agent Version':     device.agent_version || '—',
