@@ -114,7 +114,7 @@ if (Test-Path $configFile) {
         Write-Log "Already enrolled. device_id=$($existing.device_id). Running checkin..."
         try {
             Invoke-RestMethod -Uri "$APIBase/mdm/windows/checkin" -Method POST -ContentType "application/json" `
-                -Body (ConvertTo-Json @{ device_id = $existing.device_id; agent_version = "1.0.0" }) | Out-Null
+                -Body (ConvertTo-Json @{ device_id = $existing.device_id; agent_version = "{{ agent_version }}" }) | Out-Null
             Write-Log "Checkin OK."
         } catch { Write-Log "Checkin failed (non-fatal): $_" }
         exit 0
@@ -226,7 +226,7 @@ $payload = @{
     architecture       = $arch
     owner              = ""
     enrollment_method  = "Agent"
-    agent_version      = "1.0.0"
+    agent_version      = "{{ agent_version }}"
     network            = $network
     monitors           = @()
     hardware_inventory = $hwInventory
@@ -267,7 +267,7 @@ try {
     token         = $Token
     customer_id   = $CustomerID
     device_id     = $deviceId
-    agent_version = "1.0.0"
+    agent_version = "{{ agent_version }}"
     installed_at  = (Get-Date -Format "o")
 } | ConvertTo-Json | Set-Content -Path $configFile -Encoding UTF8
 Write-Log "Config saved to $configFile"
@@ -305,7 +305,7 @@ try {
         -Method POST -ContentType 'application/json' ``
         -Body (ConvertTo-Json @{
             device_id      = `$config.device_id
-            agent_version  = '1.0.0'
+            agent_version  = '{{ agent_version }}'
             ip_address     = `$ip
             cpu_pct        = `$cpu
             ram_used_gb    = `$ramUsedGB

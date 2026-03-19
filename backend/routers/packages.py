@@ -226,6 +226,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
     # Resolve artifact version up-front so bootstrap_config carries it
     _catalog_release, _catalog_artifact = find_artifact("exe", body.arch)
     _agent_version = str(_catalog_release.get("version", "")) if _catalog_release else ""
+    kwargs["agent_version"] = _agent_version
 
     # Derive MQTT host from server_url (same hostname, port 1883)
     _mqtt_host = server_url.replace("https://", "").replace("http://", "").split("/")[0]

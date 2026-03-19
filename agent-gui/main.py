@@ -112,6 +112,33 @@ def try_run(args: list[str]) -> bool:
         return False
 
 
+def cleanup_legacy_bootstrap_artifacts(logger, agent_display_name: str = "NOCKO MDM Agent") -> None:
+    """Remove old ZIP-bootstrap scheduled tasks that can report stale versions."""
+    if os.name != "nt":
+        return
+
+    task_names = {
+        f"{agent_display_name} Check-In",
+        "NOCKO MDM Agent Check-In",
+    }
+    for task_name in task_names:
+        try_run(["schtasks", "/Delete", "/TN", task_name, "/F"])
+
+    legacy_dirs = [
+        Path(r"C:\ProgramData\NOCKO MDM\logs"),
+        Path(r"C:\ProgramData\NOCKO MDM"),
+    ]
+    for legacy_dir in legacy_dirs:
+        for filename in ("checkin.ps1",):
+            try:
+                path = legacy_dir / filename
+                if path.exists():
+                    path.unlink()
+                    logger.info("Removed legacy bootstrap artifact %s", path)
+            except Exception as exc:
+                logger.warning("Could not remove legacy bootstrap artifact in %s: %s", legacy_dir, exc)
+
+
 def prepare_installed_binary(current_exe: Path, target_exe: Path, logger) -> Path:
     if current_exe == target_exe.resolve():
         return target_exe
@@ -247,6 +274,7 @@ def cleanup_previous_installation(target_exe: Path, logger) -> None:
     except PermissionError:
         logger.warning("Could not delete locked EXE — will be overwritten on next boot")
     remove_uninstall_entry()
+    cleanup_legacy_bootstrap_artifacts(logger)
 
 
 def bootstrap_install_from_embedded_config() -> int:
@@ -269,6 +297,7 @@ def bootstrap_install_from_embedded_config() -> int:
     config = AgentConfig(**{**AgentConfig().__dict__, **embedded})
     config.save()
     logger = configure_logging(config.log_level, config.log_dir)
+    cleanup_legacy_bootstrap_artifacts(logger, config.agent_display_name)
 
     target_dir = Path(config.install_dir)
     target_dir.mkdir(parents=True, exist_ok=True)

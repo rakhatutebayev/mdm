@@ -33,6 +33,7 @@ def build_zip(
     commands_interval: int = 45,
     log_level: str = "INFO",
     siem_enabled: bool = False,
+    agent_version: str = "",
 ) -> bytes:
     """Return ZIP file bytes containing install.ps1, config.json, README.txt."""
 
@@ -48,6 +49,7 @@ def build_zip(
         log_dir=log_dir,
         register_scheduled_task=register_scheduled_task,
         start_immediately=start_immediately,
+        agent_version=agent_version,
     )
 
     install_ps1 = _jinja.get_template("install.ps1.j2").render(**ctx)
@@ -67,7 +69,7 @@ def build_zip(
             "backup_enabled": False,
             "remote_enabled": False,
             "log_level": log_level,
-            "agent_version": "",
+            "agent_version": agent_version,
             "device_id": "",
             "install_dir": install_dir,
             "log_dir": log_dir,

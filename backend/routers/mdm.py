@@ -237,22 +237,22 @@ async def _effective_agent_version(
     db: AsyncSession,
 ) -> str:
     reported = str(reported_version or "").strip()
-    if not reported:
-        return ""
-
     current = str(current_version or "").strip()
-    if reported != KNOWN_AGENT_VERSION_FALLBACK:
+    hinted = await _latest_acked_update_version(device_id, db)
+
+    versions = [v for v in (reported, current, hinted) if v]
+    parsed_versions = [(v, _version_tuple(v)) for v in versions]
+    comparable_versions = [(v, parsed) for v, parsed in parsed_versions if parsed]
+    if comparable_versions:
+        return max(comparable_versions, key=lambda item: item[1])[0]
+
+    if reported and reported != KNOWN_AGENT_VERSION_FALLBACK:
         return reported
 
-    hinted = await _latest_acked_update_version(device_id, db)
-    hinted_tuple = _version_tuple(hinted)
-    reported_tuple = _version_tuple(reported)
-    current_tuple = _version_tuple(current)
-
-    if hinted_tuple and reported_tuple and hinted_tuple > reported_tuple:
-        return hinted
-    if current_tuple and reported_tuple and current_tuple > reported_tuple:
+    if current:
         return current
+    if hinted:
+        return hinted
     return reported
 
 
