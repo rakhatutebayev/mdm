@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 import struct
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-AGENT_VERSION = os.getenv("NOCKO_AGENT_VERSION", "1.2.0")
+AGENT_VERSION = (os.getenv("NOCKO_AGENT_VERSION", "") or "").strip() or "1.2.0"
 WINDOWS_SERVICE_NAME = "NOCKOAgent"
 EMBEDDED_CONFIG_MAGIC = b"NOCKO_CFG_V1"
 UNINSTALL_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOAgent"
@@ -69,6 +70,7 @@ class AgentConfig:
         config_path = path or cls.config_path()
         if not config_path.exists():
             config = cls()
+            config.agent_version = resolve_agent_version(persisted_version=config.agent_version)
             config.save(config_path)
             return config
 
@@ -90,10 +92,9 @@ class AgentConfig:
             merged["tls_allow_insecure_fallback"] = True
         if "mqtt_tls_allow_insecure_fallback" not in raw:
             merged["mqtt_tls_allow_insecure_fallback"] = True
-        # The running binary is the source of truth for agent version. This
-        # prevents a stale config.json from pinning the portal to an old version
-        # after a self-update replaced the executable successfully.
-        merged["agent_version"] = AGENT_VERSION
+        merged["agent_version"] = resolve_agent_version(
+            persisted_version=str(raw.get("agent_version", "") or ""),
+        )
         return cls(**merged)  # type: ignore[arg-type]
 
     def save(self, path: Path | None = None) -> Path:
@@ -144,6 +145,35 @@ def read_embedded_config(executable_path: str | Path) -> dict | None:
         fh.seek(-(footer_size + payload_size), 2)
         payload = fh.read(payload_size)
     return json.loads(payload.decode("utf-8"))
+
+
+def resolve_agent_version(
+    executable_path: str | Path | None = None,
+    persisted_version: str | None = None,
+) -> str:
+    """Resolve the effective runtime agent version.
+
+    Priority:
+    1. Explicit environment override during build/test.
+    2. Embedded bootstrap config from the current executable.
+    3. Persisted config.json version written at install/update time.
+    4. Fallback constant for legacy/manual runs.
+    """
+    env_version = (os.getenv("NOCKO_AGENT_VERSION", "") or "").strip()
+    if env_version:
+        return env_version
+
+    exe_path = Path(executable_path) if executable_path else Path(sys.executable)
+    embedded = read_embedded_config(exe_path)
+    embedded_version = str((embedded or {}).get("agent_version", "") or "").strip()
+    if embedded_version:
+        return embedded_version
+
+    persisted = str(persisted_version or "").strip()
+    if persisted:
+        return persisted
+
+    return AGENT_VERSION
 
 
 def write_executable_without_embedded_config(source_path: str | Path, target_path: str | Path) -> bool:

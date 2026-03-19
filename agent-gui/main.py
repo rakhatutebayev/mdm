@@ -16,6 +16,7 @@ from config import (
     AgentConfig,
     load_config,
     read_embedded_config,
+    resolve_agent_version,
     write_executable_without_embedded_config,
 )
 from logger import configure_logging
@@ -305,7 +306,7 @@ def main() -> int:
 
     args = parse_args()
     if args.version:
-        print(AGENT_VERSION)
+        print(resolve_agent_version())
         return 0
 
     if args.command == "uninstall":

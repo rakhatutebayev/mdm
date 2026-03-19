@@ -34,6 +34,7 @@ from models import (
 from package_builder.release_catalog import find_artifact
 
 router = APIRouter(prefix="/api/v1/mdm/windows", tags=["mdm-agent"])
+KNOWN_AGENT_VERSION_FALLBACK = "1.2.0"
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -198,6 +199,63 @@ async def _resolve_customer(customer_id: str, db: AsyncSession) -> Customer:
     return customer
 
 
+def _version_tuple(value: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for chunk in str(value or "").strip().split("."):
+        if not chunk.isdigit():
+            return ()
+        parts.append(int(chunk))
+    return tuple(parts)
+
+
+async def _latest_acked_update_version(device_id: str, db: AsyncSession) -> str:
+    result = await db.execute(
+        select(DeviceCommand)
+        .where(
+            DeviceCommand.device_id == device_id,
+            DeviceCommand.command_type == "update_agent",
+            DeviceCommand.status == "acked",
+        )
+        .order_by(DeviceCommand.acked_at.desc(), DeviceCommand.created_at.desc())
+        .limit(1)
+    )
+    cmd = result.scalar_one_or_none()
+    if not cmd or not cmd.payload:
+        return ""
+    try:
+        payload = _json.loads(cmd.payload)
+    except Exception:
+        return ""
+    return str(payload.get("target_version", "") or "").strip()
+
+
+async def _effective_agent_version(
+    *,
+    device_id: str,
+    current_version: str,
+    reported_version: str,
+    db: AsyncSession,
+) -> str:
+    reported = str(reported_version or "").strip()
+    if not reported:
+        return ""
+
+    current = str(current_version or "").strip()
+    if reported != KNOWN_AGENT_VERSION_FALLBACK:
+        return reported
+
+    hinted = await _latest_acked_update_version(device_id, db)
+    hinted_tuple = _version_tuple(hinted)
+    reported_tuple = _version_tuple(reported)
+    current_tuple = _version_tuple(current)
+
+    if hinted_tuple and reported_tuple and hinted_tuple > reported_tuple:
+        return hinted
+    if current_tuple and reported_tuple and current_tuple > reported_tuple:
+        return current
+    return reported
+
+
 async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayload, db: AsyncSession) -> None:
     device.device_name = body.device_name or device.device_name
     device.platform = body.platform or device.platform
@@ -212,7 +270,12 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
     device.shared_device = body.shared_device
     device.enrollment_method = body.enrollment_method
     if body.agent_version:
-        device.agent_version = body.agent_version
+        device.agent_version = await _effective_agent_version(
+            device_id=device.id,
+            current_version=device.agent_version,
+            reported_version=body.agent_version,
+            db=db,
+        )
 
     if body.network:
         net = body.network
@@ -502,7 +565,12 @@ async def checkin(body: CheckinPayload, db: AsyncSession = Depends(get_db)):
     # Update device fields
     device.last_checkin = datetime.utcnow()
     if body.agent_version:
-        device.agent_version = body.agent_version
+        device.agent_version = await _effective_agent_version(
+            device_id=device.id,
+            current_version=device.agent_version,
+            reported_version=body.agent_version,
+            db=db,
+        )
     if body.os_version:
         device.os_version = body.os_version
     if body.ip_address and device.network:
@@ -683,6 +751,18 @@ async def ack_command(body: CommandAckPayload, db: AsyncSession = Depends(get_db
     cmd.status = body.status
     cmd.result = body.result
     cmd.acked_at = datetime.utcnow()
+    if body.status == "acked" and cmd.command_type == "update_agent":
+        target_version = ""
+        try:
+            payload = _json.loads(cmd.payload or "{}")
+            target_version = str(payload.get("target_version", "") or "").strip()
+        except Exception:
+            target_version = ""
+        if target_version:
+            device_result = await db.execute(select(Device).where(Device.id == cmd.device_id))
+            device = device_result.scalar_one_or_none()
+            if device:
+                device.agent_version = target_version
     await db.commit()
     return {"status": "ok", "command_id": body.command_id}
 
