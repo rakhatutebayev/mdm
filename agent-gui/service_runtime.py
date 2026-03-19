@@ -6,7 +6,7 @@ import subprocess
 import threading
 import time
 
-from config import AgentConfig
+from config import AgentConfig, UNINSTALL_REGISTRY_KEY
 from modules.mdm import MdmAgentClient
 from modules.mqtt_listener import MqttListener, mark_seen
 
@@ -123,6 +123,7 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
 $ErrorActionPreference = 'Stop'
 $tempExe = [System.IO.Path]::GetTempFileName() + '.exe'
 $configPath = '{_ps_single_quote(str(AgentConfig.config_path()))}'
+$uninstallRegPath = 'HKLM:\\{_ps_single_quote(UNINSTALL_REGISTRY_KEY)}'
 $commandId = '{_ps_single_quote(command_id)}'
 $ackUrl = '{_ps_single_quote(config.server_url.rstrip("/") + "/api/v1/mdm/windows/commands/ack")}'
 
@@ -162,6 +163,10 @@ try {{
         $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
         $config.agent_version = '{_ps_single_quote(str(target_version))}'
         $config | ConvertTo-Json -Depth 8 | Set-Content -Path $configPath -Encoding UTF8
+    }}
+
+    if (Test-Path $uninstallRegPath) {{
+        Set-ItemProperty -Path $uninstallRegPath -Name 'DisplayVersion' -Value '{_ps_single_quote(str(target_version))}'
     }}
 
     # Start updated service
