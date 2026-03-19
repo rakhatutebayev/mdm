@@ -20,6 +20,12 @@ const COLUMNS = [
   { key: 'actions', label: 'Actions', visible: true },
 ];
 
+function formatEnrollmentMethod(platform: string | null | undefined, agentVersion: string | null | undefined) {
+  const platformLabel = (platform || '').trim() || 'Windows';
+  const versionLabel = (agentVersion || '').trim();
+  return versionLabel ? `${platformLabel} Agent ${versionLabel}` : `${platformLabel} Agent`;
+}
+
 
 export default function EnrollmentDevicesPage() {
   const searchParams = useSearchParams();
@@ -342,11 +348,8 @@ export default function EnrollmentDevicesPage() {
                       : col.key === 'enrollmentMethod' ? (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                           <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                            {d.enrollment_method === 'agent' ? 'Agent' : d.enrollment_method || '—'}
+                            {formatEnrollmentMethod(d.platform, d.agent_version)}
                           </span>
-                          {d.enrollment_method === 'agent' && d.agent_version && (
-                            <span style={{ fontSize: 12, color: '#64748b' }}>v{d.agent_version}</span>
-                          )}
                         </span>
                       ) : col.key === 'enrolledTime' ? (d.enrolled_at ? new Date(d.enrolled_at).toLocaleString() : '—')
                       : col.key === 'lastUpdate' ? (d.last_checkin ? new Date(d.last_checkin).toLocaleString() : '—')
