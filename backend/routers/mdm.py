@@ -759,17 +759,28 @@ async def portal_update_agent(body: UpdateAgentPayload, db: AsyncSession = Depen
 
     target_version = str(release.get("version", ""))
     download_url   = str(artifact.get("url", ""))
+    sha256         = str(artifact.get("sha256", "") or "")
+    if not sha256:
+        raise HTTPException(status_code=500, detail="Release artifact is missing sha256")
 
     cmd = DeviceCommand(
         device_id=body.device_id,
         command_type="update_agent",
-        payload=_json.dumps({"download_url": download_url, "target_version": target_version}),
+        payload=_json.dumps({
+            "download_url": download_url,
+            "target_version": target_version,
+            "sha256": sha256,
+        }),
     )
     db.add(cmd)
     await db.commit()
     asyncio.create_task(_mqtt_publish(
         body.device_id,
-        {"id": cmd.id, "type": "update_agent", "payload": {"download_url": download_url, "target_version": target_version}},
+        {"id": cmd.id, "type": "update_agent", "payload": {
+            "download_url": download_url,
+            "target_version": target_version,
+            "sha256": sha256,
+        }},
     ))
     return {"status": "queued", "command_id": cmd.id, "target_version": target_version}
 

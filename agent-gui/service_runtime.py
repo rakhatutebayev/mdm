@@ -16,6 +16,10 @@ def _next_due(now: float, interval: int) -> float:
     return now + max(5, interval) + random.uniform(0, min(5, interval * 0.1))
 
 
+def _ps_single_quote(value: str) -> str:
+    return value.replace("'", "''")
+
+
 # ── Command handlers ──────────────────────────────────────────────────────────
 
 def _handle_rename_computer(
@@ -81,22 +85,36 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
     Runs entirely in the SYSTEM context (no UAC dialog needed).
     Existing config.json is preserved — customer_id and enrollment_token remain.
     """
-    import os
     import sys
 
     payload        = cmd.get("payload", {})
+    command_id     = str(cmd.get("id", "") or "").strip()
     download_url   = payload.get("download_url", "").strip()
     target_version = payload.get("target_version", "unknown")
+    expected_sha256 = str(payload.get("sha256", "") or "").strip().lower()
 
     if not download_url:
         return "failed", "download_url is missing in payload"
+    if not expected_sha256:
+        return "failed", "sha256 is missing in payload"
 
     # Installed EXE path — this is where the service binary lives
     installed_exe = sys.executable  # service runs from the installed location
 
     try:
+        checksum_block = ""
+        if expected_sha256:
+            checksum_block = (
+                f"$expectedHash = '{_ps_single_quote(expected_sha256)}'\n"
+                "    if ($expectedHash) {\n"
+                "        $actualHash = (Get-FileHash -Path $tempExe -Algorithm SHA256).Hash.ToLowerInvariant()\n"
+                "        if ($actualHash -ne $expectedHash) { throw \"SHA256 mismatch. expected=$expectedHash actual=$actualHash\" }\n"
+                "    }\n"
+            )
         # PowerShell script:
         # 1. Download new EXE to a temp file
+        # 1.1 Verify checksum if provided
+        # 1.2 Update config.json version so telemetry reflects the new binary
         # 2. Stop the service (graceful)
         # 3. Overwrite the installed binary
         # 4. Start the service again
@@ -104,22 +122,55 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
         ps_script = f"""
 $ErrorActionPreference = 'Stop'
 $tempExe = [System.IO.Path]::GetTempFileName() + '.exe'
+$configPath = '{_ps_single_quote(str(AgentConfig.config_path()))}'
+$commandId = '{_ps_single_quote(command_id)}'
+$ackUrl = '{_ps_single_quote(config.server_url.rstrip("/") + "/api/v1/mdm/windows/commands/ack")}'
+
+function Send-Ack([string]$status, [string]$result) {{
+    if (-not $commandId -or -not $ackUrl) {{
+        return
+    }}
+    try {{
+        $body = @{{
+            command_id = $commandId
+            status = $status
+            result = $result
+        }} | ConvertTo-Json -Compress
+        Invoke-RestMethod -Uri $ackUrl -Method Post -ContentType 'application/json' -Body $body | Out-Null
+    }} catch {{
+        # Best effort only. If ack delivery fails, the command will be retried.
+    }}
+}}
+
 try {{
     # Download new agent
     $wc = New-Object System.Net.WebClient
-    $wc.Headers.Add('User-Agent', 'NOCKO-Agent/{target_version}-updater')
+    $wc.Headers.Add('User-Agent', 'NOCKO-Agent/{_ps_single_quote(target_version)}-updater')
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $wc.DownloadFile('{download_url}', $tempExe)
+    $wc.DownloadFile('{_ps_single_quote(download_url)}', $tempExe)
+
+    {checksum_block}
 
     # Stop current service gracefully
     Stop-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 3
 
     # Replace binary
-    Copy-Item -Path $tempExe -Destination '{installed_exe}' -Force
+    Copy-Item -Path $tempExe -Destination '{_ps_single_quote(str(installed_exe))}' -Force
+
+    if (Test-Path $configPath) {{
+        $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
+        $config.agent_version = '{_ps_single_quote(str(target_version))}'
+        $config | ConvertTo-Json -Depth 8 | Set-Content -Path $configPath -Encoding UTF8
+    }}
 
     # Start updated service
     Start-Service -Name 'NOCKOAgent' -ErrorAction SilentlyContinue
+    Send-Ack 'acked' 'Update installed successfully.'
+}} catch {{
+    $message = $_.Exception.Message
+    Send-Ack 'failed' $message
+    throw
 }} finally {{
     Remove-Item -Path $tempExe -Force -ErrorAction SilentlyContinue
 }}
@@ -131,10 +182,10 @@ try {{
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        # Don't wait — service will be stopped when PS script runs Stop-Service.
-        # Agent ACKs the command before the service stops so the portal gets the response.
+        # Don't wait — the updater process will stop the service, replace the
+        # binary, start it again, and send the final command ack itself.
         logger.info("Update to v%s started via PowerShell (pid=%s)", target_version, proc.pid)
-        return "acked", f"Update to v{target_version} started. Agent will restart shortly."
+        return "deferred", f"Update to v{target_version} started. Final status will be reported after restart."
 
     except Exception as exc:
         logger.exception("update_agent error: %s", exc)
@@ -206,6 +257,9 @@ def _dispatch_commands(commands: list[dict], client: MdmAgentClient,
                 status, result_msg = handler(cmd, config, logger, client=client)
             else:
                 status, result_msg = handler(cmd, config, logger)
+            if status == "deferred":
+                logger.info("Command '%s' is running asynchronously: %s", cmd_type, result_msg)
+                continue
             client.ack_command(cmd_id, status=status, result=result_msg)
             logger.info("Command '%s' → %s: %s", cmd_type, status, result_msg)
         except Exception as exc:

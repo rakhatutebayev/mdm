@@ -14,18 +14,34 @@ from device_info import (
     collect_metrics_payload,
 )
 
-# Suppress InsecureRequestWarning — we intentionally skip SSL verification
-# because Windows Python bundles often lack corporate/intermediate CA certs
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-
 class MdmAgentClient:
     def __init__(self, config: AgentConfig, logger: logging.Logger) -> None:
         self.config = config
         self.logger = logger
         self.session = requests.Session()
-        self.session.verify = False  # skip SSL cert chain validation
+        self._tls_verify = bool(getattr(config, "tls_verify", True))
+        self._tls_fallback_allowed = bool(getattr(config, "tls_allow_insecure_fallback", False))
+        self.session.verify = self._tls_verify
         self.session.headers.update({"User-Agent": f"NOCKO-Agent/{config.agent_version}"})
+
+    def _enable_insecure_tls_fallback(self, reason: Exception) -> None:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        self.session.verify = False
+        self._tls_verify = False
+        self.logger.warning(
+            "TLS certificate verification failed for %s. Falling back to insecure HTTPS because tls_allow_insecure_fallback=true: %s",
+            self.config.server_url,
+            reason,
+        )
+
+    def _request(self, method: str, url: str, **kwargs):
+        try:
+            return self.session.request(method, url, **kwargs)
+        except requests.exceptions.SSLError as exc:
+            if not self._tls_verify or not self._tls_fallback_allowed:
+                raise
+            self._enable_insecure_tls_fallback(exc)
+            return self.session.request(method, url, **kwargs)
 
     @property
     def api_base(self) -> str:
@@ -40,7 +56,8 @@ class MdmAgentClient:
 
         payload = collect_enrollment_payload(self.config)
         self.logger.info("Enrolling device with %s", self.api_base)
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.api_base}/enroll",
             json=payload,
             timeout=30,
@@ -55,7 +72,8 @@ class MdmAgentClient:
     def heartbeat(self) -> dict[str, Any]:
         self.enroll_if_needed()
         payload = collect_heartbeat_payload(self.config)
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.api_base}/checkin",
             json=payload,
             timeout=30,
@@ -68,7 +86,8 @@ class MdmAgentClient:
     def send_metrics(self) -> dict[str, Any]:
         self.enroll_if_needed()
         payload = collect_metrics_payload(self.config)
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.api_base}/checkin",
             json=payload,
             timeout=30,
@@ -81,7 +100,8 @@ class MdmAgentClient:
     def send_inventory(self) -> dict[str, Any]:
         self.enroll_if_needed()
         payload = collect_inventory_payload(self.config)
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.api_base}/inventory",
             json=payload,
             timeout=30,
@@ -93,7 +113,8 @@ class MdmAgentClient:
 
     def fetch_commands(self) -> list[dict[str, Any]]:
         self.enroll_if_needed()
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.api_base}/commands",
             params={"device_id": self.config.device_id},
             timeout=30,
@@ -105,7 +126,8 @@ class MdmAgentClient:
     def decommission(self, reason: str = "Agent removed") -> None:
         if not self.config.device_id:
             return
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.api_base}/decommission",
             json={"device_id": self.config.device_id, "reason": reason},
             timeout=30,
@@ -115,7 +137,8 @@ class MdmAgentClient:
 
     def ack_command(self, command_id: str, status: str = "acked", result: str | None = None) -> None:
         """Acknowledge a command result back to the server."""
-        self.session.post(
+        self._request(
+            "POST",
             f"{self.api_base}/commands/ack",
             json={"command_id": command_id, "status": status, "result": result},
             timeout=15,

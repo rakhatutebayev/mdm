@@ -71,6 +71,26 @@ class MqttListener:
     def stop(self) -> None:
         self._stop.set()
 
+    def _configure_tls(self, client, insecure: bool) -> None:
+        import ssl as _ssl
+
+        cert_reqs = _ssl.CERT_NONE if insecure else _ssl.CERT_REQUIRED
+        client.tls_set(cert_reqs=cert_reqs)
+        client.tls_insecure_set(insecure)
+
+    @staticmethod
+    def _looks_like_tls_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        return any(token in message for token in (
+            "ssl",
+            "tls",
+            "certificate",
+            "cert",
+            "hostname mismatch",
+            "self signed",
+            "verify failed",
+        ))
+
     def _run(self) -> None:
         try:
             import paho.mqtt.client as mqtt  # type: ignore
@@ -83,9 +103,12 @@ class MqttListener:
         transport = getattr(self._config, "mqtt_transport", "websockets")
         ws_path   = getattr(self._config, "mqtt_path",      "/mqtt")
         use_tls   = getattr(self._config, "mqtt_tls",       self._use_tls())
+        verify_tls = bool(getattr(self._config, "mqtt_tls_verify", True))
+        allow_insecure_fallback = bool(getattr(self._config, "mqtt_tls_allow_insecure_fallback", False))
         device_id = self._config.device_id
         topic = f"mdm/devices/{device_id}/commands"
         backoff = 5
+        insecure_tls_active = use_tls and not verify_tls
 
         def on_connect(client, userdata, flags, rc):
             if rc == 0:
@@ -115,9 +138,7 @@ class MqttListener:
             if transport == "websockets":
                 client.ws_set_options(path=ws_path)
             if use_tls:
-                import ssl as _ssl
-                client.tls_set(cert_reqs=_ssl.CERT_NONE)
-                client.tls_insecure_set(True)  # server cert verified by OS trust store
+                self._configure_tls(client, insecure=insecure_tls_active)
             client.on_connect = on_connect
             client.on_message = on_message
             client.reconnect_delay_set(min_delay=1, max_delay=30)
@@ -131,6 +152,15 @@ class MqttListener:
                 client.disconnect()
                 break
             except Exception as exc:
+                if use_tls and not insecure_tls_active and allow_insecure_fallback and self._looks_like_tls_error(exc):
+                    insecure_tls_active = True
+                    log.warning(
+                        "MQTT TLS certificate verification failed for %s:%s. Falling back to insecure TLS because mqtt_tls_allow_insecure_fallback=true: %s",
+                        host,
+                        port,
+                        exc,
+                    )
+                    continue
                 log.warning("MQTT connect error (%s). Retrying in %ss…", exc, backoff)
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 120)

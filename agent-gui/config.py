@@ -40,6 +40,8 @@ class AgentConfig:
     log_dir: str = r"C:\ProgramData\NOCKO-Agent\logs"
     start_immediately: bool = True
     agent_display_name: str = "NOCKO MDM Agent"
+    tls_verify: bool = True
+    tls_allow_insecure_fallback: bool = False
     # MQTT settings (for real-time command delivery via WebSocket/WSS)
     mqtt_enabled:   bool = True
     mqtt_host:      str  = ""         # if empty, derived from server_url hostname
@@ -47,6 +49,8 @@ class AgentConfig:
     mqtt_transport: str  = "websockets" # 'websockets' or 'tcp'
     mqtt_path:      str  = "/mqtt"     # WebSocket endpoint path
     mqtt_tls:       bool = True        # True when using wss:// (port 443)
+    mqtt_tls_verify: bool = True
+    mqtt_tls_allow_insecure_fallback: bool = False
 
     @classmethod
     def base_dir(cls) -> Path:
@@ -79,6 +83,17 @@ class AgentConfig:
         defaults = asdict(cls())
         allowed = set(defaults.keys())
         merged = {**defaults, **{k: v for k, v in raw.items() if k in allowed}}
+        # Existing installations previously skipped certificate verification.
+        # Keep them online by allowing an insecure fallback unless the config
+        # was already migrated to explicit TLS policy fields.
+        if "tls_allow_insecure_fallback" not in raw:
+            merged["tls_allow_insecure_fallback"] = True
+        if "mqtt_tls_allow_insecure_fallback" not in raw:
+            merged["mqtt_tls_allow_insecure_fallback"] = True
+        # The running binary is the source of truth for agent version. This
+        # prevents a stale config.json from pinning the portal to an old version
+        # after a self-update replaced the executable successfully.
+        merged["agent_version"] = AGENT_VERSION
         return cls(**merged)  # type: ignore[arg-type]
 
     def save(self, path: Path | None = None) -> Path:

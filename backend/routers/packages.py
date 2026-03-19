@@ -249,6 +249,8 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         "log_dir": body.log_dir,
         "start_immediately": body.start_immediately,
         "agent_display_name": body.agent_display_name,
+        "tls_verify": True,
+        "tls_allow_insecure_fallback": False,
         # MQTT — instant command delivery via WebSocket over HTTPS (no extra ports needed)
         "mqtt_enabled":   True,
         "mqtt_host":      _mqtt_host,
@@ -256,6 +258,8 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         "mqtt_transport": "websockets",
         "mqtt_path":      "/mqtt",
         "mqtt_tls":       True,
+        "mqtt_tls_verify": True,
+        "mqtt_tls_allow_insecure_fallback": False,
     }
 
     # ── Build package ─────────────────────────────────────────────────────────
