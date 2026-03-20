@@ -1,0 +1,6 @@
+requests>=2.31.0
+pyasn1<0.5
+pyasyncore>=1.0.4
+paho-mqtt
+pysnmp==4.4.12
+paramiko

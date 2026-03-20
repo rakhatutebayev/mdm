@@ -139,6 +139,123 @@ export interface EnrollmentToken {
   created_at: string;
 }
 
+export interface ProxyAgent {
+  id: string;
+  customer_id: string;
+  name: string;
+  site_name: string;
+  hostname: string;
+  ip_address: string;
+  mac_address: string;
+  portal_url: string;
+  version: string;
+  status: string;
+  is_registered: boolean;
+  capabilities: string[];
+  auth_token: string;
+  last_checkin: string | null;
+  registered_at: string | null;
+  created_at: string;
+}
+
+export interface ProxyAgentCommand {
+  id: string;
+  proxy_agent_id: string;
+  command_type: string;
+  payload: Record<string, unknown>;
+  status: string;
+  result: string | null;
+  created_at: string;
+  acked_at: string | null;
+}
+
+export interface AssetInventory {
+  processor_model: string;
+  processor_vendor: string;
+  processor_count: number | null;
+  physical_cores: number | null;
+  logical_processors: number | null;
+  memory_total_gb: number | null;
+  memory_slot_count: number | null;
+  memory_slots_used: number | null;
+  memory_module_count: number | null;
+  storage_controller_count: number | null;
+  physical_disk_count: number | null;
+  virtual_disk_count: number | null;
+  disk_total_gb: number | null;
+  network_interface_count: number | null;
+  power_supply_count: number | null;
+  raid_summary: string;
+  updated_at: string;
+}
+
+export interface AssetComponent {
+  id: number;
+  component_type: string;
+  name: string;
+  slot: string;
+  model: string;
+  manufacturer: string;
+  serial_number: string;
+  firmware_version: string;
+  capacity_gb: number | null;
+  status: string;
+  health: string;
+  extra_json: Record<string, unknown>;
+}
+
+export interface AssetHealth {
+  overall_status: string;
+  processor_status: string;
+  memory_status: string;
+  storage_status: string;
+  power_status: string;
+  network_status: string;
+  thermal_status: string;
+  power_state: string;
+  alert_count: number | null;
+  summary: string;
+  updated_at: string;
+}
+
+export interface AssetAlert {
+  id: number;
+  source: string;
+  severity: string;
+  code: string;
+  message: string;
+  status: string;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  cleared_at: string | null;
+  extra_json: Record<string, unknown>;
+}
+
+export interface DiscoveredAsset {
+  id: string;
+  customer_id: string;
+  proxy_agent_id: string | null;
+  asset_class: string;
+  source_type: string;
+  display_name: string;
+  vendor: string;
+  model: string;
+  serial_number: string;
+  firmware_version: string;
+  ip_address: string;
+  management_ip: string;
+  mac_address: string;
+  status: string;
+  raw_facts: Record<string, unknown>;
+  inventory: AssetInventory | null;
+  components: AssetComponent[];
+  health: AssetHealth | null;
+  alerts: AssetAlert[];
+  first_seen_at: string;
+  last_seen_at: string | null;
+  created_at: string;
+}
+
 export interface PackageArtifact {
   format: "zip" | "exe";
   arch: "x64" | "x86";
@@ -201,6 +318,63 @@ export const getEnrollmentToken = (customerId: string) =>
 
 export const regenerateToken = (customerId: string) =>
   req<EnrollmentToken>(`/enrollment/token/${customerId}/regenerate`, { method: "POST" });
+
+// ── Proxy Agent / Discovery ───────────────────────────────────────────────────
+
+export const getProxyAgents = (customerId?: string) =>
+  req<ProxyAgent[]>(`/discovery/agents${customerId ? `?customer_id=${customerId}` : ""}`);
+
+export const getProxyAgent = (agentId: string) =>
+  req<ProxyAgent>(`/discovery/agents/${agentId}`);
+
+export const createProxyAgent = (body: {
+  customer_id: string;
+  name: string;
+  site_name?: string;
+  hostname?: string;
+  ip_address?: string;
+  version?: string;
+  capabilities?: string[];
+  auth_token?: string;
+}) =>
+  req<ProxyAgent>("/discovery/agents", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const registerProxyAgent = (agentId: string) =>
+  req<ProxyAgent>(`/discovery/agents/${agentId}/register`, {
+    method: "POST",
+  });
+
+export const getProxyAgentCommands = (agentId: string) =>
+  req<ProxyAgentCommand[]>(`/discovery/agents/${agentId}/commands`);
+
+export const getProxyAgentCommand = (agentId: string, commandId: string) =>
+  req<ProxyAgentCommand>(`/discovery/agents/${agentId}/commands/${commandId}`);
+
+export const createProxyAgentCommand = (
+  agentId: string,
+  body: {
+    command_type: string;
+    payload?: Record<string, unknown>;
+  }
+) =>
+  req<ProxyAgentCommand>(`/discovery/agents/${agentId}/commands`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const getDiscoveredAssets = (params?: { customerId?: string; proxyAgentId?: string }) => {
+  const query = new URLSearchParams();
+  if (params?.customerId) query.set("customer_id", params.customerId);
+  if (params?.proxyAgentId) query.set("proxy_agent_id", params.proxyAgentId);
+  const suffix = query.toString();
+  return req<DiscoveredAsset[]>(`/discovery/assets${suffix ? `?${suffix}` : ""}`);
+};
+
+export const getDiscoveredAsset = (id: string, signal?: AbortSignal) =>
+  req<DiscoveredAsset>(`/discovery/assets/${id}`, signal ? { signal } : undefined);
 
 // ── Agent Packages ────────────────────────────────────────────────────────────
 

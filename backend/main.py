@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
-from routers import customers, devices, enrollment
+from routers import customers, devices, enrollment, discovery
 from routers.packages import router as packages_router
 from routers.dashboard import router as dashboard_router
 from routers.mdm import router as mdm_router
@@ -40,6 +40,15 @@ async def lifespan(app: FastAPI):
         ]:
             await conn.execute(__import__("sqlalchemy").text(col_ddl))
 
+        # proxy_agents — registration lifecycle and self-reported portal metadata
+        for col_ddl in [
+            "ALTER TABLE proxy_agents ADD COLUMN IF NOT EXISTS mac_address VARCHAR(17) DEFAULT ''",
+            "ALTER TABLE proxy_agents ADD COLUMN IF NOT EXISTS portal_url VARCHAR(255) DEFAULT ''",
+            "ALTER TABLE proxy_agents ADD COLUMN IF NOT EXISTS is_registered BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE proxy_agents ADD COLUMN IF NOT EXISTS registered_at TIMESTAMP NULL",
+        ]:
+            await conn.execute(__import__("sqlalchemy").text(col_ddl))
+
     # Start MQTT publisher (non-blocking background task)
     await MqttPublisher.connect()
     yield
@@ -62,6 +71,7 @@ app.add_middleware(
 app.include_router(customers.router)
 app.include_router(devices.router)
 app.include_router(enrollment.router)
+app.include_router(discovery.router)
 app.include_router(packages_router)
 app.include_router(dashboard_router)
 app.include_router(mdm_router)

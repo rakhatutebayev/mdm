@@ -27,6 +27,7 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: 'Enrollment', href: '/enrollment' },
+  { label: 'Discovery', href: '/discovery' },
   {
     label: 'Reports',
     children: [

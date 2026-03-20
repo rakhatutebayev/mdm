@@ -24,6 +24,8 @@ class Customer(Base):
 
     devices: Mapped[list["Device"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
     enrollment_tokens: Mapped[list["EnrollmentToken"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
+    proxy_agents: Mapped[list["ProxyAgent"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
+    discovered_assets: Mapped[list["DiscoveredAsset"]] = relationship(back_populates="customer", cascade="all, delete-orphan")
 
 
 class Device(Base):
@@ -221,6 +223,174 @@ class EnrollmentToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     customer: Mapped["Customer"] = relationship(back_populates="enrollment_tokens")
+
+
+class ProxyAgent(Base):
+    __tablename__ = "proxy_agents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    site_name: Mapped[str] = mapped_column(String(255), default="")
+    hostname: Mapped[str] = mapped_column(String(255), default="")
+    ip_address: Mapped[str] = mapped_column(String(45), default="")
+    mac_address: Mapped[str] = mapped_column(String(17), default="")
+    portal_url: Mapped[str] = mapped_column(String(255), default="")
+    version: Mapped[str] = mapped_column(String(50), default="")
+    status: Mapped[str] = mapped_column(String(50), default="offline")
+    is_registered: Mapped[bool] = mapped_column(Boolean, default=False)
+    capabilities: Mapped[str] = mapped_column(Text, default="")
+    auth_token: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    last_checkin: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    registered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    customer: Mapped["Customer"] = relationship(back_populates="proxy_agents")
+    assets: Mapped[list["DiscoveredAsset"]] = relationship(back_populates="proxy_agent")
+    commands: Mapped[list["ProxyAgentCommand"]] = relationship(back_populates="proxy_agent", cascade="all, delete-orphan")
+
+
+class DiscoveredAsset(Base):
+    __tablename__ = "discovered_assets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    customer_id: Mapped[str] = mapped_column(ForeignKey("customers.id", ondelete="CASCADE"))
+    proxy_agent_id: Mapped[Optional[str]] = mapped_column(ForeignKey("proxy_agents.id", ondelete="SET NULL"), nullable=True)
+    asset_class: Mapped[str] = mapped_column(String(50), default="network")
+    source_type: Mapped[str] = mapped_column(String(50), default="proxy_agent")
+    display_name: Mapped[str] = mapped_column(String(255), default="")
+    vendor: Mapped[str] = mapped_column(String(255), default="")
+    model: Mapped[str] = mapped_column(String(255), default="")
+    serial_number: Mapped[str] = mapped_column(String(255), default="")
+    firmware_version: Mapped[str] = mapped_column(String(100), default="")
+    ip_address: Mapped[str] = mapped_column(String(45), default="")
+    management_ip: Mapped[str] = mapped_column(String(45), default="")
+    mac_address: Mapped[str] = mapped_column(String(17), default="")
+    status: Mapped[str] = mapped_column(String(50), default="Discovered")
+    raw_facts: Mapped[str] = mapped_column(Text, default="{}")
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    customer: Mapped["Customer"] = relationship(back_populates="discovered_assets")
+    proxy_agent: Mapped["ProxyAgent | None"] = relationship(back_populates="assets")
+    inventory: Mapped["AssetInventory | None"] = relationship(
+        back_populates="asset",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    components: Mapped[list["AssetComponent"]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+    health: Mapped["AssetHealth | None"] = relationship(
+        back_populates="asset",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    alerts: Mapped[list["AssetAlert"]] = relationship(
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
+
+class AssetInventory(Base):
+    __tablename__ = "asset_inventory"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("discovered_assets.id", ondelete="CASCADE"), unique=True)
+    processor_model: Mapped[str] = mapped_column(String(255), default="")
+    processor_vendor: Mapped[str] = mapped_column(String(255), default="")
+    processor_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    physical_cores: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    logical_processors: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_total_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    memory_slot_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_slots_used: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    memory_module_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    storage_controller_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    physical_disk_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    virtual_disk_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    disk_total_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    network_interface_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    power_supply_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    raid_summary: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    asset: Mapped["DiscoveredAsset"] = relationship(back_populates="inventory")
+
+
+class AssetComponent(Base):
+    __tablename__ = "asset_components"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("discovered_assets.id", ondelete="CASCADE"))
+    component_type: Mapped[str] = mapped_column(String(50), default="")
+    name: Mapped[str] = mapped_column(String(255), default="")
+    slot: Mapped[str] = mapped_column(String(100), default="")
+    model: Mapped[str] = mapped_column(String(255), default="")
+    manufacturer: Mapped[str] = mapped_column(String(255), default="")
+    serial_number: Mapped[str] = mapped_column(String(255), default="")
+    firmware_version: Mapped[str] = mapped_column(String(100), default="")
+    capacity_gb: Mapped[Optional[float]] = mapped_column(nullable=True)
+    status: Mapped[str] = mapped_column(String(100), default="")
+    health: Mapped[str] = mapped_column(String(100), default="")
+    extra_json: Mapped[str] = mapped_column(Text, default="{}")
+
+    asset: Mapped["DiscoveredAsset"] = relationship(back_populates="components")
+
+
+class AssetHealth(Base):
+    __tablename__ = "asset_health"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("discovered_assets.id", ondelete="CASCADE"), unique=True)
+    overall_status: Mapped[str] = mapped_column(String(100), default="")
+    processor_status: Mapped[str] = mapped_column(String(100), default="")
+    memory_status: Mapped[str] = mapped_column(String(100), default="")
+    storage_status: Mapped[str] = mapped_column(String(100), default="")
+    power_status: Mapped[str] = mapped_column(String(100), default="")
+    network_status: Mapped[str] = mapped_column(String(100), default="")
+    thermal_status: Mapped[str] = mapped_column(String(100), default="")
+    power_state: Mapped[str] = mapped_column(String(100), default="")
+    alert_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    asset: Mapped["DiscoveredAsset"] = relationship(back_populates="health")
+
+
+class AssetAlert(Base):
+    __tablename__ = "asset_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("discovered_assets.id", ondelete="CASCADE"))
+    source: Mapped[str] = mapped_column(String(100), default="")
+    severity: Mapped[str] = mapped_column(String(50), default="")
+    code: Mapped[str] = mapped_column(String(100), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(50), default="active")
+    first_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    cleared_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    extra_json: Mapped[str] = mapped_column(Text, default="{}")
+
+    asset: Mapped["DiscoveredAsset"] = relationship(back_populates="alerts")
+
+
+class ProxyAgentCommand(Base):
+    __tablename__ = "proxy_agent_commands"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    proxy_agent_id: Mapped[str] = mapped_column(ForeignKey("proxy_agents.id", ondelete="CASCADE"))
+    command_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    acked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    proxy_agent: Mapped["ProxyAgent"] = relationship(back_populates="commands")
 
 
 class SystemSettings(Base):

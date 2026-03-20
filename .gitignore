@@ -39,6 +39,7 @@ Thumbs.db
 
 # Generated packages (temporary)
 /tmp/
+.deploy_tmp/
 
 # Logs
 *.log

@@ -1,11 +1,9 @@
 # EMQX MQTT Broker — WSS (MQTT over WebSocket on port 443)
 # Start: docker compose -f docker-compose.yml -f docker-compose.mqtt.yml up -d
 
-version: "3.9"
-
 services:
   emqx:
-    image: emqx/emqx:5
+    image: emqx/emqx:5.8.6
     restart: unless-stopped
     environment:
       EMQX_NAME: nocko_mdm
@@ -19,9 +17,8 @@ services:
   backend:
     environment:
       MQTT_HOST: emqx
-      MQTT_PORT: "8083"
-      MQTT_TRANSPORT: "websockets"
-      MQTT_PATH: "/mqtt"
+      MQTT_PORT: "1883"
+      MQTT_TRANSPORT: "tcp"
 
 volumes:
   emqxdata:
