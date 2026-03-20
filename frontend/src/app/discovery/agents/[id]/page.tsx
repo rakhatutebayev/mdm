@@ -49,6 +49,22 @@ function isEsxiAsset(asset: DiscoveredAsset) {
   return asset.raw_facts?.template_key === 'vmware_esxi' || asset.raw_facts?.hypervisor === 'VMware ESXi';
 }
 
+
+function isAvayaAsset(asset: DiscoveredAsset) {
+  return asset.asset_class === 'voip' || asset.raw_facts?.template_key === 'avaya_1608';
+}
+
+
+function assetSecondaryLine(asset: DiscoveredAsset) {
+  const firmware = (asset.firmware_version || '').trim();
+  const extension = String(asset.raw_facts?.extension || '').trim();
+  if (isAvayaAsset(asset) && extension) {
+    return firmware ? `${firmware} (${extension})` : `(${extension})`;
+  }
+  return firmware || '—';
+}
+
+
 function formatCount(value: number | null | undefined, label: string) {
   if (typeof value !== 'number' || Number.isNaN(value)) return null;
   return `${value} ${label}`;
@@ -394,7 +410,7 @@ export default function ProxyAgentDetailPage() {
                             >
                               {asset.display_name || asset.serial_number || asset.management_ip || asset.ip_address || 'Unnamed asset'}
                             </Link>
-                            <span>{asset.firmware_version || '—'}</span>
+                            <span>{assetSecondaryLine(asset)}</span>
                             {isEsxiAsset(asset) ? (
                               <>
                                 {esxiSummary(asset).length ? (
