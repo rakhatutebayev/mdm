@@ -64,6 +64,11 @@ def _parse_eid_slot(value: Any) -> tuple[str, str]:
     return enclosure.strip(), slot.strip()
 
 
+def _is_problem_state(value: Any) -> bool:
+    state = str(value or "").strip().lower()
+    return bool(state) and state not in {"onln", "optl", "ok", "ugood"}
+
+
 def _run_command(client: paramiko.SSHClient, command: str, timeout_s: float) -> tuple[int, str, str]:
     stdin, stdout, stderr = client.exec_command(command, timeout=timeout_s)
     _ = stdin
@@ -138,6 +143,7 @@ def collect_esxi_perccli(
                     "slot": slot,
                     "state": str(entry.get("State", "") or "").strip(),
                     "drive_group": str(entry.get("DG", "") or "").strip(),
+                    "size_text": str(entry.get("Size", "") or "").strip(),
                     "size_gb": _parse_size_gb(entry.get("Size")),
                     "interface": str(entry.get("Intf", "") or "").strip(),
                     "media": str(entry.get("Med", "") or "").strip(),
@@ -172,6 +178,20 @@ def collect_esxi_perccli(
         if isinstance(policies, dict):
             disk["drive_position"] = str(policies.get("Drive position", "") or "").strip()
             disk["connected_port"] = str(policies.get("Connected Port Number", "") or "").strip()
+        if _is_problem_state(disk.get("state")) and disk["enclosure_id"] and disk["slot"]:
+            query = f"{perccli_path} /c{controller_index}/e{disk['enclosure_id']}/s{disk['slot']} show J"
+            query_code, query_out, query_err = _run_command(client, query, timeout_s)
+            query_payload = _load_json(query_out)
+            query_status = _command_status(query_payload)
+            query_data = _response_data(query_payload)
+            if query_status:
+                disk["query_command_status"] = query_status
+            if query_data:
+                disk["query_response_data"] = query_data
+            if query_code:
+                disk["query_exit_code"] = query_code
+            if query_err.strip():
+                disk["query_stderr"] = query_err.strip()
 
     virtual_disks = []
     for key, value in virtual_data.items():

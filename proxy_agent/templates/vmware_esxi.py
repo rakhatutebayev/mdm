@@ -70,6 +70,30 @@ def _perccli_status(value: Any) -> str:
     return "Unknown"
 
 
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _perccli_exact_detail(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    state = _text(item.get("state"))
+    if state:
+        parts.append(f"State={state}")
+    size_text = _text(item.get("size_text"))
+    if size_text:
+        parts.append(f"Size={size_text}")
+    query_status = item.get("query_command_status")
+    if isinstance(query_status, dict):
+        for key in ("Status", "Description", "Detailed Status", "ErrCd"):
+            value = _text(query_status.get(key))
+            if value:
+                parts.append(f"{key}={value}")
+    stderr = _text(item.get("query_stderr"))
+    if stderr:
+        parts.append(f"stderr={stderr}")
+    return "; ".join(parts)
+
+
 class VmwareEsxiTemplate(DeviceTemplate):
     key = "vmware_esxi"
     display_name = "VMware ESXi Host"
@@ -110,6 +134,9 @@ class VmwareEsxiTemplate(DeviceTemplate):
         perccli = details.get("perccli")
         if not isinstance(perccli, dict):
             perccli = {}
+        perccli_command_status = perccli.get("command_status")
+        if not isinstance(perccli_command_status, dict):
+            perccli_command_status = {}
 
         processors = [item for item in devices if str(item.get("type", "")) == HR_DEVICE_PROCESSOR]
         processor_models = []
@@ -217,6 +244,14 @@ class VmwareEsxiTemplate(DeviceTemplate):
 
         raid_controller_components = []
         if perccli_controller.get("product_name"):
+            controller_status = perccli_command_status.get("controller")
+            if not isinstance(controller_status, dict):
+                controller_status = {}
+            controller_reason = "; ".join(
+                f"{key}={value}"
+                for key in ("Status", "Description", "Detailed Status", "ErrCd")
+                if (value := _text(controller_status.get(key)))
+            )
             raid_controller_components.append(
                 {
                     "component_type": "raid_controller",
@@ -225,7 +260,20 @@ class VmwareEsxiTemplate(DeviceTemplate):
                     "serial_number": str(perccli_controller.get("serial_number", "") or "").strip(),
                     "firmware_version": str(perccli_controller.get("firmware_version", "") or "").strip(),
                     "model": str(perccli_controller.get("product_name", "") or "").strip(),
-                    "raw": perccli_controller,
+                    "extra_json": {
+                        "source": "esxi_perccli",
+                        "health": _text(perccli_controller.get("health")),
+                        "sas_address": _text(perccli_controller.get("sas_address")),
+                        "pci_address": _text(perccli_controller.get("pci_address")),
+                        "driver_name": _text(perccli_controller.get("driver_name")),
+                        "driver_version": _text(perccli_controller.get("driver_version")),
+                        "firmware_package": _text(perccli_controller.get("firmware_package")),
+                        "drive_groups": perccli_controller.get("drive_groups"),
+                        "physical_drives": perccli_controller.get("physical_drives"),
+                        "virtual_drives": perccli_controller.get("virtual_drives"),
+                        "status_text": controller_reason,
+                        "reason": controller_reason,
+                    },
                 }
             )
 
@@ -236,6 +284,10 @@ class VmwareEsxiTemplate(DeviceTemplate):
             enclosure = str(disk.get("enclosure_id", "") or "").strip()
             slot = str(disk.get("slot", "") or "").strip()
             slot_label = ":".join(part for part in [enclosure, slot] if part) or "unknown"
+            detail_text = _perccli_exact_detail(disk)
+            query_status = disk.get("query_command_status")
+            if not isinstance(query_status, dict):
+                query_status = {}
             physical_disk_components.append(
                 {
                     "component_type": "physical_disk",
@@ -246,7 +298,27 @@ class VmwareEsxiTemplate(DeviceTemplate):
                     "model": str(disk.get("model", "") or "").strip(),
                     "capacity_gb": disk.get("size_gb"),
                     "slot": slot_label,
-                    "raw": disk,
+                    "extra_json": {
+                        "source": "esxi_perccli",
+                        "state": _text(disk.get("state")),
+                        "size_text": _text(disk.get("size_text")),
+                        "drive_group": _text(disk.get("drive_group")),
+                        "interface": _text(disk.get("interface")),
+                        "media_type": _text(disk.get("media")),
+                        "sector_size": _text(disk.get("sector_size")),
+                        "device_id": _text(disk.get("device_id")),
+                        "spin_state": _text(disk.get("spin_state")),
+                        "wwn": _text(disk.get("wwn")),
+                        "raw_size": _text(disk.get("raw_size")),
+                        "drive_position": _text(disk.get("drive_position")),
+                        "connected_port": _text(disk.get("connected_port")),
+                        "query_status": _text(query_status.get("Status")),
+                        "query_description": _text(query_status.get("Description")),
+                        "query_detailed_status": _text(query_status.get("Detailed Status")),
+                        "query_error_code": _text(query_status.get("ErrCd")),
+                        "status_text": detail_text,
+                        "reason": detail_text,
+                    },
                 }
             )
 
@@ -257,6 +329,15 @@ class VmwareEsxiTemplate(DeviceTemplate):
             vd = str(array.get("virtual_disk", "") or "").strip()
             raid_type = str(array.get("raid_type", "") or "").strip()
             display = " ".join(part for part in [f"VD{vd}" if vd else "", raid_type] if part).strip() or "Virtual Disk"
+            virtual_reason = "; ".join(
+                f"{label}={value}"
+                for label, value in [
+                    ("State", _text(array.get("state"))),
+                    ("Access", _text(array.get("access"))),
+                    ("Cache", _text(array.get("cache"))),
+                ]
+                if value
+            )
             virtual_disk_components.append(
                 {
                     "component_type": "virtual_disk",
@@ -264,7 +345,18 @@ class VmwareEsxiTemplate(DeviceTemplate):
                     "status": _perccli_status(array.get("state")),
                     "capacity_gb": array.get("size_gb"),
                     "raid_type": raid_type,
-                    "raw": array,
+                    "extra_json": {
+                        "source": "esxi_perccli",
+                        "state": _text(array.get("state")),
+                        "raid_type": raid_type,
+                        "access": _text(array.get("access")),
+                        "cache": _text(array.get("cache")),
+                        "strip_size": _text(array.get("strip_size")),
+                        "member_slots": array.get("member_slots"),
+                        "naa_id": _text(array.get("naa_id")),
+                        "status_text": virtual_reason,
+                        "reason": virtual_reason,
+                    },
                 }
             )
 
