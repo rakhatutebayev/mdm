@@ -340,6 +340,7 @@ def _snmp_walk_subtree(ip: str, subtree_oid: str, target: SnmpTarget, max_rows: 
 
 
 RACADM_SEL_TIME_FORMATS = (
+    "%Y/%m/%d %H:%M:%S",
     "%m/%d/%Y %H:%M:%S",
     "%m/%d/%y %H:%M:%S",
     "%a %b %d %H:%M:%S %Y",
@@ -386,6 +387,20 @@ def _normalize_alert_severity(value: Any) -> str:
 
 def _parse_racadm_sel_entries(text: str) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
+    timed_line_pattern = re.compile(
+        r"^(?P<time>\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s+"
+        r"(?P<scope>\S+)\s+"
+        r"(?P<severity>Critical|Warning|Non-Critical|Non-Recoverable|Informational|Info|Ok)\s+"
+        r"(?P<message>.+)$",
+        re.IGNORECASE,
+    )
+    boot_line_pattern = re.compile(
+        r"^(?P<time><[^>]+>)\s+"
+        r"(?P<scope>\S+)\s+"
+        r"(?P<severity>Critical|Warning|Non-Critical|Non-Recoverable|Informational|Info|Ok)\s+"
+        r"(?P<message>.+)$",
+        re.IGNORECASE,
+    )
     blocks: list[list[str]] = []
     current: list[str] = []
     for raw_line in text.splitlines():
@@ -394,6 +409,30 @@ def _parse_racadm_sel_entries(text: str) -> list[dict[str, str]]:
             if current:
                 blocks.append(current)
                 current = []
+            continue
+        timed_match = timed_line_pattern.match(line)
+        if timed_match:
+            entries.append(
+                {
+                    "event_time": _parse_racadm_timestamp(timed_match.group("time")),
+                    "event_time_raw": timed_match.group("time"),
+                    "scope": timed_match.group("scope"),
+                    "severity": timed_match.group("severity"),
+                    "message": timed_match.group("message").strip(),
+                }
+            )
+            continue
+        boot_match = boot_line_pattern.match(line)
+        if boot_match:
+            entries.append(
+                {
+                    "event_time": "",
+                    "event_time_raw": boot_match.group("time"),
+                    "scope": boot_match.group("scope"),
+                    "severity": boot_match.group("severity"),
+                    "message": boot_match.group("message").strip(),
+                }
+            )
             continue
         if re.match(r"^(?:Record|SEL Record(?: ID)?)\b", line, re.IGNORECASE) and current:
             blocks.append(current)
