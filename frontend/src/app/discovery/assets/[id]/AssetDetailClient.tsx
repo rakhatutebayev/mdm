@@ -40,6 +40,10 @@ function isAvayaAsset(asset: DiscoveredAsset) {
   return asset.asset_class === 'voip' || asset.raw_facts?.template_key === 'avaya_1608';
 }
 
+function prefersHardwareDashboard(asset: DiscoveredAsset) {
+  return asset.asset_class === 'server' || isIdracAsset(asset) || isEsxiAsset(asset);
+}
+
 function inventoryRows(asset: DiscoveredAsset) {
   const inventory = asset.inventory;
   if (!inventory) return [];
@@ -202,7 +206,9 @@ export default function AssetDetailClient({
   initialError,
 }: AssetDetailClientProps) {
   const [asset] = useState<DiscoveredAsset | null>(initialAsset);
-  const [activeTab, setActiveTab] = useState<'overview' | 'hardware'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'hardware'>(
+    () => (initialAsset && prefersHardwareDashboard(initialAsset) ? 'hardware' : 'overview'),
+  );
   const [error] = useState<string | null>(initialError);
 
   const backHref = useMemo(() => {
