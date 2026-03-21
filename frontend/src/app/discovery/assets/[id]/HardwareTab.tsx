@@ -125,17 +125,6 @@ function normalizeSelEntries(asset: DiscoveredAsset) {
   );
 }
 
-function rawIdracTables(asset: DiscoveredAsset) {
-  const rawFacts = rawObject(asset.raw_facts);
-  const tables = rawObject(rawFacts.idrac_component_tables);
-  return {
-    powerSupplies: rawArray(tables.power_supplies),
-    temperatureProbes: rawArray(tables.temperature_probes),
-    memoryDevices: rawArray(tables.memory_devices),
-    coolingDevices: rawArray(tables.cooling_devices),
-  };
-}
-
 function renderBadge(label: string, tone: Tone) {
   return <span className={badgeClassName(tone)}>{label || 'Unknown'}</span>;
 }
@@ -334,22 +323,12 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
 
   const rawFacts = rawObject(asset.raw_facts);
   const details = rawObject(rawFacts.dell_details);
-  const inventory = asset.inventory;
-  const cpus = componentTypeRows(asset, 'cpu');
-  const memoryModules = componentTypeRows(asset, 'memory_module');
-  const physicalDisks = componentTypeRows(asset, 'physical_disk');
-  const virtualDisks = componentTypeRows(asset, 'virtual_disk');
-  const raidControllers = componentTypeRows(asset, 'raid_controller');
   const powerSupplies = componentTypeRows(asset, 'power_supply');
-  const idracTables = rawIdracTables(asset);
-  const temperatureStatus = asset.health?.thermal_status || '';
-  const temperatureProbe = idracTables.temperatureProbes[0] ?? null;
   const headerStatus = asset.health?.overall_status || asset.status || 'Unknown';
   const headerTone = toneForStatus(headerStatus);
   const serviceTag = details.service_tag || asset.serial_number;
   const modelName = asset.model || String(details.controller_model || '').trim() || 'Unknown model';
   const globalCode = String(rawFacts.global_status_code || details.global_status || '').trim();
-  const totalMemory = inventory?.memory_total_gb;
   const selEntries = normalizeSelEntries(asset);
   const displayAlerts = selEntries.length
     ? selEntries
@@ -361,29 +340,15 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
         message: alert.message || '—',
       }));
 
-  const diskMembership = new Map<string, AssetComponent[]>();
-  for (const disk of physicalDisks) {
-    const extra = rawObject(disk.extra_json);
-    const members = Array.isArray(extra.member_slots) ? extra.member_slots.map((value) => String(value)) : [];
-    for (const member of members) {
-      const current = diskMembership.get(member) || [];
-      current.push(disk);
-      diskMembership.set(member, current);
-    }
-  }
-  const assignedDiskKeys = new Set<string>();
   const primaryManagementIp = asset.management_ip || asset.ip_address;
   const titleModel = modelName || asset.display_name || asset.management_ip || asset.ip_address || 'Server';
   const titleLabel = rawFacts.template_key === 'dell_idrac' || asset.asset_class === 'idrac'
     ? `${titleModel} (iDRAC6)`
     : titleModel;
-  const temperatureValue = temperatureProbe
-    ? (temperatureProbe.reading_celsius
-      ?? (temperatureProbe.reading_tenths_c != null ? `${Number(temperatureProbe.reading_tenths_c) / 10}°C` : null)
-      ?? temperatureProbe.reading
-      ?? temperatureProbe.current_reading
-      ?? temperatureProbe.value)
-    : null;
+  const managementController = asset.components?.find((component) => component.component_type === 'management_controller');
+  const managementExtra = rawObject(managementController?.extra_json);
+  const currentPowerDraw = typeof managementExtra.actual_power_consumption === 'string' ? managementExtra.actual_power_consumption : '';
+  const peakPowerDraw = typeof managementExtra.peak_power_consumption === 'string' ? managementExtra.peak_power_consumption : '';
 
   return (
     <div className={styles.serverDash}>
@@ -399,6 +364,10 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
           <span className={styles.serverDashPollingLabel}>Last Polled (SNMP)</span>
           <strong>{formatRelativeTime(asset.last_seen_at)}</strong>
         </div>
+      </div>
+
+      <div className={styles.serverDashNotice}>
+        Legacy iDRAC6 exposes limited hardware inventory. CPU, RAM, and storage sections are hidden because this device does not publish those live tables.
       </div>
 
       <div className={styles.serverDashGrid}>
@@ -429,16 +398,19 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
         <section className={styles.serverCard}>
           <div className={styles.serverCardHeader}>Environmental</div>
           <div className={styles.serverCardBody}>
-            <div className={styles.serverThermalBlock}>
-              <div className={styles.serverKvLabel}>System Board Inlet Temp</div>
-              <div className={styles.serverTempRow}>
-                <div className={styles.serverTempValue}>{formatValue(temperatureValue)}</div>
-                <div className={styles.serverTempBarTrack}>
-                  <div className={`${styles.serverTempBarFill} ${toneForStatus(temperatureStatus) === 'fail' ? styles.serverTempBarFail : toneForStatus(temperatureStatus) === 'warn' ? styles.serverTempBarWarn : styles.serverTempBarOk}`} />
-                </div>
-              </div>
-            </div>
             <div className={styles.serverKvList}>
+              {currentPowerDraw ? (
+                <div className={styles.serverKvItem}>
+                  <span className={styles.serverKvLabel}>Current Power Draw</span>
+                  <span className={styles.serverKvValue}>{currentPowerDraw}</span>
+                </div>
+              ) : null}
+              {peakPowerDraw ? (
+                <div className={styles.serverKvItem}>
+                  <span className={styles.serverKvLabel}>Peak Power Draw</span>
+                  <span className={styles.serverKvValue}>{peakPowerDraw}</span>
+                </div>
+              ) : null}
               <div className={styles.serverKvItem}>
                 <span className={styles.serverKvLabel}>PSU 1 Status</span>
                 <span className={styles.serverKvValue}>
@@ -456,164 +428,6 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
                 </span>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className={`${styles.serverCard} ${styles.serverCardSpan3}`}>
-          <div className={styles.serverCardHeader}>Processors (CPU)</div>
-          <div className={styles.serverTableWrap}>
-            <table className={styles.serverTable}>
-              <thead>
-                <tr>
-                  <th>Socket</th>
-                  <th>Processor Model</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cpus.length ? cpus.map((cpu) => (
-                  <tr key={cpu.id}>
-                    <td>{cpu.slot || cpu.name || '—'}</td>
-                    <td>{cpu.model || cpu.name || '—'}</td>
-                    <td>{renderBadge(componentStatus(cpu) || 'Unknown', toneForStatus(componentStatus(cpu)))}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td>—</td>
-                    <td>No processor rows exposed by current iDRAC6 payload</td>
-                    <td>{renderBadge('Unknown', 'neutral')}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className={`${styles.serverCard} ${styles.serverCardSpan3}`}>
-          <div className={styles.serverCardHeader}>
-            <div className={styles.serverHeaderSplit}>
-              <span>Memory (RAM)</span>
-              <span className={styles.serverHeaderMetric}>Total Capacity: {formatValue(totalMemory != null ? `${totalMemory} GB` : null)}</span>
-            </div>
-          </div>
-          <div className={styles.serverTableWrap}>
-            <table className={styles.serverTable}>
-              <thead>
-                <tr>
-                  <th>Slot Label</th>
-                  <th>Capacity</th>
-                  <th>Type</th>
-                  <th>Speed</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {memoryModules.length ? memoryModules.map((module) => {
-                  const extra = rawObject(module.extra_json);
-                  return (
-                    <tr key={module.id}>
-                      <td>{module.slot || module.name || '—'}</td>
-                      <td>{module.capacity_gb != null ? `${module.capacity_gb} GB` : '—'}</td>
-                      <td>{formatValue(extra.memory_type || module.model)}</td>
-                      <td>{formatValue(extra.speed_ns ? `${extra.speed_ns} ns` : extra.operating_speed_mhz ? `${extra.operating_speed_mhz} MT/s` : '')}</td>
-                      <td>{renderBadge(componentStatus(module) || 'Unknown', toneForStatus(componentStatus(module)))}</td>
-                    </tr>
-                  );
-                }) : idracTables.memoryDevices.length ? idracTables.memoryDevices.map((row, index) => (
-                  <tr key={`${String(row.index || index)}`}>
-                    <td>{formatValue(row.location_name || row.display_name || row.index)}</td>
-                    <td>{formatValue(row.size_mb ? `${row.size_mb} MB` : row.capacity)}</td>
-                    <td>{formatValue(row.memory_type || row.type)}</td>
-                    <td>{formatValue(row.speed_ns ? `${row.speed_ns} ns` : row.speed_mhz ? `${row.speed_mhz} MT/s` : row.speed)}</td>
-                    <td>{renderBadge(String(row.status || row.health || row.status_code || 'Unknown'), toneForStatus(String(row.status || row.health || row.status_code || '')))}</td>
-                  </tr>
-                )) : (
-                  <tr>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>{renderBadge('Unknown', 'neutral')}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className={`${styles.serverCard} ${styles.serverCardSpan3}`}>
-          <div className={styles.serverCardHeader}>Storage Subsystem (RAID &amp; Disks)</div>
-          <div className={styles.serverCardBody}>
-            {virtualDisks.length ? virtualDisks.map((vd) => {
-              const extra = rawObject(vd.extra_json);
-              const memberSlots = Array.isArray(extra.member_slots) ? extra.member_slots.map((value) => String(value)) : [];
-              const memberDisks = physicalDisks.filter((disk) => {
-                const slot = disk.slot || disk.name;
-                return memberSlots.includes(slot);
-              });
-              memberDisks.forEach((disk) => assignedDiskKeys.add(String(disk.id)));
-              return (
-                <div key={vd.id} className={styles.serverStorageGroup}>
-                  <div className={styles.serverStorageHeader}>
-                    <div className={styles.serverStorageTitle}>
-                      <span>{vd.name || 'Virtual Disk'}</span>
-                      <span className={styles.serverStorageSubtitle}>{formatValue(extra.raid_type || vd.model)}</span>
-                    </div>
-                    {renderBadge(componentStatus(vd) || 'Unknown', toneForStatus(componentStatus(vd)))}
-                  </div>
-                  {memberDisks.length ? (
-                    <ul className={styles.serverDiskList}>
-                      {memberDisks.map((disk) => (
-                        <li key={disk.id} className={styles.serverDiskItem}>
-                          <div className={styles.serverDiskSlot}>{disk.slot || disk.name || '—'}</div>
-                          <div>
-                            <div className={styles.serverDiskModel}>{[disk.manufacturer, disk.model].filter(Boolean).join(' ') || disk.name || 'Physical Disk'}</div>
-                            <div className={styles.serverKvValueSub}>{[disk.serial_number, disk.capacity_gb != null ? `${disk.capacity_gb} GB` : ''].filter(Boolean).join(' · ') || 'No additional disk metadata'}</div>
-                          </div>
-                          <div>{renderBadge(componentStatus(disk) || 'Unknown', toneForStatus(componentStatus(disk)))}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className={styles.serverEmptyNote}>Current payload does not expose virtual-disk to physical-disk membership mapping.</div>
-                  )}
-                </div>
-              );
-            }) : null}
-
-            {physicalDisks.filter((disk) => !assignedDiskKeys.has(String(disk.id))).length ? (
-              <div className={styles.serverStorageGroup}>
-                <div className={styles.serverStorageHeader}>
-                  <div className={styles.serverStorageTitle}>
-                    <span>Unassigned Physical Disks</span>
-                    <span className={styles.serverStorageSubtitle}>Direct component view</span>
-                  </div>
-                </div>
-                <ul className={styles.serverDiskList}>
-                  {physicalDisks.filter((disk) => !assignedDiskKeys.has(String(disk.id))).map((disk) => {
-                    const extra = rawObject(disk.extra_json);
-                    return (
-                      <li key={disk.id} className={styles.serverDiskItem}>
-                        <div className={styles.serverDiskSlot}>{disk.slot || disk.name || '—'}</div>
-                        <div>
-                          <div className={styles.serverDiskModel}>{[disk.manufacturer, disk.model].filter(Boolean).join(' ') || disk.name || 'Physical Disk'}</div>
-                          <div className={styles.serverKvValueSub}>{[disk.serial_number, typeof extra.reason === 'string' ? extra.reason : '', disk.capacity_gb != null ? `${disk.capacity_gb} GB` : ''].filter(Boolean).join(' · ') || 'No additional disk metadata'}</div>
-                        </div>
-                        <div>{renderBadge(componentStatus(disk) || 'Unknown', toneForStatus(componentStatus(disk)))}</div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
-
-            {!virtualDisks.length && !physicalDisks.length && !raidControllers.length ? (
-              <div className={styles.serverEmptyNote}>
-                {asset.raw_facts?.storage_via_snmp === false
-                  ? 'This iDRAC6 returned no storage rows via SNMP. RAID, disk, and topology blocks can be rendered only after the current source exposes them.'
-                  : 'No storage subsystem rows are available from the current asset source yet.'}
-              </div>
-            ) : null}
           </div>
         </section>
 

@@ -263,6 +263,16 @@
   gap: 20px;
 }
 
+.serverDashNotice {
+  padding: 12px 14px;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-hover);
+  color: var(--page-text-sub);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .serverDashHeader {
   display: flex;
   justify-content: space-between;
