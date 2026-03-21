@@ -1,1 +1,0 @@
-"""NOCKO Proxy Agent package."""
