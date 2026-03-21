@@ -777,7 +777,7 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
                       <tr key={nic.id}>
                         <td>{nic.name || '—'}</td>
                         <td>{nic.slot || '—'}</td>
-                        <td>{formatValue(extra.mac_address || nic.mac_address)}</td>
+                        <td>{formatValue(extra.mac_address)}</td>
                         <td>{renderBadge(componentStatus(nic) || 'Unknown', toneForStatus(componentStatus(nic)))}</td>
                         <td>{formatValue(extra.source)}</td>
                       </tr>
