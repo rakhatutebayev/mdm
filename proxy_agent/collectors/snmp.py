@@ -446,6 +446,158 @@ def _run_ssh_command(
         client.close()
 
 
+def _run_ssh_commands(
+    host: str,
+    username: str,
+    password: str,
+    port: int,
+    commands: list[str],
+    timeout_s: float,
+) -> dict[str, tuple[int, str, str]]:
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(
+        hostname=host,
+        port=port,
+        username=username,
+        password=password,
+        look_for_keys=False,
+        allow_agent=False,
+        timeout=timeout_s,
+        banner_timeout=timeout_s,
+        auth_timeout=timeout_s,
+    )
+    try:
+        results: dict[str, tuple[int, str, str]] = {}
+        for command in commands:
+            stdin, stdout, stderr = client.exec_command(command, timeout=timeout_s)
+            _ = stdin
+            out = stdout.read().decode("utf-8", errors="ignore")
+            err = stderr.read().decode("utf-8", errors="ignore")
+            code = stdout.channel.recv_exit_status()
+            results[command] = (code, out, err)
+        return results
+    finally:
+        client.close()
+
+
+def _snake_case_label(value: str) -> str:
+    text = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+    return text.strip("_")
+
+
+def _parse_racadm_equals_lines(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            line = line[1:].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[_snake_case_label(key)] = value.strip()
+    return values
+
+
+def _parse_racadm_getsysinfo(text: str) -> dict[str, Any]:
+    sections: dict[str, dict[str, str]] = {}
+    current_section = "root"
+    sections[current_section] = {}
+    embedded_nics: list[dict[str, str]] = []
+    current_embedded_base = ""
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.endswith(":") and "=" not in stripped:
+            current_section = _snake_case_label(stripped[:-1]) or "root"
+            sections.setdefault(current_section, {})
+            current_embedded_base = ""
+            continue
+        if "=" not in stripped:
+            continue
+        key, value = [part.strip() for part in stripped.split("=", 1)]
+        if current_section == "embedded_nic_mac_addresses":
+            if raw_line[:1].isspace():
+                nic_name = f"{current_embedded_base} {key}".strip()
+            else:
+                nic_name = key
+                current_embedded_base = key.split()[0]
+            embedded_nics.append(
+                {
+                    "name": nic_name,
+                    "mac_address": value.upper(),
+                }
+            )
+            continue
+        sections.setdefault(current_section, {})[_snake_case_label(key)] = value
+    return {
+        "sections": sections,
+        "embedded_nics": embedded_nics,
+    }
+
+
+def _collect_idrac_racadm_details(host: str, target: SnmpTarget) -> dict[str, Any]:
+    commands = [
+        "racadm getsysinfo",
+        "racadm getversion",
+        "racadm getniccfg",
+        "racadm getconfig -g cfgServerPower",
+        "racadm getconfig -g cfgLanNetworking",
+        "racadm getconfig -g ifcRacManagedNodeOs",
+        "racadm getconfig -g cfgSensorRedundancy -i 1",
+    ]
+    commands.extend(f"racadm getconfig -g cfgServerPowerSupply -i {index}" for index in range(1, 5))
+    results = _run_ssh_commands(
+        host=host,
+        username=target.ssh_username,
+        password=target.ssh_password,
+        port=target.ssh_port,
+        commands=commands,
+        timeout_s=max(10.0, target.timeout_s * 12),
+    )
+    getsysinfo = _parse_racadm_getsysinfo(results["racadm getsysinfo"][1])
+    getversion = _parse_racadm_equals_lines(results["racadm getversion"][1])
+    getniccfg = _parse_racadm_getsysinfo(results["racadm getniccfg"][1])
+    server_power = _parse_racadm_equals_lines(results["racadm getconfig -g cfgServerPower"][1])
+    lan_networking = _parse_racadm_equals_lines(results["racadm getconfig -g cfgLanNetworking"][1])
+    managed_node_os = _parse_racadm_equals_lines(results["racadm getconfig -g ifcRacManagedNodeOs"][1])
+    sensor_redundancy = _parse_racadm_equals_lines(results["racadm getconfig -g cfgSensorRedundancy -i 1"][1])
+    power_supplies: list[dict[str, str]] = []
+    for index in range(1, 5):
+        command = f"racadm getconfig -g cfgServerPowerSupply -i {index}"
+        parsed = _parse_racadm_equals_lines(results[command][1])
+        if not parsed:
+            continue
+        parsed["index"] = str(index)
+        if (
+            parsed.get("cfgserverpowersupplyonlinestatus", "").strip().lower() == "absent"
+            and parsed.get("cfgserverpowersupplymaxinputpower", "").strip().startswith("0 ")
+            and parsed.get("cfgserverpowersupplymaxoutputpower", "").strip().startswith("0 ")
+        ):
+            continue
+        power_supplies.append(parsed)
+    errors = {
+        command: err.strip()
+        for command, (_, _, err) in results.items()
+        if err.strip()
+    }
+    return {
+        "getsysinfo": getsysinfo,
+        "getversion": getversion,
+        "getniccfg": getniccfg,
+        "server_power": server_power,
+        "lan_networking": lan_networking,
+        "managed_node_os": managed_node_os,
+        "sensor_redundancy": sensor_redundancy,
+        "power_supplies": power_supplies,
+        "errors": errors,
+    }
+
+
 def _collect_idrac_racadm_sel(host: str, target: SnmpTarget) -> dict[str, Any]:
     code, out, err = _run_ssh_command(
         host=host,
@@ -664,6 +816,7 @@ def probe_host(ip: str, target: SnmpTarget) -> dict[str, Any] | None:
     esxi_details: dict[str, Any] = {}
     dell_storage: dict[str, Any] = {}
     idrac_component_tables: dict[str, Any] = {}
+    idrac_racadm_details: dict[str, Any] = {}
 
     if target.only_match:
         haystack = " ".join([sys_descr, sys_name, model]).lower()
@@ -705,6 +858,12 @@ def probe_host(ip: str, target: SnmpTarget) -> dict[str, Any] | None:
                 "host_resource_hints": [],
             }
         if target.ssh_username and target.ssh_password:
+            try:
+                idrac_racadm_details = _collect_idrac_racadm_details(ip, target)
+                dell_details["racadm_details"] = idrac_racadm_details
+            except Exception as exc:
+                dell_details["racadm_details_error"] = str(exc)
+                idrac_racadm_details = {"error": str(exc)}
             try:
                 dell_details["racadm_sel"] = _collect_idrac_racadm_sel(ip, target)
             except Exception as exc:
@@ -824,6 +983,7 @@ def probe_host(ip: str, target: SnmpTarget) -> dict[str, Any] | None:
         "snmp_community": target.community,
         "dell_details": dell_details,
         "idrac_component_tables": idrac_component_tables,
+        "idrac_racadm_details": idrac_racadm_details,
         "dell_storage": dell_storage,
         "avaya_details": avaya_details,
         "esxi_details": esxi_details,

@@ -1,6 +1,7 @@
 """Dell iDRAC device template."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from proxy_agent.templates.base import DeviceTemplate
@@ -194,6 +195,22 @@ def _label_from_map(mapping: dict[str, str], code: Any) -> str:
     return mapping.get(text, text)
 
 
+def _obj(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _rows(value: Any) -> list[dict[str, Any]]:
+    return [row for row in (value or []) if isinstance(row, dict)]
+
+
+def _first_number(value: Any) -> float | None:
+    match = re.search(r"-?\d+(?:\.\d+)?", str(value or ""))
+    if not match:
+        return None
+    number = float(match.group(0))
+    return int(number) if number.is_integer() else number
+
+
 class DellIdracTemplate(DeviceTemplate):
     key = "dell_idrac"
     display_name = "Dell iDRAC"
@@ -213,24 +230,44 @@ class DellIdracTemplate(DeviceTemplate):
         dell_details = raw_facts.get("dell_details")
         if not isinstance(dell_details, dict):
             dell_details = {}
+        racadm_details = _obj(raw_facts.get("idrac_racadm_details") or dell_details.get("racadm_details"))
+        racadm_system = _obj(racadm_details.get("getsysinfo"))
+        racadm_system_sections = _obj(racadm_system.get("sections"))
+        racadm_system_info = _obj(racadm_system_sections.get("system_information"))
+        racadm_rac_info = _obj(racadm_system_sections.get("rac_information"))
+        racadm_version = _obj(racadm_details.get("getversion"))
+        racadm_power = _obj(racadm_details.get("server_power"))
+        racadm_lan = _obj(racadm_details.get("lan_networking"))
+        racadm_node_os = _obj(racadm_details.get("managed_node_os"))
+        racadm_sensor_redundancy = _obj(racadm_details.get("sensor_redundancy"))
+        racadm_power_supplies = _rows(racadm_details.get("power_supplies"))
+        racadm_embedded_nics = _rows(racadm_system.get("embedded_nics"))
 
         model = (
             str(dell_details.get("system_model_name", "") or "").strip()
+            or str(racadm_system_info.get("system_model", "") or "").strip()
             or str(dell_details.get("controller_model", "") or "").strip()
             or str(raw_facts.get("model", "") or "").strip()
             or "iDRAC"
         )
         display_name = (
             str(raw_facts.get("sys_name", "") or "").strip()
+            or str(racadm_rac_info.get("dns_rac_name", "") or "").strip()
             or f"Dell {model}"
         )
         service_tag = str(
             dell_details.get("service_tag", "")
             or dell_details.get("system_service_tag", "")
+            or racadm_system_info.get("service_tag", "")
             or raw_facts.get("serial_number", "")
             or ""
         ).strip()
-        firmware = str(dell_details.get("controller_firmware", "") or raw_facts.get("firmware_version", "") or "").strip()
+        firmware = str(
+            dell_details.get("controller_firmware", "")
+            or racadm_rac_info.get("firmware_version", "")
+            or raw_facts.get("firmware_version", "")
+            or ""
+        ).strip()
         management_url = str(dell_details.get("management_url", "") or "").strip()
         global_status_code = str(dell_details.get("global_status", "") or "").strip()
         global_status = {
@@ -257,6 +294,26 @@ class DellIdracTemplate(DeviceTemplate):
         power_rows = _table_rows(component_tables.get("power_supplies"))
         cooling_rows = _table_rows(component_tables.get("cooling_devices"))
         temperature_rows = _table_rows(component_tables.get("temperature_probes"))
+        if not power_rows and racadm_power_supplies:
+            power_rows = [
+                {
+                    "index": str(row.get("index", "") or "").strip(),
+                    "status_code": "3" if str(row.get("cfgserverpowersupplyonlinestatus", "") or "").strip().lower() == "present" else "2",
+                    "location_name": f"PSU {str(row.get('index', '') or '').strip()}",
+                    "type_code": "",
+                    "input_voltage": "",
+                    "output_tenths_watts": "",
+                    "sensor_state": "",
+                    "fqdd": "",
+                    "racadm_online_status": str(row.get("cfgserverpowersupplyonlinestatus", "") or "").strip(),
+                    "racadm_fw_ver": str(row.get("cfgserverpowersupplyfwver", "") or "").strip(),
+                    "racadm_type": str(row.get("cfgserverpowersupplytype", "") or "").strip(),
+                    "racadm_max_input_power": str(row.get("cfgserverpowersupplymaxinputpower", "") or "").strip(),
+                    "racadm_max_output_power": str(row.get("cfgserverpowersupplymaxoutputpower", "") or "").strip(),
+                    "racadm_current_draw": str(row.get("cfgserverpowersupplycurrentdraw", "") or "").strip(),
+                }
+                for row in racadm_power_supplies
+            ]
         has_storage_mib = bool(storage_pds or storage_vds or storage_ctls)
         # Когда Dell Storage MIB пуст (iDRAC6), показываем LUN/PERC из hrDevice
         show_hr_storage = bool(hr_hints) and not storage_pds and not storage_vds
@@ -281,6 +338,11 @@ class DellIdracTemplate(DeviceTemplate):
         ]
         memory_sizes_gb = [_memory_size_gb(row.get("size_kb")) for row in memory_rows]
         memory_sizes_gb = [value for value in memory_sizes_gb if value is not None]
+        embedded_nics = [
+            row
+            for row in racadm_embedded_nics
+            if str(row.get("name", "") or "").strip() and str(row.get("mac_address", "") or "").strip()
+        ]
 
         def _worst_component_status(rows: list[dict[str, Any]], code_field: str = "status_code") -> str:
             worst = ""
@@ -308,7 +370,7 @@ class DellIdracTemplate(DeviceTemplate):
             "physical_disk_count": (len(storage_pds) if has_storage_mib else (len(hr_hints) if show_hr_storage else None)),
             "virtual_disk_count": len(storage_vds) if has_storage_mib else None,
             "disk_total_gb": None,
-            "network_interface_count": None,
+            "network_interface_count": len(embedded_nics) or None,
             "power_supply_count": len(power_rows) or None,
             "raid_summary": raid_summary
             if (has_storage_mib or show_hr_storage)
@@ -339,7 +401,7 @@ class DellIdracTemplate(DeviceTemplate):
             "power_status": _worst_component_status(power_rows),
             "network_status": "",
             "thermal_status": _worst_component_status(cooling_rows + temperature_rows),
-            "power_state": "",
+            "power_state": str(racadm_system_info.get("power_status", "") or ""),
             "alert_count": 1 if global_status in {"Critical", "Non-Recoverable", "Non-Critical"} else 0,
             "summary": "",
         }
@@ -369,6 +431,12 @@ class DellIdracTemplate(DeviceTemplate):
             table_bits.append(f"{len(temperature_rows)} temperature probe")
         if table_bits:
             health["summary"] = f"{health['summary']} Component tables: {', '.join(table_bits)}."
+        power_now = racadm_power.get("cfgserveractualpowerconsumption")
+        if power_now:
+            health["summary"] = f"{health['summary']} Current draw: {power_now}."
+        node_os_name = str(racadm_node_os.get("ifcracmnososname", "") or racadm_system_info.get("os_name", "") or "").strip()
+        if node_os_name:
+            health["summary"] = f"{health['summary']} Managed OS: {node_os_name}."
 
         racadm_sel = dell_details.get("racadm_sel")
         if not isinstance(racadm_sel, dict):
@@ -398,6 +466,17 @@ class DellIdracTemplate(DeviceTemplate):
                 "extra_json": {
                     "management_url": management_url,
                     "status_code": global_status_code,
+                    "bios_version": str(racadm_version.get("bios_version", "") or racadm_system_info.get("system_bios_version", "") or ""),
+                    "idrac_version": str(racadm_version.get("idrac_version", "") or ""),
+                    "usc_version": str(racadm_version.get("usc_version", "") or ""),
+                    "power_status": str(racadm_system_info.get("power_status", "") or ""),
+                    "managed_os_name": str(racadm_node_os.get("ifcracmnososname", "") or racadm_system_info.get("os_name", "") or ""),
+                    "managed_os_hostname": str(racadm_node_os.get("ifcracmnoshostname", "") or racadm_system_info.get("host_name", "") or ""),
+                    "actual_power_consumption": str(racadm_power.get("cfgserveractualpowerconsumption", "") or ""),
+                    "peak_power_consumption": str(racadm_power.get("cfgserverpeakpowerconsumption", "") or ""),
+                    "peak_power_timestamp": str(racadm_power.get("cfgserverpeakpowerconsumptiontimestamp", "") or ""),
+                    "power_cap_watts": str(racadm_power.get("cfgserverpowercapwatts", "") or ""),
+                    "sensor_redundancy_policy": str(racadm_sensor_redundancy.get("cfgsensorredundancypolicy", "") or ""),
                 },
             }
         ]
@@ -465,28 +544,58 @@ class DellIdracTemplate(DeviceTemplate):
         for row in power_rows:
             code = str(row.get("status_code", "") or "").strip()
             location = str(row.get("location_name", "") or row.get("fqdd", "") or row.get("index", "") or "").strip()
+            racadm_type = str(row.get("racadm_type", "") or "").strip()
+            racadm_fw_ver = str(row.get("racadm_fw_ver", "") or "").strip()
             components.append(
                 {
                     "component_type": "power_supply",
                     "name": location or "Power Supply",
                     "slot": location,
-                    "model": _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
+                    "model": racadm_type or _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
                     "manufacturer": "Dell",
                     "serial_number": "",
-                    "firmware_version": "",
+                    "firmware_version": racadm_fw_ver,
                     "capacity_gb": None,
-                    "status": _component_status_from_code(code),
+                    "status": str(row.get("racadm_online_status", "") or _component_status_from_code(code)),
                     "health": _dell_snmp_status_label(code),
                     "extra_json": {
-                        "source": "idrac_power_supply_table",
+                        "source": "idrac_power_supply_table" if str(row.get("type_code", "") or "").strip() else "idrac_racadm_power_supply",
                         "snmp_index": row.get("index", ""),
                         "status_code": code,
                         "type_code": str(row.get("type_code", "") or ""),
-                        "power_supply_type": _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
+                        "power_supply_type": racadm_type or _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
                         "output_watts": _power_watts(row.get("output_tenths_watts")),
                         "input_voltage": _safe_int(row.get("input_voltage")),
                         "sensor_state": str(row.get("sensor_state", "") or ""),
                         "fqdd": str(row.get("fqdd", "") or ""),
+                        "online_status": str(row.get("racadm_online_status", "") or ""),
+                        "max_input_power": str(row.get("racadm_max_input_power", "") or ""),
+                        "max_output_power": str(row.get("racadm_max_output_power", "") or ""),
+                        "current_draw": str(row.get("racadm_current_draw", "") or ""),
+                    },
+                }
+            )
+
+        for row in embedded_nics:
+            name = str(row.get("name", "") or "").strip()
+            mac_address = str(row.get("mac_address", "") or "").strip()
+            if not name or not mac_address:
+                continue
+            components.append(
+                {
+                    "component_type": "nic",
+                    "name": name,
+                    "slot": name.split()[0] if " " in name else name,
+                    "model": "Embedded NIC",
+                    "manufacturer": "Dell",
+                    "serial_number": mac_address,
+                    "firmware_version": "",
+                    "capacity_gb": None,
+                    "status": "OK",
+                    "health": "Observed",
+                    "extra_json": {
+                        "source": "idrac_racadm_getsysinfo",
+                        "mac_address": mac_address,
                     },
                 }
             )
