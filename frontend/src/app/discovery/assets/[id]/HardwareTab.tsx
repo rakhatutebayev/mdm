@@ -341,9 +341,18 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
   const physicalDisks = componentTypeRows(asset, 'physical_disk');
   const virtualDisks = componentTypeRows(asset, 'virtual_disk');
   const raidControllers = componentTypeRows(asset, 'raid_controller');
+  const managementController = componentTypeRows(asset, 'management_controller')[0];
   const networkInterfaces = componentTypeRows(asset, 'network_interface').concat(componentTypeRows(asset, 'nic'));
   const powerSupplies = componentTypeRows(asset, 'power_supply');
   const idracTables = rawIdracTables(asset);
+  const managementExtra = rawObject(managementController?.extra_json);
+  const racadmDetails = rawObject(rawFacts.idrac_racadm_details);
+  const racadmGetsysinfo = rawObject(racadmDetails.getsysinfo);
+  const racadmSections = rawObject(racadmGetsysinfo.sections);
+  const racadmGetniccfg = rawObject(racadmDetails.getniccfg);
+  const racadmNiccfgSections = rawObject(racadmGetniccfg.sections);
+  const racadmIpv4 = rawObject(racadmNiccfgSections.ipv4_settings);
+  const racadmLomStatus = rawObject(racadmNiccfgSections.lom_status);
   const temperatureStatus = asset.health?.thermal_status || '';
   const temperatureProbe = idracTables.temperatureProbes[0] ?? null;
   const powerTone = toneForStatus(asset.health?.power_status || rawFacts.critical_source_summary as string | undefined);
@@ -375,6 +384,8 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
     }
   }
   const assignedDiskKeys = new Set<string>();
+  const primaryManagementIp = asset.management_ip || asset.ip_address || String(racadmIpv4.ip_address || '').trim();
+  const managementUrl = String(details.management_url || rawFacts.management_url || managementExtra.management_url || '').trim();
 
   return (
     <div className={styles.serverDash}>
@@ -415,15 +426,39 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
               </div>
               <div className={styles.serverKvItem}>
                 <span className={styles.serverKvLabel}>Management IP</span>
-                <span className={styles.serverKvValue}>{formatValue(asset.management_ip || asset.ip_address)}</span>
+                <span className={styles.serverKvValue}>{formatValue(primaryManagementIp)}</span>
               </div>
               <div className={styles.serverKvItem}>
                 <span className={styles.serverKvLabel}>Firmware</span>
                 <span className={styles.serverKvValue}>{formatValue(details.controller_firmware || asset.firmware_version)}</span>
               </div>
               <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>BIOS Version</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.bios_version)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>iDRAC Version</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.idrac_version)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>USC Version</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.usc_version)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Power State</span>
+                <span className={styles.serverKvValue}>{formatValue(asset.health?.power_state || managementExtra.power_status)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Managed OS</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.managed_os_name || rawObject(racadmSections.system_information).os_name)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Managed Host</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.managed_os_hostname || rawObject(racadmSections.system_information).host_name)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
                 <span className={styles.serverKvLabel}>Management URL</span>
-                <span className={styles.serverKvValue}>{formatValue(details.management_url || rawFacts.management_url)}</span>
+                <span className={styles.serverKvValue}>{formatValue(managementUrl)}</span>
               </div>
             </div>
           </div>
@@ -462,6 +497,26 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
                       ? renderBadge(componentStatus(powerSupplies[1]) || 'Unknown', toneForStatus(componentStatus(powerSupplies[1])))
                       : renderBadge('Not exposed', 'neutral')}
                 </span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Current Draw</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.actual_power_consumption)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Peak Draw</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.peak_power_consumption)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Peak Timestamp</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.peak_power_timestamp)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Power Cap</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.power_cap_watts)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Redundancy Policy</span>
+                <span className={styles.serverKvValue}>{formatValue(managementExtra.sensor_redundancy_policy)}</span>
               </div>
             </div>
           </div>
@@ -664,6 +719,78 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
           </div>
         </section>
 
+        <section className={`${styles.serverCard} ${styles.serverCardSpan3}`}>
+          <div className={styles.serverCardHeader}>Power Supplies</div>
+          <div className={styles.serverTableWrap}>
+            {powerSupplies.length ? (
+              <table className={styles.serverTable}>
+                <thead>
+                  <tr>
+                    <th>PSU</th>
+                    <th>Status</th>
+                    <th>Type</th>
+                    <th>Firmware</th>
+                    <th>Capacity</th>
+                    <th>Current Draw</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {powerSupplies.map((psu) => {
+                    const extra = rawObject(psu.extra_json);
+                    return (
+                      <tr key={psu.id}>
+                        <td>{psu.slot || psu.name || '—'}</td>
+                        <td>{renderBadge(componentStatus(psu) || 'Unknown', toneForStatus(componentStatus(psu)))}</td>
+                        <td>{formatValue(extra.power_supply_type || psu.model)}</td>
+                        <td>{formatValue(psu.firmware_version || extra.firmware_version)}</td>
+                        <td>{formatValue(extra.max_output_power || extra.max_input_power)}</td>
+                        <td>{formatValue(extra.current_draw)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className={styles.serverEmptyNote}>No structured power supply rows are available in the current payload.</div>
+            )}
+          </div>
+        </section>
+
+        <section className={`${styles.serverCard} ${styles.serverCardSpan3}`}>
+          <div className={styles.serverCardHeader}>Embedded Network Interfaces</div>
+          <div className={styles.serverTableWrap}>
+            {networkInterfaces.length ? (
+              <table className={styles.serverTable}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Slot</th>
+                    <th>MAC Address</th>
+                    <th>Status</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {networkInterfaces.map((nic) => {
+                    const extra = rawObject(nic.extra_json);
+                    return (
+                      <tr key={nic.id}>
+                        <td>{nic.name || '—'}</td>
+                        <td>{nic.slot || '—'}</td>
+                        <td>{formatValue(extra.mac_address || nic.mac_address)}</td>
+                        <td>{renderBadge(componentStatus(nic) || 'Unknown', toneForStatus(componentStatus(nic)))}</td>
+                        <td>{formatValue(extra.source)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <div className={styles.serverEmptyNote}>No embedded NIC rows are available in the current payload.</div>
+            )}
+          </div>
+        </section>
+
         <section className={styles.serverCard}>
           <div className={styles.serverCardHeader}>Controllers</div>
           <div className={styles.serverCardBody}>
@@ -691,6 +818,26 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
               <div className={styles.serverKvItem}>
                 <span className={styles.serverKvLabel}>Primary MAC</span>
                 <span className={styles.serverKvValue}>{formatValue(asset.mac_address)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Link Speed</span>
+                <span className={styles.serverKvValue}>{formatValue(racadmLomStatus.speed)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Duplex</span>
+                <span className={styles.serverKvValue}>{formatValue(racadmLomStatus.duplex_mode)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Active LOM</span>
+                <span className={styles.serverKvValue}>{formatValue(racadmLomStatus.active_lom_in_shared_mode)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>NIC Selection</span>
+                <span className={styles.serverKvValue}>{formatValue(racadmLomStatus.nic_selection)}</span>
+              </div>
+              <div className={styles.serverKvItem}>
+                <span className={styles.serverKvLabel}>Gateway</span>
+                <span className={styles.serverKvValue}>{formatValue(racadmIpv4.gateway)}</span>
               </div>
             </div>
           </div>
