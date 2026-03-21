@@ -125,6 +125,55 @@ function normalizeSelEntries(asset: DiscoveredAsset) {
   );
 }
 
+function latestDiskObservations(
+  entries: Array<{ key: string; eventTime: string; severity: string; component: string; message: string }>,
+) {
+  const latestByDisk = new Map<
+    string,
+    { key: string; diskLabel: string; state: string; tone: Tone; eventTime: string; message: string }
+  >();
+
+  for (const entry of entries) {
+    const match = entry.message.match(/\bDrive\s+(\d+)\b/i);
+    if (!match) continue;
+
+    const diskLabel = `Drive ${match[1]}`;
+    let state = 'Observed';
+    let tone: Tone = 'neutral';
+    const text = entry.message.toLowerCase();
+
+    if (/failed|missing/.test(text)) {
+      state = 'Failed / Missing';
+      tone = 'fail';
+    } else if (/removed/.test(text)) {
+      state = 'Removed';
+      tone = 'fail';
+    } else if (/installed|restored|inserted/.test(text)) {
+      state = 'Installed';
+      tone = 'ok';
+    } else if (/degraded|rebuild|rebuilding|predictive|warning/.test(text)) {
+      state = 'Warning';
+      tone = 'warn';
+    } else if (/online|ready/.test(text)) {
+      state = 'Online';
+      tone = 'ok';
+    }
+
+    if (!latestByDisk.has(diskLabel)) {
+      latestByDisk.set(diskLabel, {
+        key: `${diskLabel}-${entry.key}`,
+        diskLabel,
+        state,
+        tone,
+        eventTime: entry.eventTime,
+        message: entry.message,
+      });
+    }
+  }
+
+  return [...latestByDisk.values()];
+}
+
 function renderBadge(label: string, tone: Tone) {
   return <span className={badgeClassName(tone)}>{label || 'Unknown'}</span>;
 }
@@ -349,6 +398,7 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
   const managementExtra = rawObject(managementController?.extra_json);
   const currentPowerDraw = typeof managementExtra.actual_power_consumption === 'string' ? managementExtra.actual_power_consumption : '';
   const peakPowerDraw = typeof managementExtra.peak_power_consumption === 'string' ? managementExtra.peak_power_consumption : '';
+  const diskObservations = latestDiskObservations(displayAlerts);
 
   return (
     <div className={styles.serverDash}>
@@ -367,7 +417,7 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
       </div>
 
       <div className={styles.serverDashNotice}>
-        Legacy iDRAC6 exposes limited hardware inventory. CPU, RAM, and storage sections are hidden because this device does not publish those live tables.
+        Legacy iDRAC6 exposes limited hardware inventory. CPU and RAM sections stay hidden, and storage below is derived from disk events in SEL history rather than live RAID SNMP tables.
       </div>
 
       <div className={styles.serverDashGrid}>
@@ -428,6 +478,42 @@ export function HardwareTab({ asset }: { asset: DiscoveredAsset }) {
                 </span>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className={`${styles.serverCard} ${styles.serverCardSpan3}`}>
+          <div className={styles.serverCardHeader}>Storage Subsystem (RAID &amp; Disks)</div>
+          <div className={styles.serverCardBody}>
+            <div className={styles.serverEmptyNote}>
+              Live RAID inventory is not exposed by this iDRAC6. The rows below show the latest observed disk states derived from SEL history using the same disk-oriented mapping categories as the Zabbix template.
+            </div>
+
+            {diskObservations.length ? (
+              <div className={styles.serverStorageGroup}>
+                <div className={styles.serverStorageHeader}>
+                  <div className={styles.serverStorageTitle}>
+                    <span>Observed Physical Disks</span>
+                    <span className={styles.serverStorageSubtitle}>SEL-derived state</span>
+                  </div>
+                </div>
+                <ul className={styles.serverDiskList}>
+                  {diskObservations.map((disk) => (
+                    <li key={disk.key} className={styles.serverDiskItem}>
+                      <div className={styles.serverDiskSlot}>{disk.diskLabel}</div>
+                      <div>
+                        <div className={styles.serverDiskModel}>{disk.message}</div>
+                        <div className={styles.serverKvValueSub}>{fmtDate(disk.eventTime)}</div>
+                      </div>
+                      <div>{renderBadge(disk.state, disk.tone)}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className={styles.serverEmptyNote}>
+                No disk-related SEL events are currently available from this iDRAC6.
+              </div>
+            )}
           </div>
         </section>
 
