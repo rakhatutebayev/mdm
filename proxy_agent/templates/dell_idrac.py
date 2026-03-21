@@ -65,6 +65,66 @@ HR_DEVICE_STATUS_LABEL: dict[str, str] = {
     "5": "Down",
 }
 
+POWER_SUPPLY_TYPE_BY_CODE: dict[str, str] = {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "Linear",
+    "4": "Switching",
+    "5": "Battery",
+    "6": "UPS",
+    "7": "Converter",
+    "8": "Regulator",
+    "9": "AC",
+    "10": "DC",
+    "11": "VRM",
+}
+
+COOLING_TYPE_BY_CODE: dict[str, str] = {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "Fan",
+    "4": "Blower",
+    "5": "Chip Fan",
+    "6": "Cabinet Fan",
+    "7": "Power Supply Fan",
+    "8": "Heat Pipe",
+    "9": "Refrigeration",
+    "10": "Active Cooling",
+    "11": "Passive Cooling",
+}
+
+TEMPERATURE_TYPE_BY_CODE: dict[str, str] = {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "Ambient",
+    "16": "Discrete",
+}
+
+MEMORY_TYPE_BY_CODE: dict[str, str] = {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "DRAM",
+    "4": "EDRAM",
+    "5": "VRAM",
+    "6": "SRAM",
+    "7": "RAM",
+    "8": "ROM",
+    "9": "FLASH",
+    "10": "EEPROM",
+    "11": "FEPROM",
+    "12": "EPROM",
+    "13": "CDRAM",
+    "14": "3DRAM",
+    "15": "SDRAM",
+    "16": "SGRAM",
+    "17": "RDRAM",
+    "18": "DDR",
+    "19": "DDR2",
+    "20": "DDR2 FB-DIMM",
+    "24": "DDR3",
+    "25": "FBD2",
+}
+
 
 def _hr_device_health_label(code: str) -> str:
     text = str(code or "").strip()
@@ -82,6 +142,56 @@ def _hr_component_status(code: str) -> str:
     if text in ("4", "5"):
         return "Critical"
     return "Unknown"
+
+
+def _alert_severity(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"critical", "non-recoverable", "fatal"}:
+        return "critical"
+    if text in {"warning", "non-critical", "warn"}:
+        return "warning"
+    if text in {"informational", "info"}:
+        return "info"
+    if text in {"ok", "normal"}:
+        return "ok"
+    return text or "unknown"
+
+
+def _table_rows(value: Any) -> list[dict[str, Any]]:
+    return [row for row in (value or []) if isinstance(row, dict)]
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _memory_size_gb(size_kb: Any) -> float | None:
+    size = _safe_int(size_kb)
+    if size is None or size <= 0 or size == 2147483647:
+        return None
+    return round(size / (1024 * 1024), 2)
+
+
+def _power_watts(value: Any) -> float | None:
+    watts_tenths = _safe_int(value)
+    if watts_tenths is None:
+        return None
+    return round(watts_tenths / 10.0, 1)
+
+
+def _temperature_c(value: Any) -> float | None:
+    reading = _safe_int(value)
+    if reading is None:
+        return None
+    return round(reading / 10.0, 1)
+
+
+def _label_from_map(mapping: dict[str, str], code: Any) -> str:
+    text = str(code or "").strip()
+    return mapping.get(text, text)
 
 
 class DellIdracTemplate(DeviceTemplate):
@@ -105,7 +215,8 @@ class DellIdracTemplate(DeviceTemplate):
             dell_details = {}
 
         model = (
-            str(dell_details.get("controller_model", "") or "").strip()
+            str(dell_details.get("system_model_name", "") or "").strip()
+            or str(dell_details.get("controller_model", "") or "").strip()
             or str(raw_facts.get("model", "") or "").strip()
             or "iDRAC"
         )
@@ -113,7 +224,12 @@ class DellIdracTemplate(DeviceTemplate):
             str(raw_facts.get("sys_name", "") or "").strip()
             or f"Dell {model}"
         )
-        service_tag = str(dell_details.get("service_tag", "") or raw_facts.get("serial_number", "") or "").strip()
+        service_tag = str(
+            dell_details.get("service_tag", "")
+            or dell_details.get("system_service_tag", "")
+            or raw_facts.get("serial_number", "")
+            or ""
+        ).strip()
         firmware = str(dell_details.get("controller_firmware", "") or raw_facts.get("firmware_version", "") or "").strip()
         management_url = str(dell_details.get("management_url", "") or "").strip()
         global_status_code = str(dell_details.get("global_status", "") or "").strip()
@@ -133,6 +249,14 @@ class DellIdracTemplate(DeviceTemplate):
         storage_vds: list[dict[str, Any]] = list(storage.get("virtual_disks") or [])
         storage_ctls: list[dict[str, Any]] = list(storage.get("controllers") or [])
         hr_hints: list[dict[str, Any]] = [h for h in (storage.get("host_resource_hints") or []) if isinstance(h, dict)]
+        component_tables = raw_facts.get("idrac_component_tables")
+        if not isinstance(component_tables, dict):
+            component_tables = {}
+        processor_rows = _table_rows(component_tables.get("processors"))
+        memory_rows = _table_rows(component_tables.get("memory_devices"))
+        power_rows = _table_rows(component_tables.get("power_supplies"))
+        cooling_rows = _table_rows(component_tables.get("cooling_devices"))
+        temperature_rows = _table_rows(component_tables.get("temperature_probes"))
         has_storage_mib = bool(storage_pds or storage_vds or storage_ctls)
         # Когда Dell Storage MIB пуст (iDRAC6), показываем LUN/PERC из hrDevice
         show_hr_storage = bool(hr_hints) and not storage_pds and not storage_vds
@@ -150,22 +274,42 @@ class DellIdracTemplate(DeviceTemplate):
         if show_hr_storage and not has_storage_mib:
             raid_summary = "Host Resources MIB hints (limited; no Dell Storage tables)"
 
+        processor_models = [
+            str(row.get("brand_name", "") or row.get("version", "") or "").strip()
+            for row in processor_rows
+            if str(row.get("brand_name", "") or row.get("version", "") or "").strip()
+        ]
+        memory_sizes_gb = [_memory_size_gb(row.get("size_kb")) for row in memory_rows]
+        memory_sizes_gb = [value for value in memory_sizes_gb if value is not None]
+
+        def _worst_component_status(rows: list[dict[str, Any]], code_field: str = "status_code") -> str:
+            worst = ""
+            for row in rows:
+                status = _component_status_from_code(str(row.get(code_field, "") or ""))
+                if status == "Critical":
+                    return "Critical"
+                if status == "Warning":
+                    worst = "Warning"
+                elif status == "OK" and not worst:
+                    worst = "OK"
+            return worst
+
         inventory = {
-            "processor_model": "",
-            "processor_vendor": "",
-            "processor_count": None,
-            "physical_cores": None,
-            "logical_processors": None,
-            "memory_total_gb": None,
-            "memory_slot_count": None,
-            "memory_slots_used": None,
-            "memory_module_count": None,
+            "processor_model": processor_models[0] if processor_models else "",
+            "processor_vendor": str(processor_rows[0].get("manufacturer", "") or "").strip() if processor_rows else "",
+            "processor_count": len(processor_rows) or None,
+            "physical_cores": sum(_safe_int(row.get("core_count")) or 0 for row in processor_rows) or None,
+            "logical_processors": sum(_safe_int(row.get("thread_count")) or 0 for row in processor_rows) or None,
+            "memory_total_gb": round(sum(memory_sizes_gb), 2) if memory_sizes_gb else None,
+            "memory_slot_count": len(memory_rows) or None,
+            "memory_slots_used": sum(1 for row in memory_rows if (_memory_size_gb(row.get("size_kb")) or 0) > 0) or None,
+            "memory_module_count": len(memory_rows) or None,
             "storage_controller_count": len(storage_ctls) if has_storage_mib else None,
             "physical_disk_count": (len(storage_pds) if has_storage_mib else (len(hr_hints) if show_hr_storage else None)),
             "virtual_disk_count": len(storage_vds) if has_storage_mib else None,
             "disk_total_gb": None,
             "network_interface_count": None,
-            "power_supply_count": None,
+            "power_supply_count": len(power_rows) or None,
             "raid_summary": raid_summary
             if (has_storage_mib or show_hr_storage)
             else "Legacy iDRAC6 SNMP profile exposes limited hardware details",
@@ -189,12 +333,12 @@ class DellIdracTemplate(DeviceTemplate):
 
         health = {
             "overall_status": global_status or "Unknown",
-            "processor_status": "",
-            "memory_status": "",
+            "processor_status": _worst_component_status(processor_rows),
+            "memory_status": _worst_component_status(memory_rows),
             "storage_status": worst_storage if (has_storage_mib or hr_hints) else "",
-            "power_status": "",
+            "power_status": _worst_component_status(power_rows),
             "network_status": "",
-            "thermal_status": "",
+            "thermal_status": _worst_component_status(cooling_rows + temperature_rows),
             "power_state": "",
             "alert_count": 1 if global_status in {"Critical", "Non-Recoverable", "Non-Critical"} else 0,
             "summary": "",
@@ -212,6 +356,32 @@ class DellIdracTemplate(DeviceTemplate):
             )
         else:
             health["summary"] = f"Legacy Dell SNMP overall status: {global_status or 'Unknown'}"
+        table_bits: list[str] = []
+        if processor_rows:
+            table_bits.append(f"{len(processor_rows)} CPU")
+        if memory_rows:
+            table_bits.append(f"{len(memory_rows)} DIMM")
+        if power_rows:
+            table_bits.append(f"{len(power_rows)} PSU")
+        if cooling_rows:
+            table_bits.append(f"{len(cooling_rows)} fan")
+        if temperature_rows:
+            table_bits.append(f"{len(temperature_rows)} temperature probe")
+        if table_bits:
+            health["summary"] = f"{health['summary']} Component tables: {', '.join(table_bits)}."
+
+        racadm_sel = dell_details.get("racadm_sel")
+        if not isinstance(racadm_sel, dict):
+            racadm_sel = {}
+        sel_entries = [entry for entry in (racadm_sel.get("entries") or []) if isinstance(entry, dict)]
+        latest_sel_entry = sel_entries[0] if sel_entries else {}
+        latest_sel_message = str(racadm_sel.get("exact_error", "") or latest_sel_entry.get("message", "") or "").strip()
+        latest_sel_timestamp = str(racadm_sel.get("exact_timestamp", "") or latest_sel_entry.get("event_time", "") or "").strip()
+        if latest_sel_message:
+            suffix = f" Latest SEL event: {latest_sel_message}."
+            if latest_sel_timestamp:
+                suffix = f" Latest SEL event at {latest_sel_timestamp}: {latest_sel_message}."
+            health["summary"] = f"{health['summary']}{suffix}"
 
         components: list[dict[str, Any]] = [
             {
@@ -231,6 +401,148 @@ class DellIdracTemplate(DeviceTemplate):
                 },
             }
         ]
+
+        for row in processor_rows:
+            code = str(row.get("status_code", "") or "").strip()
+            brand = str(row.get("brand_name", "") or row.get("version", "") or "").strip()
+            fqdd = str(row.get("fqdd", "") or row.get("index", "") or "").strip()
+            components.append(
+                {
+                    "component_type": "cpu",
+                    "name": fqdd or brand or "Processor",
+                    "slot": fqdd,
+                    "model": brand,
+                    "manufacturer": str(row.get("manufacturer", "") or "").strip(),
+                    "serial_number": "",
+                    "firmware_version": "",
+                    "capacity_gb": None,
+                    "status": _component_status_from_code(code),
+                    "health": _dell_snmp_status_label(code),
+                    "extra_json": {
+                        "source": "idrac_processor_table",
+                        "snmp_index": row.get("index", ""),
+                        "status_code": code,
+                        "type_code": str(row.get("type_code", "") or ""),
+                        "current_speed_mhz": _safe_int(row.get("current_speed_mhz")),
+                        "core_count": _safe_int(row.get("core_count")),
+                        "thread_count": _safe_int(row.get("thread_count")),
+                        "version": str(row.get("version", "") or ""),
+                    },
+                }
+            )
+
+        for row in memory_rows:
+            code = str(row.get("status_code", "") or "").strip()
+            location = str(row.get("location_name", "") or row.get("bank_location_name", "") or row.get("index", "") or "").strip()
+            speed_ns = _safe_int(row.get("speed_ns"))
+            components.append(
+                {
+                    "component_type": "memory_module",
+                    "name": location or "Memory DIMM",
+                    "slot": location,
+                    "model": _label_from_map(MEMORY_TYPE_BY_CODE, row.get("type_code")),
+                    "manufacturer": str(row.get("manufacturer", "") or "").strip(),
+                    "serial_number": "",
+                    "firmware_version": "",
+                    "capacity_gb": _memory_size_gb(row.get("size_kb")),
+                    "status": _component_status_from_code(code),
+                    "health": _dell_snmp_status_label(code),
+                    "extra_json": {
+                        "source": "idrac_memory_table",
+                        "snmp_index": row.get("index", ""),
+                        "status_code": code,
+                        "type_code": str(row.get("type_code", "") or ""),
+                        "bank_location_name": str(row.get("bank_location_name", "") or ""),
+                        "part_number": str(row.get("part_number", "") or ""),
+                        "size_kb": _safe_int(row.get("size_kb")),
+                        "operating_speed_mhz": speed_ns,
+                        "speed_ns": speed_ns,
+                        "memory_type": _label_from_map(MEMORY_TYPE_BY_CODE, row.get("type_code")),
+                    },
+                }
+            )
+
+        for row in power_rows:
+            code = str(row.get("status_code", "") or "").strip()
+            location = str(row.get("location_name", "") or row.get("fqdd", "") or row.get("index", "") or "").strip()
+            components.append(
+                {
+                    "component_type": "power_supply",
+                    "name": location or "Power Supply",
+                    "slot": location,
+                    "model": _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
+                    "manufacturer": "Dell",
+                    "serial_number": "",
+                    "firmware_version": "",
+                    "capacity_gb": None,
+                    "status": _component_status_from_code(code),
+                    "health": _dell_snmp_status_label(code),
+                    "extra_json": {
+                        "source": "idrac_power_supply_table",
+                        "snmp_index": row.get("index", ""),
+                        "status_code": code,
+                        "type_code": str(row.get("type_code", "") or ""),
+                        "power_supply_type": _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
+                        "output_watts": _power_watts(row.get("output_tenths_watts")),
+                        "input_voltage": _safe_int(row.get("input_voltage")),
+                        "sensor_state": str(row.get("sensor_state", "") or ""),
+                        "fqdd": str(row.get("fqdd", "") or ""),
+                    },
+                }
+            )
+
+        for row in cooling_rows:
+            code = str(row.get("status_code", "") or "").strip()
+            location = str(row.get("location_name", "") or row.get("index", "") or "").strip()
+            components.append(
+                {
+                    "component_type": "fan",
+                    "name": location or "Cooling Device",
+                    "slot": location,
+                    "model": _label_from_map(COOLING_TYPE_BY_CODE, row.get("type_code")),
+                    "manufacturer": "",
+                    "serial_number": "",
+                    "firmware_version": "",
+                    "capacity_gb": None,
+                    "status": _component_status_from_code(code),
+                    "health": _dell_snmp_status_label(code),
+                    "extra_json": {
+                        "source": "idrac_cooling_device_table",
+                        "snmp_index": row.get("index", ""),
+                        "status_code": code,
+                        "type_code": str(row.get("type_code", "") or ""),
+                        "cooling_type": _label_from_map(COOLING_TYPE_BY_CODE, row.get("type_code")),
+                        "reading_rpm": _safe_int(row.get("reading_rpm")),
+                    },
+                }
+            )
+
+        for row in temperature_rows:
+            code = str(row.get("status_code", "") or "").strip()
+            location = str(row.get("location_name", "") or row.get("index", "") or "").strip()
+            components.append(
+                {
+                    "component_type": "temperature_probe",
+                    "name": location or "Temperature Probe",
+                    "slot": location,
+                    "model": _label_from_map(TEMPERATURE_TYPE_BY_CODE, row.get("type_code")),
+                    "manufacturer": "",
+                    "serial_number": "",
+                    "firmware_version": "",
+                    "capacity_gb": None,
+                    "status": _component_status_from_code(code),
+                    "health": _dell_snmp_status_label(code),
+                    "extra_json": {
+                        "source": "idrac_temperature_probe_table",
+                        "snmp_index": row.get("index", ""),
+                        "status_code": code,
+                        "type_code": str(row.get("type_code", "") or ""),
+                        "probe_type": _label_from_map(TEMPERATURE_TYPE_BY_CODE, row.get("type_code")),
+                        "reading_celsius": _temperature_c(row.get("reading_tenths_c")),
+                        "reading_tenths_c": _safe_int(row.get("reading_tenths_c")),
+                    },
+                }
+            )
 
         for row in storage_ctls:
             if not isinstance(row, dict):
@@ -363,6 +675,35 @@ class DellIdracTemplate(DeviceTemplate):
                 }
             )
 
+        for entry in sel_entries:
+            message = str(entry.get("message", "") or "").strip()
+            if not message:
+                continue
+            record_id = str(entry.get("record_id", "") or "").strip()
+            event_time = str(entry.get("event_time", "") or "").strip() or None
+            raw_severity = str(entry.get("severity", "") or "").strip()
+            alerts.append(
+                {
+                    "source": "legacy_idrac_racadm",
+                    "severity": _alert_severity(raw_severity),
+                    "code": f"idrac_sel_record_{record_id}" if record_id else "idrac_sel_event",
+                    "message": message,
+                    "status": "recorded",
+                    "first_seen_at": event_time,
+                    "last_seen_at": event_time,
+                    "cleared_at": None,
+                    "extra_json": {
+                        "history_entry": True,
+                        "event_time": event_time or "",
+                        "record_id": record_id,
+                        "raw_severity": raw_severity,
+                        "source_command": str(racadm_sel.get("command", "") or ""),
+                    },
+                }
+            )
+
+        health["alert_count"] = len(alerts) or 0
+
         return {
             "asset_class": "idrac",
             "display_name": display_name,
@@ -385,6 +726,9 @@ class DellIdracTemplate(DeviceTemplate):
                     "management_url": management_url,
                     "global_status": global_status,
                     "global_status_code": global_status_code,
+                    "last_alert_message": latest_sel_message,
+                    "last_alert_time": latest_sel_timestamp,
+                    "racadm_sel_entries": sel_entries,
                     "storage_via_snmp": bool(has_storage_mib),
                     "storage_via_hr_hints": bool(show_hr_storage),
                 },

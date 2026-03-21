@@ -218,12 +218,407 @@
   color: var(--page-text-sub);
 }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--surface-border);
+  margin-bottom: 16px;
+  padding-bottom: 2px;
+}
+
+.tabButton {
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--page-text-sub);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tabButton:hover {
+  color: var(--page-text);
+}
+
+.tabButtonActive {
+  color: var(--nav-accent);
+  border-bottom: 2px solid var(--nav-accent);
+}
+
 @media (max-width: 980px) {
   .header {
     flex-direction: column;
   }
 
   .infoGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.serverDash {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.serverDashHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.serverDashBreadcrumbs {
+  font-size: 12px;
+  color: var(--page-text-sub);
+  margin-bottom: 8px;
+}
+
+.serverDashTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.serverDashTitle {
+  margin: 0;
+  font-size: 20px;
+  color: var(--page-text);
+}
+
+.serverDashPolling {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+.serverDashPollingLabel {
+  font-size: 12px;
+  color: var(--page-text-sub);
+}
+
+.serverDashPollingSub {
+  font-size: 12px;
+  color: var(--page-text-sub);
+}
+
+.serverDashGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.serverCard {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.serverCardSpan2 {
+  grid-column: span 2;
+}
+
+.serverCardSpan3 {
+  grid-column: span 3;
+}
+
+.serverAlertCard {
+  border-left: 3px solid var(--danger-text, #dc2626);
+}
+
+.serverCardHeader {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--surface-border);
+  background: #fafbfd;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--page-text);
+}
+
+.serverHeaderSplit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.serverHeaderMetric {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--page-text-sub);
+}
+
+.serverCardBody {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.serverKvList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.serverKvItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.serverKvItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.serverKvLabel {
+  font-size: 12px;
+  color: var(--page-text-sub);
+  font-weight: 500;
+}
+
+.serverKvValue {
+  font-size: 13px;
+  color: var(--page-text);
+  text-align: right;
+}
+
+.serverKvValueSub {
+  font-size: 12px;
+  color: var(--page-text-sub);
+  margin-top: 4px;
+}
+
+.serverCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--surface-hover);
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.serverBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.serverBadgeOk {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.serverBadgeWarn {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.serverBadgeFail {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.serverBadgeNeutral {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.serverTableWrap {
+  overflow: auto;
+}
+
+.serverTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.serverTable th,
+.serverTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--surface-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.serverTable th {
+  color: var(--page-text-sub);
+  font-weight: 600;
+  background: var(--surface-hover);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.serverTable tr:last-child td {
+  border-bottom: none;
+}
+
+.serverStorageGroup {
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.serverStorageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.serverStorageTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--page-text);
+}
+
+.serverStorageSubtitle {
+  font-size: 11px;
+  color: var(--page-text-sub);
+  background: #e5e7eb;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.serverDiskList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.serverDiskItem {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.serverDiskItem:last-child {
+  border-bottom: none;
+}
+
+.serverDiskSlot {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--page-text-sub);
+}
+
+.serverDiskModel {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--page-text);
+}
+
+.serverEmptyNote {
+  padding: 12px 0;
+  font-size: 13px;
+  color: var(--page-text-sub);
+}
+
+.serverThermalBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.serverTempRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.serverTempValue {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--page-text);
+}
+
+.serverTempBarTrack {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-border);
+  overflow: hidden;
+}
+
+.serverTempBarFill {
+  height: 100%;
+  width: 42%;
+  border-radius: 999px;
+}
+
+.serverTempBarOk {
+  background: linear-gradient(90deg, #60a5fa, #22c55e);
+}
+
+.serverTempBarWarn {
+  background: linear-gradient(90deg, #60a5fa, #f59e0b);
+}
+
+.serverTempBarFail {
+  background: linear-gradient(90deg, #f59e0b, #dc2626);
+}
+
+@media (max-width: 1100px) {
+  .serverDashGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .serverCardSpan2,
+  .serverCardSpan3 {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .serverDashHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .serverDashPolling {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .serverHeaderSplit {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .serverDiskItem {
     grid-template-columns: 1fr;
   }
 }

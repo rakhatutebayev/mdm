@@ -5,7 +5,7 @@ import asyncio
 import json
 import secrets
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete, select
@@ -75,6 +75,80 @@ def _effective_agent_status(agent: ProxyAgent) -> str:
         return "Registered"
     age_s = (datetime.utcnow() - agent.last_checkin).total_seconds()
     return "Online" if age_s <= 900 else "Offline"
+
+
+def _load_json_object(value: str | None) -> dict[str, Any]:
+    try:
+        payload = json.loads(value or "{}")
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _iso_or_blank(value: Any) -> str:
+    if isinstance(value, datetime):
+        return value.isoformat(sep=" ")
+    return str(value or "").strip()
+
+
+def _alert_identity_parts(
+    source: str,
+    code: str,
+    message: str,
+    extra_json: dict[str, Any],
+    first_seen_at: datetime | None,
+    last_seen_at: datetime | None,
+) -> str:
+    record_id = str(extra_json.get("record_id", "") or "").strip()
+    if record_id:
+        return "|".join([source.strip(), code.strip(), f"record:{record_id}"])
+    event_time = str(extra_json.get("event_time", "") or "").strip()
+    if event_time:
+        return "|".join([source.strip(), code.strip(), event_time, message.strip()])
+    first_seen = _iso_or_blank(first_seen_at)
+    if first_seen:
+        return "|".join([source.strip(), code.strip(), first_seen, message.strip()])
+    last_seen = _iso_or_blank(last_seen_at)
+    return "|".join([source.strip(), code.strip(), last_seen, message.strip()])
+
+
+def _alert_identity_from_model(alert: AssetAlert) -> str:
+    extra_json = _load_json_object(alert.extra_json)
+    return _alert_identity_parts(
+        source=alert.source,
+        code=alert.code,
+        message=alert.message,
+        extra_json=extra_json,
+        first_seen_at=alert.first_seen_at,
+        last_seen_at=alert.last_seen_at,
+    )
+
+
+def _alert_identity_from_payload(alert: Any) -> str:
+    extra_json = alert.extra_json if isinstance(alert.extra_json, dict) else {}
+    return _alert_identity_parts(
+        source=alert.source,
+        code=alert.code,
+        message=alert.message,
+        extra_json=extra_json,
+        first_seen_at=alert.first_seen_at,
+        last_seen_at=alert.last_seen_at,
+    )
+
+
+def _alert_has_event_history(extra_json: dict[str, Any]) -> bool:
+    return bool(extra_json.get("history_entry")) or bool(extra_json.get("event_time")) or bool(extra_json.get("record_id"))
+
+
+def _alert_sort_value(alert_row: dict[str, Any]) -> tuple[int, str]:
+    extra_json = alert_row.get("extra_json", {})
+    if not isinstance(extra_json, dict):
+        extra_json = {}
+    event_time = str(extra_json.get("event_time", "") or "").strip()
+    last_seen = _iso_or_blank(alert_row.get("last_seen_at"))
+    first_seen = _iso_or_blank(alert_row.get("first_seen_at"))
+    history_rank = 1 if event_time else 0
+    return (history_rank, event_time or last_seen or first_seen)
 
 
 def _serialize_agent(agent: ProxyAgent) -> ProxyAgentOut:
@@ -147,12 +221,7 @@ def _serialize_asset(asset: DiscoveredAsset) -> DiscoveredAssetOut:
 
     alerts = []
     for alert in asset.alerts:
-        try:
-            extra_json = json.loads(alert.extra_json or "{}")
-            if not isinstance(extra_json, dict):
-                extra_json = {}
-        except Exception:
-            extra_json = {}
+        extra_json = _load_json_object(alert.extra_json)
         alerts.append(
             {
                 "id": alert.id,
@@ -167,6 +236,7 @@ def _serialize_asset(asset: DiscoveredAsset) -> DiscoveredAssetOut:
                 "extra_json": extra_json,
             }
         )
+    alerts.sort(key=_alert_sort_value, reverse=True)
 
     return DiscoveredAssetOut(
         id=asset.id,
@@ -333,23 +403,59 @@ async def _persist_asset_details(
                 )
             )
 
-    if item.alerts:
-        await db.execute(delete(AssetAlert).where(AssetAlert.asset_id == asset.id))
-        for alert in item.alerts:
-            db.add(
-                AssetAlert(
-                    asset_id=asset.id,
-                    source=alert.source,
-                    severity=alert.severity,
-                    code=alert.code,
-                    message=alert.message,
-                    status=alert.status,
-                    first_seen_at=alert.first_seen_at,
-                    last_seen_at=alert.last_seen_at or now,
-                    cleared_at=alert.cleared_at,
-                    extra_json=_json_dumps(alert.extra_json),
-                )
+    result = await db.execute(select(AssetAlert).where(AssetAlert.asset_id == asset.id))
+    existing_alerts = result.scalars().all()
+    existing_by_key = {_alert_identity_from_model(alert): alert for alert in existing_alerts}
+    seen_alert_keys: set[str] = set()
+
+    for alert in item.alerts:
+        extra_json = alert.extra_json if isinstance(alert.extra_json, dict) else {}
+        history_entry = _alert_has_event_history(extra_json)
+        key = _alert_identity_from_payload(alert)
+        seen_alert_keys.add(key)
+        existing = existing_by_key.get(key)
+        if existing:
+            existing.source = alert.source
+            existing.severity = alert.severity
+            existing.code = alert.code
+            existing.message = alert.message
+            existing.status = alert.status
+            existing.extra_json = _json_dumps(extra_json)
+            existing.first_seen_at = alert.first_seen_at or existing.first_seen_at
+            if alert.last_seen_at:
+                existing.last_seen_at = alert.last_seen_at
+            elif history_entry:
+                existing.last_seen_at = existing.last_seen_at or alert.first_seen_at
+            else:
+                existing.last_seen_at = now
+            existing.cleared_at = alert.cleared_at
+            continue
+
+        db.add(
+            AssetAlert(
+                asset_id=asset.id,
+                source=alert.source,
+                severity=alert.severity,
+                code=alert.code,
+                message=alert.message,
+                status=alert.status,
+                first_seen_at=alert.first_seen_at,
+                last_seen_at=alert.last_seen_at or (alert.first_seen_at if history_entry else now),
+                cleared_at=alert.cleared_at,
+                extra_json=_json_dumps(extra_json),
             )
+        )
+
+    for existing in existing_alerts:
+        key = _alert_identity_from_model(existing)
+        if key in seen_alert_keys:
+            continue
+        extra_json = _load_json_object(existing.extra_json)
+        if _alert_has_event_history(extra_json):
+            continue
+        if existing.status != "cleared":
+            existing.status = "cleared"
+            existing.cleared_at = now
 
 
 @router.get("/agents", response_model=list[ProxyAgentOut])

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { getDiscoveredAsset, type AssetAlert, type AssetComponent, type DiscoveredAsset } from '@/lib/api';
+import { HardwareTab } from './HardwareTab';
 import styles from './page.module.css';
 
 function fmtDate(value: string | null | undefined) {
@@ -114,6 +115,24 @@ function alertSubtitle(alert: AssetAlert) {
   return [alert.source, alert.code, alert.status].filter(Boolean).join(' · ');
 }
 
+
+function alertEventTime(alert: AssetAlert) {
+  const extra = alert.extra_json ?? {};
+  const eventTime = typeof extra.event_time === 'string' ? extra.event_time : '';
+  return fmtDate(eventTime || alert.first_seen_at || alert.last_seen_at);
+}
+
+
+function alertObservedTime(alert: AssetAlert) {
+  const extra = alert.extra_json ?? {};
+  const eventTime = typeof extra.event_time === 'string' ? extra.event_time : '';
+  if (eventTime && alert.last_seen_at && eventTime !== alert.last_seen_at) {
+    return fmtDate(alert.last_seen_at);
+  }
+  return '—';
+}
+
+
 function profileSections(asset: DiscoveredAsset) {
   const sections: Array<{ title: string; rows: Array<[string, unknown]> }> = [];
 
@@ -172,7 +191,7 @@ function profileSections(asset: DiscoveredAsset) {
         rows: [
           [
             'Note',
-            'No dell_storage block in raw_facts — deploy the latest proxy agent and run sync. iDRAC6 often has empty Dell Storage MIB; use ESXi + PERCCLI for disk details.',
+            'No dell_storage block in raw_facts — deploy the latest proxy agent and run sync. On iDRAC6 the Dell Storage MIB is often empty, so detailed RAID and disk topology may remain unavailable from this asset source.',
           ],
         ],
       });
@@ -227,6 +246,7 @@ export default function DiscoveredAssetDetailPage() {
   const customer = searchParams.get('customer') || '';
 
   const [asset, setAsset] = useState<DiscoveredAsset | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'hardware'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -301,7 +321,24 @@ export default function DiscoveredAssetDetailPage() {
             </div>
           </div>
 
-          <div className={styles.stats}>
+          <div className={styles.tabs}>
+            <button 
+              className={`${styles.tabButton} ${activeTab === 'overview' ? styles.tabButtonActive : ''}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              General Overview
+            </button>
+            <button 
+              className={`${styles.tabButton} ${activeTab === 'hardware' ? styles.tabButtonActive : ''}`}
+              onClick={() => setActiveTab('hardware')}
+            >
+              Hardware Profile
+            </button>
+          </div>
+
+          {activeTab === 'overview' ? (
+            <>
+              <div className={styles.stats}>
             <div className={styles.statCard}>
               <span className={styles.statLabel}>Health</span>
               <strong className={styles.statValue}>{asset.health?.overall_status || asset.status || '—'}</strong>
@@ -431,7 +468,8 @@ export default function DiscoveredAssetDetailPage() {
                       <th>Severity</th>
                       <th>Message</th>
                       <th>Source</th>
-                      <th>Last Seen</th>
+                      <th>Event Time</th>
+                      <th>Observed</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -440,7 +478,8 @@ export default function DiscoveredAssetDetailPage() {
                         <td>{alert.severity || '—'}</td>
                         <td>{alert.message || '—'}</td>
                         <td>{alertSubtitle(alert) || '—'}</td>
-                        <td>{fmtDate(alert.last_seen_at)}</td>
+                        <td>{alertEventTime(alert)}</td>
+                        <td>{alertObservedTime(alert)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -459,6 +498,10 @@ export default function DiscoveredAssetDetailPage() {
               <pre>{JSON.stringify(asset.raw_facts, null, 2)}</pre>
             </div>
           </section>
+            </>
+          ) : (
+            <HardwareTab asset={asset} />
+          )}
         </>
       )}
     </div>
