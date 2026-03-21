@@ -120,6 +120,12 @@ IDRAC_TEMPERATURE_READING = "1.3.6.1.4.1.674.10892.5.4.700.20.1.6"
 IDRAC_TEMPERATURE_TYPE = "1.3.6.1.4.1.674.10892.5.4.700.20.1.7"
 IDRAC_TEMPERATURE_LOCATION = "1.3.6.1.4.1.674.10892.5.4.700.20.1.8"
 
+IDRAC_POWER_SUPPLY_STATUS_DETAILS = "1.3.6.1.4.1.674.10892.5.4.200.10.1.10"
+IDRAC_COOLING_DEVICE_STATUS_DETAILS = "1.3.6.1.4.1.674.10892.5.4.200.10.1.22"
+IDRAC_TEMPERATURE_STATUS_DETAILS = "1.3.6.1.4.1.674.10892.5.4.200.10.1.25"
+IDRAC_MEMORY_DEVICE_STATUS_DETAILS = "1.3.6.1.4.1.674.10892.5.4.200.10.1.28"
+IDRAC_PROCESSOR_DEVICE_STATUS_LIST = "1.3.6.1.4.1.674.10892.5.4.200.10.1.51"
+
 IDRAC_COMPONENT_WALK_MAX = 256
 
 
@@ -248,6 +254,41 @@ def _snmp_get(ip: str, oid: str, target: SnmpTarget) -> str:
     for _name, value in var_binds:
         return _safe_str(value)
     return ""
+
+
+def _parse_status_detail_octets(value: str) -> list[int]:
+    text = str(value or "").strip()
+    if not text:
+        return []
+    parts = [part for part in re.split(r"[:\s]+", text) if part]
+    parsed: list[int] = []
+    for part in parts:
+        token = part.strip()
+        if not token:
+            continue
+        try:
+            if re.fullmatch(r"[0-9A-Fa-f]{2}", token):
+                parsed.append(int(token, 16))
+            elif token.isdigit():
+                parsed.append(int(token))
+        except ValueError:
+            continue
+    return parsed
+
+
+def _status_detail_rows(value: str, source: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for index, code in enumerate(_parse_status_detail_octets(value), start=1):
+        if code <= 0:
+            continue
+        rows.append(
+            {
+                "index": str(index),
+                "status_code": str(code),
+                "source": source,
+            }
+        )
+    return rows
 
 
 def _snmp_first_subtree_value(ip: str, subtree_oid: str, target: SnmpTarget, max_rows: int = 20) -> str:
@@ -736,6 +777,23 @@ def _collect_idrac_component_tables(ip: str, target: SnmpTarget) -> dict[str, li
             if any(str(value or "").strip() for field, value in row.items() if field != "index"):
                 filtered.append(row)
         out[key] = filtered
+
+    fallback_status_oids = {
+        "processors": (IDRAC_PROCESSOR_DEVICE_STATUS_LIST, "idrac_processor_status_list"),
+        "memory_devices": (IDRAC_MEMORY_DEVICE_STATUS_DETAILS, "idrac_memory_status_details"),
+        "power_supplies": (IDRAC_POWER_SUPPLY_STATUS_DETAILS, "idrac_power_supply_status_details"),
+        "cooling_devices": (IDRAC_COOLING_DEVICE_STATUS_DETAILS, "idrac_cooling_device_status_details"),
+        "temperature_probes": (IDRAC_TEMPERATURE_STATUS_DETAILS, "idrac_temperature_status_details"),
+    }
+    for key, (oid, source) in fallback_status_oids.items():
+        if out.get(key):
+            continue
+        raw_statuses = _snmp_first_subtree_value(ip, oid, st, max_rows=8)
+        if not raw_statuses:
+            raw_statuses = _snmp_get(ip, oid, st)
+        fallback_rows = _status_detail_rows(raw_statuses, source)
+        if fallback_rows:
+            out[key] = fallback_rows
     return out
 
 

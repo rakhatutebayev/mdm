@@ -483,13 +483,15 @@ class DellIdracTemplate(DeviceTemplate):
 
         for row in processor_rows:
             code = str(row.get("status_code", "") or "").strip()
+            idx = str(row.get("index", "") or "").strip()
             brand = str(row.get("brand_name", "") or row.get("version", "") or "").strip()
-            fqdd = str(row.get("fqdd", "") or row.get("index", "") or "").strip()
+            fqdd = str(row.get("fqdd", "") or "").strip()
+            cpu_label = f"CPU {idx}" if idx else "Processor"
             components.append(
                 {
                     "component_type": "cpu",
-                    "name": fqdd or brand or "Processor",
-                    "slot": fqdd,
+                    "name": fqdd or brand or cpu_label,
+                    "slot": fqdd or cpu_label,
                     "model": brand,
                     "manufacturer": str(row.get("manufacturer", "") or "").strip(),
                     "serial_number": "",
@@ -498,8 +500,8 @@ class DellIdracTemplate(DeviceTemplate):
                     "status": _component_status_from_code(code),
                     "health": _dell_snmp_status_label(code),
                     "extra_json": {
-                        "source": "idrac_processor_table",
-                        "snmp_index": row.get("index", ""),
+                        "source": str(row.get("source", "") or "idrac_processor_table"),
+                        "snmp_index": idx,
                         "status_code": code,
                         "type_code": str(row.get("type_code", "") or ""),
                         "current_speed_mhz": _safe_int(row.get("current_speed_mhz")),
@@ -512,13 +514,15 @@ class DellIdracTemplate(DeviceTemplate):
 
         for row in memory_rows:
             code = str(row.get("status_code", "") or "").strip()
-            location = str(row.get("location_name", "") or row.get("bank_location_name", "") or row.get("index", "") or "").strip()
+            idx = str(row.get("index", "") or "").strip()
+            location = str(row.get("location_name", "") or row.get("bank_location_name", "") or "").strip()
+            dimm_label = location or (f"DIMM {idx}" if idx else "Memory DIMM")
             speed_ns = _safe_int(row.get("speed_ns"))
             components.append(
                 {
                     "component_type": "memory_module",
-                    "name": location or "Memory DIMM",
-                    "slot": location,
+                    "name": dimm_label,
+                    "slot": dimm_label,
                     "model": _label_from_map(MEMORY_TYPE_BY_CODE, row.get("type_code")),
                     "manufacturer": str(row.get("manufacturer", "") or "").strip(),
                     "serial_number": "",
@@ -527,8 +531,8 @@ class DellIdracTemplate(DeviceTemplate):
                     "status": _component_status_from_code(code),
                     "health": _dell_snmp_status_label(code),
                     "extra_json": {
-                        "source": "idrac_memory_table",
-                        "snmp_index": row.get("index", ""),
+                        "source": str(row.get("source", "") or "idrac_memory_table"),
+                        "snmp_index": idx,
                         "status_code": code,
                         "type_code": str(row.get("type_code", "") or ""),
                         "bank_location_name": str(row.get("bank_location_name", "") or ""),
@@ -543,6 +547,7 @@ class DellIdracTemplate(DeviceTemplate):
 
         for row in power_rows:
             code = str(row.get("status_code", "") or "").strip()
+            idx = str(row.get("index", "") or "").strip()
             location = str(row.get("location_name", "") or row.get("fqdd", "") or row.get("index", "") or "").strip()
             racadm_type = str(row.get("racadm_type", "") or "").strip()
             racadm_fw_ver = str(row.get("racadm_fw_ver", "") or "").strip()
@@ -559,8 +564,11 @@ class DellIdracTemplate(DeviceTemplate):
                     "status": str(row.get("racadm_online_status", "") or _component_status_from_code(code)),
                     "health": _dell_snmp_status_label(code),
                     "extra_json": {
-                        "source": "idrac_power_supply_table" if str(row.get("type_code", "") or "").strip() else "idrac_racadm_power_supply",
-                        "snmp_index": row.get("index", ""),
+                        "source": str(
+                            row.get("source", "")
+                            or ("idrac_power_supply_table" if str(row.get("type_code", "") or "").strip() else "idrac_racadm_power_supply")
+                        ),
+                        "snmp_index": idx,
                         "status_code": code,
                         "type_code": str(row.get("type_code", "") or ""),
                         "power_supply_type": racadm_type or _label_from_map(POWER_SUPPLY_TYPE_BY_CODE, row.get("type_code")),
@@ -602,12 +610,14 @@ class DellIdracTemplate(DeviceTemplate):
 
         for row in cooling_rows:
             code = str(row.get("status_code", "") or "").strip()
-            location = str(row.get("location_name", "") or row.get("index", "") or "").strip()
+            idx = str(row.get("index", "") or "").strip()
+            location = str(row.get("location_name", "") or "").strip()
+            fan_label = location or (f"Fan {idx}" if idx else "Cooling Device")
             components.append(
                 {
                     "component_type": "fan",
-                    "name": location or "Cooling Device",
-                    "slot": location,
+                    "name": fan_label,
+                    "slot": fan_label,
                     "model": _label_from_map(COOLING_TYPE_BY_CODE, row.get("type_code")),
                     "manufacturer": "",
                     "serial_number": "",
@@ -616,8 +626,8 @@ class DellIdracTemplate(DeviceTemplate):
                     "status": _component_status_from_code(code),
                     "health": _dell_snmp_status_label(code),
                     "extra_json": {
-                        "source": "idrac_cooling_device_table",
-                        "snmp_index": row.get("index", ""),
+                        "source": str(row.get("source", "") or "idrac_cooling_device_table"),
+                        "snmp_index": idx,
                         "status_code": code,
                         "type_code": str(row.get("type_code", "") or ""),
                         "cooling_type": _label_from_map(COOLING_TYPE_BY_CODE, row.get("type_code")),
@@ -628,12 +638,14 @@ class DellIdracTemplate(DeviceTemplate):
 
         for row in temperature_rows:
             code = str(row.get("status_code", "") or "").strip()
-            location = str(row.get("location_name", "") or row.get("index", "") or "").strip()
+            idx = str(row.get("index", "") or "").strip()
+            location = str(row.get("location_name", "") or "").strip()
+            probe_label = location or (f"Temperature Probe {idx}" if idx else "Temperature Probe")
             components.append(
                 {
                     "component_type": "temperature_probe",
-                    "name": location or "Temperature Probe",
-                    "slot": location,
+                    "name": probe_label,
+                    "slot": probe_label,
                     "model": _label_from_map(TEMPERATURE_TYPE_BY_CODE, row.get("type_code")),
                     "manufacturer": "",
                     "serial_number": "",
@@ -642,8 +654,8 @@ class DellIdracTemplate(DeviceTemplate):
                     "status": _component_status_from_code(code),
                     "health": _dell_snmp_status_label(code),
                     "extra_json": {
-                        "source": "idrac_temperature_probe_table",
-                        "snmp_index": row.get("index", ""),
+                        "source": str(row.get("source", "") or "idrac_temperature_probe_table"),
+                        "snmp_index": idx,
                         "status_code": code,
                         "type_code": str(row.get("type_code", "") or ""),
                         "probe_type": _label_from_map(TEMPERATURE_TYPE_BY_CODE, row.get("type_code")),

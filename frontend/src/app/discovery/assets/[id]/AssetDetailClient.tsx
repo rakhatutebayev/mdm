@@ -231,6 +231,7 @@ export default function AssetDetailClient({
     ['Last Seen', fmtDate(asset.last_seen_at)],
   ] : [];
   const profileCards = asset ? profileSections(asset) : [];
+  const showDedicatedServerPage = asset ? prefersHardwareDashboard(asset) : false;
 
   return (
     <div className={styles.page}>
@@ -242,6 +243,8 @@ export default function AssetDetailClient({
 
       {!asset ? (
         <div className={styles.emptyState}>{error || `Asset ${assetId} not found.`}</div>
+      ) : showDedicatedServerPage ? (
+        <HardwareTab asset={asset} />
       ) : (
         <>
           <div className={styles.header}>
