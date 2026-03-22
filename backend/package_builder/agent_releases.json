@@ -14,6 +14,15 @@
           "sha256": "cef064edcfceeefd6c31ec79c171d6e32c23a01d67b4d3f568123b8a22953c43",
           "size_bytes": 13727483,
           "notes": "Published by GitHub Actions Windows release workflow"
+        },
+        {
+          "format": "linux-tarball",
+          "arch": "amd64",
+          "filename": "nocko-proxy-agent-1.7.4-linux-amd64.tar.gz",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.7.4/nocko-proxy-agent-1.7.4-linux-amd64.tar.gz",
+          "sha256": "09c5e356267f9dd0fea760da28f80092f03838c16c5233c718ee547cb5c24035",
+          "size_bytes": 36456,
+          "notes": "Linux proxy-agent tarball — upload via workflow proxy-agent-linux.yml if missing on release"
         }
       ]
     },

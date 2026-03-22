@@ -71,3 +71,14 @@ def find_artifact(fmt: str, arch: str) -> tuple[dict[str, Any] | None, dict[str,
         if artifact.get("format") == fmt and artifact.get("arch") == arch:
             return release, artifact
     return release, None
+
+
+def find_linux_proxy_bundle() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Latest release artifact: Linux proxy-agent tarball (format linux-tarball, arch amd64)."""
+    release = get_latest_release()
+    if not release:
+        return None, None
+    for artifact in release.get("artifacts", []):
+        if artifact.get("format") == "linux-tarball" and artifact.get("arch") == "amd64":
+            return release, artifact
+    return release, None

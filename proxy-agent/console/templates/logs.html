@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<h1>Agent Logs</h1>
+<div class="card" style="padding:0">
+<pre>{% for line in log_lines %}{{ line }}{% else %}No log file found.{% endfor %}</pre>
+</div>
+<p style="font-size:.75rem;color:#475569;margin-top:.5rem">Showing last 200 lines. <a href="/logs?lines=500" style="color:#63b3ed">Show 500</a></p>
+{% endblock %}

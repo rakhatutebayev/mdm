@@ -1,0 +1,59 @@
+.page { padding: 28px 36px; max-width: 1200px; margin: 0 auto; }
+.breadcrumb { font-size: 13px; color: #8b90a4; margin-bottom: 20px; }
+.breadcrumb a { color: #7b8cff; text-decoration: none; }
+.breadcrumb span { margin: 0 6px; }
+
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; background: #1a1c25; border: 1px solid #2d3048; border-radius: 14px; padding: 20px 24px; }
+.agentType { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #8b90a4; font-weight: 600; margin-bottom: 4px; }
+.title { font-size: 22px; font-weight: 700; color: #f0f2f8; margin: 0 0 8px; }
+.headerMeta { display: flex; gap: 10px; font-size: 13px; color: #8b90a4; flex-wrap: wrap; }
+.headerRight { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.onlineBadge { font-size: 13px; font-weight: 600; }
+.onlineBadge[data-online="true"] { color: #22c55e; }
+.onlineBadge[data-online="false"] { color: #6b7280; }
+.statusBadge { padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.status_active   { background: #14532d40; color: #22c55e; border: 1px solid #22c55e40; }
+.status_revoked  { background: #450a0a40; color: #ef4444; border: 1px solid #ef444440; }
+.status_disabled { background: #1e2030; color: #8b90a4; border: 1px solid #3d4070; }
+
+.layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+.infoCol { display: flex; flex-direction: column; gap: 16px; }
+.commandsCol { display: flex; flex-direction: column; gap: 16px; }
+
+.card { background: #1a1c25; border: 1px solid #2d3048; border-radius: 12px; overflow: hidden; }
+.cardTitle { font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; color: #8b90a4; font-weight: 600; padding: 12px 16px; border-bottom: 1px solid #2d3048; }
+
+.infoRow { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #1e2030; }
+.infoRow:last-child { border-bottom: none; }
+.infoLabel { font-size: 12px; color: #8b90a4; }
+.infoValue { font-size: 13px; color: #c8cce0; font-weight: 500; text-align: right; }
+
+.statusBtns { display: flex; gap: 8px; padding: 14px 16px; }
+.statusBtn { padding: 6px 14px; border-radius: 8px; border: 1px solid #2d3048; background: transparent; color: #8b90a4; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.statusBtn:hover:not(:disabled) { background: #1e2030; color: #c8cce0; }
+.statusBtnActive { background: #1e2a4a !important; color: #7b8cff !important; border-color: #3d5bf5 !important; }
+.statusBtn:disabled { opacity: 0.5; cursor: default; }
+
+.cmdForm { display: flex; gap: 10px; padding: 14px 16px; }
+.select { flex: 1; background: #13151e; border: 1px solid #2d3048; border-radius: 7px; padding: 8px 12px; color: #c8cce0; font-size: 13px; outline: none; cursor: pointer; }
+.sendBtn { background: #3d5bf5; color: white; border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.sendBtn:hover { background: #4f6cf7; }
+.sendBtn:disabled { opacity: 0.5; cursor: default; }
+.sentMsg { padding: 8px 16px 12px; font-size: 13px; color: #22c55e; }
+
+.table { width: 100%; border-collapse: collapse; }
+.table th { padding: 10px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #8b90a4; border-bottom: 1px solid #2d3048; }
+.table td { padding: 11px 16px; border-bottom: 1px solid #1e2030; font-size: 13px; color: #c8cce0; }
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background: #1e2030; }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.muted { color: #8b90a4; font-size: 12px; }
+
+.cmdBadge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.badge_green  { background: #14532d40; color: #22c55e; border: 1px solid #22c55e40; }
+.badge_orange { background: #78350f40; color: #f59e0b; border: 1px solid #f59e0b40; }
+.badge_red    { background: #450a0a40; color: #ef4444; border: 1px solid #ef444440; }
+.badge_blue   { background: #1e3a8a40; color: #60a5fa; border: 1px solid #60a5fa40; }
+
+.empty { padding: 24px; text-align: center; color: #8b90a4; font-size: 13px; }
+.loading { padding: 48px; text-align: center; color: #8b90a4; }

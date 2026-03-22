@@ -15,7 +15,9 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://mdm:${POSTGRES_PASSWORD:-mdmpassword}@postgres:5432/nocko_mdm

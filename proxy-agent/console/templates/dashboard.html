@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="card">
+  <h2>Agent Status</h2>
+  <div class="info-row">
+    <div class="info-item"><span class="k">Agent ID:</span><span class="v">{{ agent_id }}</span></div>
+    <div class="info-item"><span class="k">Tenant:</span><span class="v">{{ tenant_id }}</span></div>
+    <div class="info-item"><span class="k">Broker:</span><span class="v">{{ broker_url or '—' }}</span></div>
+  </div>
+</div>
+
+<div class="grid-3">
+  <div class="card">
+    <div class="stat">
+      <div class="num">{{ active_devices }}</div>
+      <div class="lbl">Active Devices</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="stat">
+      <div class="num">{{ total_devices }}</div>
+      <div class="lbl">Total Devices</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="stat">
+      <div class="num">{{ profiles }}</div>
+      <div class="lbl">Profiles Loaded</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Импорт профиля (Zabbix)</h2>
+  <p class="hint">Экспорт шаблона Zabbix: <strong>.xml</strong>, <strong>.json</strong> или <strong>.yaml / .yml</strong>. Нужны SNMP items с полем <code>snmp_oid</code>.</p>
+  <form action="/profiles/upload" method="post" enctype="multipart/form-data">
+    <div class="form-row">
+      <label>Файл шаблона</label>
+      <input type="file" name="file" accept=".xml,.json,.yaml,.yml,application/xml,application/json,text/yaml" required>
+    </div>
+    <button type="submit">Загрузить и конвертировать</button>
+  </form>
+</div>
+{% endblock %}

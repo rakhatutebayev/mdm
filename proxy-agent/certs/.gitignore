@@ -1,0 +1,2 @@
+# Local / CI-injected trust anchor (keep out of public repos)
+mdm-ca.pem

@@ -1,0 +1,15 @@
+{
+  "_comment": "LOCAL ONLY fields — managed on this machine. SERVER-MANAGED fields are fetched from MDM.",
+  "listen_host": "0.0.0.0",
+  "listen_port": 8443,
+  "log_level": "INFO",
+  "mdm_url": "https://mdm.nocko.com",
+  "enrollment_token": "",
+  "data_dir": "/var/lib/nocko-agent",
+  "cert_dir": "/etc/nocko-agent/certs",
+  "db_path": "/var/lib/nocko-agent/agent.db",
+  "console_tls": true,
+  "console_cert_filename": "ui.crt",
+  "console_key_filename": "ui.key",
+  "mdm_trust_ca_file": "mdm-ca.pem"
+}

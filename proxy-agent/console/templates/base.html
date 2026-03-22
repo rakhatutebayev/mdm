@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>NOCKO Agent — {% block title %}Console{% endblock %}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:ui-sans-serif,system-ui,sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+    nav{background:#1a1f2e;border-bottom:1px solid #2d3748;padding:0 1.5rem;display:flex;align-items:center;gap:2rem}
+    nav .brand{font-weight:700;font-size:1.1rem;color:#63b3ed;padding:1rem 0}
+    nav a{color:#94a3b8;text-decoration:none;padding:1rem .25rem;font-size:.875rem;border-bottom:2px solid transparent}
+    nav a:hover,nav a.active{color:#e2e8f0;border-color:#63b3ed}
+    .badge{display:inline-block;padding:.15rem .5rem;border-radius:.375rem;font-size:.7rem;font-weight:600}
+    .badge-green{background:#14532d;color:#4ade80} .badge-red{background:#450a0a;color:#f87171}
+    .badge-yellow{background:#422006;color:#fb923c}
+    main{padding:2rem 1.5rem;max-width:1200px;margin:0 auto}
+    h1{font-size:1.5rem;font-weight:700;margin-bottom:1.5rem}
+    h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#94a3b8}
+    .card{background:#1a1f2e;border:1px solid #2d3748;border-radius:.75rem;padding:1.5rem;margin-bottom:1.5rem}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+    .stat{text-align:center} .stat .num{font-size:2.5rem;font-weight:700;color:#63b3ed}
+    .stat .lbl{font-size:.75rem;color:#64748b;margin-top:.25rem;text-transform:uppercase;letter-spacing:.05em}
+    table{width:100%;border-collapse:collapse;font-size:.875rem}
+    th{text-align:left;padding:.75rem 1rem;color:#64748b;font-weight:500;border-bottom:1px solid #2d3748}
+    td{padding:.75rem 1rem;border-bottom:1px solid #1e2535;color:#cbd5e1}
+    tr:hover td{background:#1e2535}
+    input,select{background:#0f1117;border:1px solid #2d3748;color:#e2e8f0;padding:.5rem .75rem;border-radius:.375rem;width:100%;margin-bottom:.75rem}
+    button,input[type=submit]{background:#2563eb;color:#fff;border:none;padding:.6rem 1.25rem;border-radius:.375rem;cursor:pointer;font-size:.875rem;width:auto}
+    button:hover,input[type=submit]:hover{background:#1d4ed8}
+    pre{background:#0f1117;border:1px solid #2d3748;border-radius:.5rem;padding:1rem;overflow-x:auto;font-size:.75rem;line-height:1.6;color:#94a3b8;max-height:600px;overflow-y:auto}
+    .info-row{display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:1rem}
+    .info-item{font-size:.8rem} .info-item .k{color:#64748b} .info-item .v{color:#94a3b8;margin-left:.3rem}
+    label{font-size:.8rem;color:#94a3b8;display:block;margin-bottom:.25rem}
+    .form-row{margin-bottom:1rem}
+    .alert{padding:.75rem 1rem;border-radius:.5rem;margin-bottom:1rem;font-size:.875rem}
+    .alert-warn{background:#422006;border:1px solid #92400e;color:#fbbf24}
+    .hint{font-size:.8rem;color:#64748b;line-height:1.5;margin-bottom:1rem}
+    .hint code{background:#0f1117;padding:.1rem .35rem;border-radius:.25rem;font-size:.75rem}
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">⬡ NOCKO Agent</span>
+  <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Dashboard</a>
+  <a href="/devices" {% if request.url.path.startswith('/devices') %}class="active"{% endif %}>Devices</a>
+  <a href="/config" {% if request.url.path == '/config' %}class="active"{% endif %}>Config</a>
+  <a href="/logs" {% if request.url.path == '/logs' %}class="active"{% endif %}>Logs</a>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:1rem;font-size:.8rem">
+    <span class="info-item"><span class="k">Agent:</span><span class="v">{{ agent_id or '—' }}</span></span>
+    {% if registered %}
+      <span class="badge badge-green">● Registered</span>
+    {% else %}
+      <span class="badge badge-red">● Not Registered</span>
+    {% endif %}
+    {% if queue_size > 0 %}
+      <span class="badge badge-yellow">Queue: {{ queue_size }}</span>
+    {% endif %}
+  </div>
+</nav>
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

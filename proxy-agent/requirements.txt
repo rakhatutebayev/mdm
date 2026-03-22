@@ -1,0 +1,10 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27
+paho-mqtt>=2.0
+puresnmp>=2.0
+sqlmodel>=0.0.16
+aiofiles>=23.0
+jinja2>=3.1
+python-multipart>=0.0.9
+pyyaml>=6.0

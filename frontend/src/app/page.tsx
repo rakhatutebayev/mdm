@@ -189,6 +189,15 @@ export default async function DashboardPage() {
             </div>
           </div>
 
+          {/* Network Health Widget */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <span className={styles.cardTitle}>Network Health</span>
+              <Link href="/network/alerts" className={styles.cardLink}>View alerts →</Link>
+            </div>
+            <NetworkHealthWidget />
+          </div>
+
           {/* Platform Distribution */}
           <div className={styles.card}>
             <div className={styles.cardHeader}>
@@ -222,3 +231,60 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
+// ── Network Health Widget (server component) ────────────────────────────────
+async function NetworkHealthWidget() {
+  const apiUrl = process.env.API_URL || 'http://localhost:8000';
+  const tenantId = process.env.DEFAULT_TENANT_ID || '1';
+
+  let alerts: { severity: string; active: boolean }[] = [];
+  let agents:  { online: boolean }[] = [];
+  let devices: { health_status: string; online: boolean }[] = [];
+
+  try {
+    const [ra, rg, rd] = await Promise.all([
+      fetch(`${apiUrl}/api/v1/portal/alerts?active_only=true&limit=200`,
+            { headers: { 'X-Tenant-Id': tenantId }, cache: 'no-store' }),
+      fetch(`${apiUrl}/api/v1/portal/agents`,
+            { headers: { 'X-Tenant-Id': tenantId }, cache: 'no-store' }),
+      fetch(`${apiUrl}/api/v1/portal/devices`,
+            { headers: { 'X-Tenant-Id': tenantId }, cache: 'no-store' }),
+    ]);
+    if (ra.ok) alerts  = await ra.json();
+    if (rg.ok) agents  = await rg.json();
+    if (rd.ok) devices = await rd.json();
+  } catch { /* backend not running — show zeros */ }
+
+  const critical = alerts.filter(a => a.severity === 'critical').length;
+  const warning  = alerts.filter(a => a.severity === 'warning').length;
+  const agOnline = agents.filter(a => a.online).length;
+  const devOnline = devices.filter(d => d.online).length;
+  const devCritical = devices.filter(d => d.health_status === 'critical').length;
+
+  const rows = [
+    { label: 'Critical Alerts', value: critical, href: '/network/alerts',   color: critical  > 0 ? '#ef4444' : '#22c55e' },
+    { label: 'Warnings',        value: warning,  href: '/network/alerts',   color: warning   > 0 ? '#f59e0b' : '#22c55e' },
+    { label: 'Agents Online',   value: `${agOnline}/${agents.length}`, href: '/network/agents', color: '#60a5fa' },
+    { label: 'Devices Online',  value: `${devOnline}/${devices.length}`, href: '/network/devices', color: '#60a5fa' },
+    { label: 'Devices Critical',value: devCritical, href: '/network/devices', color: devCritical > 0 ? '#ef4444' : '#22c55e' },
+  ];
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      {rows.map(r => (
+        <Link
+          key={r.label}
+          href={r.href}
+          style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '9px 16px', textDecoration: 'none', transition: 'background 0.12s',
+          }}
+        >
+          <span style={{ fontSize: 13, color: '#8b90a4' }}>{r.label}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: r.color }}>{r.value}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+

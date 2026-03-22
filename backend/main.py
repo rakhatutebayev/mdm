@@ -1,21 +1,30 @@
 """FastAPI application entry point."""
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base
+from database import engine, Base, AsyncSessionLocal
 from routers import customers, devices, enrollment, discovery
 from routers.packages import router as packages_router
 from routers.dashboard import router as dashboard_router
 from routers.mdm import router as mdm_router
 from routers.settings import router as settings_router
+from routers.agent_router import router as agent_router
+from routers.agent_portal import router as agent_portal_router
 from mqtt_publisher import MqttPublisher
+from mqtt_consumer import get_consumer
+import agent_models  # ensure models are registered with Base
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create all tables on startup if they don't exist
+    # This includes agent_models tables since agent_models.py is imported above
+    # and registers all new Zabbix-style tables with the same Base.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
         # Inline schema migrations for new columns on existing tables
         await conn.execute(
             __import__("sqlalchemy").text(
@@ -51,8 +60,23 @@ async def lifespan(app: FastAPI):
 
     # Start MQTT publisher (non-blocking background task)
     await MqttPublisher.connect()
+
+    # Start MQTT ingest consumer (proxy agent data plane)
+    consumer = get_consumer(AsyncSessionLocal)
+    consumer.start()
+
+    # Start trends aggregator (hourly rollup)
+    from trends_aggregator import get_aggregator
+    aggregator = get_aggregator(AsyncSessionLocal)
+    agg_task = asyncio.create_task(aggregator.run_forever())
+
     yield
+
+    agg_task.cancel()
+    consumer.stop()
     await MqttPublisher.disconnect()
+
+
 
 
 app = FastAPI(
@@ -76,6 +100,9 @@ app.include_router(packages_router)
 app.include_router(dashboard_router)
 app.include_router(mdm_router)
 app.include_router(settings_router)
+app.include_router(agent_router)         # Proxy Agent API (agent-side)
+app.include_router(agent_portal_router)  # Proxy Agent API (portal-side)
+
 
 
 @app.get("/health")

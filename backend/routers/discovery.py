@@ -302,12 +302,14 @@ async def _find_existing_asset(
         value = value.strip()
         if not value:
             continue
-        result = await db.execute(
-            select(DiscoveredAsset).where(
-                DiscoveredAsset.customer_id == customer_id,
-                getattr(DiscoveredAsset, field) == value,
-            )
-        )
+        filters = [
+            DiscoveredAsset.customer_id == customer_id,
+            getattr(DiscoveredAsset, field) == value,
+        ]
+        # Keep host-level assets and out-of-band controllers separate even if they share IP/MAC.
+        if normalized_asset_class:
+            filters.append(DiscoveredAsset.asset_class == normalized_asset_class)
+        result = await db.execute(select(DiscoveredAsset).where(*filters))
         found = result.scalar_one_or_none()
         if found:
             return found

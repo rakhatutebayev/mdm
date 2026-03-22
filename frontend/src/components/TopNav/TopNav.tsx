@@ -29,6 +29,15 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Enrollment', href: '/enrollment' },
   { label: 'Discovery', href: '/discovery' },
   {
+    label: 'Network',
+    children: [
+      { label: 'Proxy Agents', href: '/network/agents', icon: '📡' },
+      { label: 'Devices', href: '/network/devices', icon: '🖥️' },
+      { label: 'Alerts', href: '/network/alerts', icon: '🔔' },
+      { label: 'SNMP Profiles', href: '/network/profiles', icon: '🗂️' },
+    ],
+  },
+  {
     label: 'Reports',
     children: [
       { label: 'Device Status', href: '/reports/status', icon: '📊' },
@@ -38,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   { label: 'Admin', href: '/admin' },
   { label: 'Support', href: '/support' },
+
 ];
 
 export default function TopNav() {

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Devices{% endblock %}
+{% block content %}
+<h1>Devices</h1>
+<div class="card" style="padding:0">
+  <table>
+    <thead>
+      <tr>
+        <th>Device UID</th>
+        <th>IP</th>
+        <th>Profile</th>
+        <th>SNMP</th>
+        <th>Status</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in devices %}
+      <tr>
+        <td><code style="font-size:.8rem">{{ d.device_id }}</code></td>
+        <td>{{ d.ip }}</td>
+        <td>{{ d.profile_id or '—' }}</td>
+        <td>v{{ d.snmp_version }}</td>
+        <td>
+          {% if d.status == 'active' %}<span class="badge badge-green">active</span>
+          {% elif d.status == 'offline' %}<span class="badge badge-red">offline</span>
+          {% else %}<span class="badge badge-yellow">{{ d.status }}</span>{% endif %}
+        </td>
+        <td>{% if d.last_seen %}{{ d.last_seen }}{% else %}—{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" style="text-align:center;color:#475569;padding:2rem">No devices configured</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

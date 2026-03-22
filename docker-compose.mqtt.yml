@@ -16,9 +16,12 @@ services:
 
   backend:
     environment:
+      # In-cluster: backend → EMQX MQTT over WebSocket (listener 8083, path /mqtt)
       MQTT_HOST: emqx
-      MQTT_PORT: "1883"
-      MQTT_TRANSPORT: "tcp"
+      MQTT_PORT: "8083"
+      MQTT_TRANSPORT: "websockets"
+      MQTT_PATH: "/mqtt"
+      # Agents get wss://<MDM_SERVER_URL host>/mqtt (443) from MQTT_TRANSPORT + MDM_SERVER_URL
 
 volumes:
   emqxdata:

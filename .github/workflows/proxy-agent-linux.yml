@@ -1,0 +1,66 @@
+# Build Linux proxy-agent tarball and attach to existing agent-v* GitHub Release, then update manifest.
+name: Linux proxy-agent tarball
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Same version as Windows agent release, e.g. 1.8.0 (Git tag agent-v1.8.0 must exist)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build tarball
+        run: |
+          chmod +x scripts/package_linux_proxy_agent.sh
+          ./scripts/package_linux_proxy_agent.sh "${{ inputs.version }}"
+
+      - name: Compute checksum
+        id: sum
+        run: |
+          f="dist/nocko-proxy-agent-${{ inputs.version }}-linux-amd64.tar.gz"
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$f" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "bytes=$(wc -c < "$f" | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to existing GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="agent-v${{ inputs.version }}"
+          gh release view "$tag" --repo "${{ github.repository }}" >/dev/null \
+            || { echo "Release $tag not found. Create Windows agent release first."; exit 1; }
+          gh release upload "$tag" "${{ steps.sum.outputs.file }}" --clobber --repo "${{ github.repository }}"
+
+      - name: Merge linux artifact into manifest
+        run: |
+          tag="agent-v${{ inputs.version }}"
+          fname="nocko-proxy-agent-${{ inputs.version }}-linux-amd64.tar.gz"
+          url="https://github.com/${{ github.repository }}/releases/download/${tag}/${fname}"
+          python scripts/merge_linux_proxy_manifest.py \
+            --manifest backend/package_builder/agent_releases.json \
+            --version "${{ inputs.version }}" \
+            --url "$url" \
+            --sha256 "${{ steps.sum.outputs.sha256 }}" \
+            --filename "$fname" \
+            --size-bytes "${{ steps.sum.outputs.bytes }}"
+
+      - name: Commit manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/package_builder/agent_releases.json
+          if git diff --cached --quiet; then
+            echo "No manifest changes."
+          else
+            git commit -m "Add linux-tarball to agent v${{ inputs.version }}"
+            git push
+          fi

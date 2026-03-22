@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Config{% endblock %}
+{% block content %}
+<h1>Configuration</h1>
+
+<div class="card">
+  <h2>🔒 Server-Managed Config (read-only — fetched from MDM)</h2>
+  <table>
+    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+    <tbody>
+    {% for k, v in server_config.items() %}
+      <tr><td>{{ k }}</td><td>{{ v or '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>✏️ Local Config (editable on this machine)</h2>
+  <div class="alert alert-warn">Only LOCAL ONLY fields can be changed here. Server-managed settings are controlled by the MDM portal.</div>
+  <form method="post" action="/config">
+    <div class="form-row">
+      <label>Listen Port</label>
+      <input type="number" name="listen_port" value="{{ local_config.listen_port }}" min="1024" max="65535">
+    </div>
+    <div class="form-row">
+      <label>Log Level</label>
+      <select name="log_level">
+        {% for lvl in ['DEBUG','INFO','WARNING','ERROR'] %}
+          <option value="{{ lvl }}" {% if local_config.log_level == lvl %}selected{% endif %}>{{ lvl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <input type="submit" value="Save Local Config">
+  </form>
+</div>
+{% endblock %}

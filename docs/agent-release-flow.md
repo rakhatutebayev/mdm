@@ -61,6 +61,14 @@ Convention: newest release goes first.
 - `ZIP` can still exist as a fallback bootstrap path for internal use.
 - If no base `EXE` artifact exists for the selected architecture, the portal blocks the download and shows an actionable error.
 
+## Linux proxy-agent tarball
+
+The same release catalog (`agent_releases.json`) can include a **linux-tarball** artifact (`arch: amd64`) for the [bootstrap installer](../docs/linux-installer-tz-vs-impl.md).
+
+- Package locally: `./scripts/package_linux_proxy_agent.sh <version>`
+- CI: workflow `.github/workflows/proxy-agent-linux.yml` (run **after** the `agent-v<version>` GitHub Release exists — typically after the Windows build workflow)
+- Merge manifest entry: `scripts/merge_linux_proxy_manifest.py`
+
 ## Recommended GitHub Actions Responsibilities
 
 - run backend/frontend tests
@@ -68,6 +76,7 @@ Convention: newest release goes first.
 - package the portable `.exe`
 - upload assets to GitHub Releases
 - update `backend/package_builder/agent_releases.json`
+- (optional) build and upload Linux proxy-agent tarball via `proxy-agent-linux.yml`
 
 Repository workflow added:
 

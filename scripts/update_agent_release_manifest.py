@@ -24,10 +24,12 @@ def parse_asset(value: str) -> dict[str, str]:
         )
 
     fmt, arch, path = parts
-    if fmt != "exe":
-        raise argparse.ArgumentTypeError("Asset format must be 'exe'")
-    if arch not in {"x64", "x86"}:
-        raise argparse.ArgumentTypeError("Asset arch must be 'x64' or 'x86'")
+    if fmt not in {"exe", "linux-tarball"}:
+        raise argparse.ArgumentTypeError("Asset format must be 'exe' or 'linux-tarball'")
+    if fmt == "exe" and arch not in {"x64", "x86"}:
+        raise argparse.ArgumentTypeError("For exe, arch must be 'x64' or 'x86'")
+    if fmt == "linux-tarball" and arch != "amd64":
+        raise argparse.ArgumentTypeError("For linux-tarball, arch must be 'amd64'")
 
     return {"format": fmt, "arch": arch, "path": path}
 
@@ -76,7 +78,11 @@ def main() -> int:
                 "url": f"https://github.com/{args.repo}/releases/download/{args.tag}/{filename}",
                 "sha256": sha256_of(path),
                 "size_bytes": path.stat().st_size,
-                "notes": "Published by GitHub Actions Windows release workflow",
+                "notes": (
+                    "Published by GitHub Actions Windows release workflow"
+                    if asset["format"] == "exe"
+                    else "Linux proxy-agent tarball (GitHub Actions)"
+                ),
             }
         )
 
