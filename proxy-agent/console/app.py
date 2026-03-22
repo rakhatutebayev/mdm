@@ -134,10 +134,14 @@ async def profile_upload(request: Request, file: UploadFile = File(...)):
     content = await file.read()
 
     try:
-        profile_id, profile_name, output_mapping, warnings = _convert_zabbix_xml(content)
+        profile_id, profile_name, output_mapping, warnings = parse_zabbix_template_bytes(
+            content, filename
+        )
 
         with get_session() as s:
-            existing = s.get(DeviceProfile, profile_id)
+            existing = s.exec(
+                select(DeviceProfile).where(DeviceProfile.profile_id == profile_id)
+            ).first()
             if existing:
                 existing.output_mapping = json.dumps(output_mapping)
                 existing.profile_name = profile_name
