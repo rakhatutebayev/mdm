@@ -4,6 +4,17 @@ Operational steps for portal (Docker Compose) and Linux **proxy-agent**. Keep se
 
 **Типовые ошибки и как их избежать:** см. **[`operations-lessons.md`](operations-lessons.md)** (обновляй при новых инцидентах).
 
+### Политика: правки → сразу прод
+
+Не оставлять исправления только в Git без выката на боевые системы:
+
+| Что меняли | Сразу после `git push` |
+|------------|-------------------------|
+| **`proxy-agent/`** | С рабочей машины: **`./scripts/deploy-proxy-agent-prod.sh`** → хост **`192.168.11.153`**, `/opt/nocko-agent`. |
+| **`backend/`**, **`frontend/`**, `docker-compose*.yml` | На сервере портала: `git pull`, `docker compose build …`, `docker compose up -d …` (или дождаться успешного [`deploy.yml`](../.github/workflows/deploy.yml)). |
+
+Исключение — только если пользователь явно запретил деплой.
+
 ## 1. Portal (`mdm.nocko.com` or similar)
 
 Prerequisites: Docker + Compose plugin, repo at `/opt/nocko-mdm` (or your path).

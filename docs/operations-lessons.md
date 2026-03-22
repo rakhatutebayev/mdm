@@ -8,6 +8,7 @@
 |----------|---------|
 | В коммит попали ключи / пароли | Каталог **`arc/`** в `.gitignore` — не коммитить. Перед `git add -A` делать `git restore arc/` или `git reset` для `arc/`. Токены в `git remote` на сервере — убрать, токен отозвать в GitHub. |
 | «Забыли» запушить, прод без Agent API | После правок всегда **`git push origin main`**; на сервере `git pull` и пересборка backend. |
+| Правки в `proxy-agent/` только в репо, бой со старым кодом | **Сразу после пуша** гонять **`./scripts/deploy-proxy-agent-prod.sh`** на **`192.168.11.153`** — см. [`deployment-runbook.md`](deployment-runbook.md) §«Политика: правки → сразу прод». |
 
 ## Docker / портал
 

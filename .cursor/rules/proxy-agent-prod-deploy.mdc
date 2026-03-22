@@ -6,7 +6,9 @@ alwaysApply: false
 
 # Proxy agent → production
 
-When you finish edits under `proxy-agent/`, run from repo root:
+**Правило:** как только изменён код под `proxy-agent/` — **сразу** деплоить на боевой хост (не оставлять только коммит без выката).
+
+From repo root, immediately after your edits:
 
 ```bash
 ./scripts/deploy-proxy-agent-prod.sh
