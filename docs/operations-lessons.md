@@ -32,6 +32,13 @@
 1. Собрать/опубликовать **Windows** (`agent-release.yml`) → тег `agent-vX.Y.Z`.
 2. Запустить **Linux tarball** (`proxy-agent-linux.yml`) с той же версией **или** вручную залить `.tar.gz` и обновить манифест (`merge_linux_proxy_manifest.py`).
 
+## Локальная консоль proxy-agent
+
+| Проблема | Решение |
+|----------|---------|
+| `Import failed: name '_convert_zabbix_xml' is not defined` | В `console/app.py` импорт профилей должен вызывать **`parse_zabbix_template_bytes(content, filename)`** из `core/zabbix_import` (XML/JSON/YAML). Не оставлять устаревшие хелперы без определения. |
+| Обновление профиля не срабатывает | `DeviceProfile` имеет PK **`id`**, slug в **`profile_id`** — искать через `select(...).where(DeviceProfile.profile_id == ...)`, не `session.get(DeviceProfile, profile_id)`. |
+
 ## Поведение ИИ в Cursor
 
 Правило **`.cursor/rules/nocko-autonomous-agent.mdc`**: не тормозить уточнениями — действовать по коду и ТЗ, новые выводы заносить сюда или в [`deployment-runbook.md`](deployment-runbook.md).
