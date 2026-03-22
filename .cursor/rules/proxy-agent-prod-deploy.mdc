@@ -1,0 +1,19 @@
+---
+description: After changing proxy-agent code, deploy to production host 192.168.11.153
+globs: proxy-agent/**
+alwaysApply: false
+---
+
+# Proxy agent → production
+
+When you finish edits under `proxy-agent/`, run from repo root:
+
+```bash
+./scripts/deploy-proxy-agent-prod.sh
+```
+
+Prefer SSH key: run once `./scripts/setup-agent-prod-ssh.sh`. For passwordless sudo deploy, install `scripts/remote/nocko-agent-deploy-sync.sh` on the server — see `docs/agent-prod-ssh-and-sudo.md`.
+
+Until then: `SSHPASS` + `PROD_AGENT_SUDO_PASS` (never commit).
+
+Default target: `192.168.11.153` → `/opt/nocko-agent`, then `https://192.168.11.153:8443/` (TZ §6.2).
