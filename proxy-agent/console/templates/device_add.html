@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Добавить устройство — NOCKO</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 0;
+    }
+    .popup-header {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: .75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .popup-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .popup-header .brand {
+      font-size: .75rem;
+      color: #64748b;
+    }
+    .popup-body { padding: 1.25rem; }
+
+    .alert { padding: .75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: .875rem; }
+    .alert-ok  { background: #14532d; border: 1px solid #166534; color: #86efac; }
+    .alert-err { background: #450a0a; border: 1px solid #991b1b; color: #fca5a5; }
+
+    .form-row { margin-bottom: .9rem; }
+    .form-row label {
+      display: block;
+      font-size: .8rem;
+      color: #94a3b8;
+      margin-bottom: .3rem;
+      font-weight: 500;
+    }
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: .5rem .75rem;
+      font-size: .875rem;
+      transition: border-color .15s;
+      outline: none;
+    }
+    .form-row input:focus,
+    .form-row select:focus { border-color: #6366f1; }
+    .form-row small { display: block; margin-top: .3rem; font-size: .72rem; color: #64748b; }
+
+    .form-actions {
+      display: flex;
+      gap: .75rem;
+      margin-top: 1.25rem;
+    }
+    .btn-primary {
+      flex: 1;
+      padding: .6rem 1rem;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-cancel {
+      padding: .6rem 1rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      font-size: .9rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-cancel:hover { background: #334155; color: #e2e8f0; }
+
+    .section-label {
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #475569;
+      margin: 1rem 0 .6rem 0;
+    }
+    hr { border: none; border-top: 1px solid #1e293b; margin: .75rem 0; }
+  </style>
+</head>
+<body>
+
+{% if closed %}
+<!-- После успешного добавления закрываем popup и обновляем родителя -->
+<script>
+  if (window.opener && !window.opener.closed) {
+    window.opener.location.href = '/devices';
+  }
+  window.close();
+</script>
+<div style="padding:2rem;text-align:center;color:#86efac">Устройство добавлено. Закрываю...</div>
+{% else %}
+
+<div class="popup-header">
+  <h2>{% if bind_profile %}Добавить устройство — {{ bind_profile.profile_id }}{% else %}Добавить устройство{% endif %}</h2>
+  <span class="brand">NOCKO Agent Console</span>
+</div>
+
+<div class="popup-body">
+
+{% if flash_err %}
+<div class="alert alert-err">{{ flash_err }}</div>
+{% endif %}
+
+<form action="/devices/add?popup=1{% if bind_profile %}&bind={{ bind_profile.profile_id }}{% endif %}" method="post" id="addDeviceForm">
+
+  <div class="section-label">Идентификация</div>
+
+  <div class="form-row">
+    <label>Device UID <span style="color:#475569">(латиница / цифры / . _ -)</span></label>
+    <input type="text" name="device_uid" required
+           placeholder="{% if bind_profile %}{{ bind_profile.profile_id }}-host1{% else %}server-dell1{% endif %}"
+           pattern="[a-zA-Z0-9_.-]+" autocomplete="off">
+  </div>
+  <div class="form-row">
+    <label>IP адрес</label>
+    <input type="text" name="ip" required placeholder="192.168.1.50" autocomplete="off">
+  </div>
+  <div class="form-row">
+    <label>Профиль (шаблон)</label>
+    <select name="profile_id">
+      <option value="">— без профиля —</option>
+      {% for p in profile_list %}
+      <option value="{{ p.profile_id }}"
+        {% if bind_profile and bind_profile.profile_id == p.profile_id %}selected{% endif %}>
+        {{ p.profile_id }} — {{ p.profile_name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <hr>
+  <div class="section-label">Коллектор</div>
+
+  <div class="form-row">
+    <label>Тип коллектора</label>
+    <select name="collector_type" id="collectorType" onchange="toggleCollectorFields()">
+      <option value="snmp">SNMP (UDP/161)</option>
+      <option value="vmware">VMware ESXi / vCenter</option>
+    </select>
+  </div>
+
+  <!-- SNMP fields -->
+  <div id="snmpFields">
+    <div class="form-row">
+      <label>SNMP version</label>
+      <select name="snmp_version">
+        <option value="2c">v2c (community)</option>
+        <option value="3">v3</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Community (v2c)</label>
+      <input type="text" name="snmp_community" value="public" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>SNMPv3 user / auth key / priv key</label>
+      <input type="text" name="snmp_v3_user" placeholder="user (если v3)" autocomplete="off" style="margin-bottom:.4rem">
+      <input type="password" name="snmp_v3_auth_key" placeholder="auth key (если v3)" autocomplete="off" style="margin-bottom:.4rem">
+      <input type="password" name="snmp_v3_priv_key" placeholder="priv key (если v3)" autocomplete="off">
+    </div>
+  </div>
+
+  <!-- VMware fields -->
+  <div id="vmwareFields" style="display:none">
+    <div class="form-row">
+      <label>VMware SDK URL</label>
+      <input type="text" name="vmware_url" placeholder="https://192.168.1.50/sdk" autocomplete="off">
+      <small>Standalone ESXi: https://IP/sdk | vCenter: https://vcenter-ip/sdk</small>
+    </div>
+    <div class="form-row">
+      <label>VMware Username</label>
+      <input type="text" name="vmware_username" placeholder="root" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>VMware Password</label>
+      <input type="password" name="vmware_password" autocomplete="off">
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="form-row">
+    <label>Статус опроса</label>
+    <select name="status">
+      <option value="active" selected>active</option>
+      <option value="offline">offline</option>
+      <option value="unsupported">unsupported</option>
+    </select>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" class="btn-cancel" onclick="window.close()">Отмена</button>
+    <button type="submit" class="btn-primary">✓ Добавить устройство</button>
+  </div>
+
+</form>
+</div>
+
+<script>
+function toggleCollectorFields() {
+  var ct = document.getElementById('collectorType').value;
+  document.getElementById('snmpFields').style.display = ct === 'snmp' ? '' : 'none';
+  document.getElementById('vmwareFields').style.display = ct === 'vmware' ? '' : 'none';
+}
+</script>
+
+{% endif %}
+</body>
+</html>

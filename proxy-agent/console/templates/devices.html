@@ -1,7 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Devices{% endblock %}
 {% block content %}
-<h1>Devices</h1>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+  <h1 style="margin:0">Devices</h1>
+  <button onclick="openAddDevice()" style="background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:.5rem 1.1rem;font-size:.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:.4rem">
+    <span style="font-size:1.1rem;line-height:1">＋</span> Добавить устройство
+  </button>
+</div>
+
+{% if devices_flash %}
+{% if devices_flash.kind == 'err' %}
+<div class="alert alert-warn">{{ devices_flash.text }}</div>
+{% else %}
+<div class="alert" style="background:#14532d;border:1px solid #166534;color:#86efac">{{ devices_flash.text }}</div>
+{% endif %}
+{% endif %}
+
+<script>
+function openAddDevice(profileId) {
+  var url = '/devices/add';
+  if (profileId) url += '?bind=' + encodeURIComponent(profileId);
+  var popup = window.open(url, 'add_device',
+    'width=660,height=740,resizable=yes,scrollbars=yes,left=' +
+    Math.round((screen.width - 660) / 2) + ',top=' +
+    Math.round((screen.height - 740) / 2));
+  if (popup) popup.focus();
+}
+</script>
+
 <div class="card" style="padding:0">
   <table>
     <thead>
@@ -9,27 +36,51 @@
         <th>Device UID</th>
         <th>IP</th>
         <th>Profile</th>
-        <th>SNMP</th>
+        <th>Collector</th>
         <th>Status</th>
+        <th>Приём данных</th>
         <th>Last Seen</th>
+        <th>Действия</th>
       </tr>
     </thead>
     <tbody>
-    {% for d in devices %}
+    {% for row in device_rows %}
+      {% set d = row.d %}
+      {% set r = row.receipt %}
       <tr>
         <td><code style="font-size:.8rem">{{ d.device_id }}</code></td>
         <td>{{ d.ip }}</td>
         <td>{{ d.profile_id or '—' }}</td>
-        <td>v{{ d.snmp_version }}</td>
+        <td>
+          {% if d.collector_type == 'vmware' %}
+            <span class="badge" style="background:#1e3a5f;color:#93c5fd">VMware</span>
+          {% else %}
+            <span class="badge badge-green">SNMP</span>
+          {% endif %}
+        </td>
         <td>
           {% if d.status == 'active' %}<span class="badge badge-green">active</span>
           {% elif d.status == 'offline' %}<span class="badge badge-red">offline</span>
           {% else %}<span class="badge badge-yellow">{{ d.status }}</span>{% endif %}
         </td>
+        <td style="max-width:22rem">
+          <span class="badge {{ r.badge_class }}">{{ r.label }}</span>
+          <div class="hint" style="margin:.25rem 0 0 0;font-size:.72rem;line-height:1.35">{{ r.detail }}</div>
+        </td>
         <td>{% if d.last_seen %}{{ d.last_seen }}{% else %}—{% endif %}</td>
+        <td style="white-space:nowrap">
+          <a href="/devices/{{ d.device_id }}/latest.json" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1e3a5f;padding:.35rem .6rem;font-size:.75rem;border-radius:4px;color:#e2e8f0;text-decoration:none;margin-right:.35rem">Просмотр JSON</a>
+          {% if d.collector_type != 'vmware' %}
+          <a href="/devices/{{ d.device_id }}/snmp-debug.json" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#14532d;padding:.35rem .6rem;font-size:.75rem;border-radius:4px;color:#86efac;text-decoration:none;margin-right:.35rem">SNMP debug</a>
+          {% endif %}
+          <form action="/devices/remove" method="post" style="display:inline;margin:0;vertical-align:middle" onsubmit="return confirm('Удалить устройство {{ d.device_id }}?');">
+            <input type="hidden" name="device_id" value="{{ d.device_id }}">
+            <button type="submit" style="background:#7f1d1d;padding:.35rem .6rem;font-size:.75rem">Удалить</button>
+          </form>
+        </td>
       </tr>
     {% else %}
-      <tr><td colspan="6" style="text-align:center;color:#475569;padding:2rem">No devices configured</td></tr>
+      <tr><td colspan="8" style="text-align:center;color:#475569;padding:2rem">Нет устройств — добавьте формой выше.</td></tr>
     {% endfor %}
     </tbody>
   </table>
