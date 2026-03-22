@@ -2,6 +2,8 @@
 
 Operational steps for portal (Docker Compose) and Linux **proxy-agent**. Keep secrets in `.env` on the server and SSH keys — not in git or chat.
 
+**Типовые ошибки и как их избежать:** см. **[`operations-lessons.md`](operations-lessons.md)** (обновляй при новых инцидентах).
+
 ## 1. Portal (`mdm.nocko.com` or similar)
 
 Prerequisites: Docker + Compose plugin, repo at `/opt/nocko-mdm` (or your path).
