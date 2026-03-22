@@ -103,7 +103,7 @@ class MQTTIngestConsumer:
 
     async def _dispatch(self, payload: dict) -> None:
         """Run ingest logic in async DB session."""
-        from routers.agent_ingest import process_envelope
+        from agent_ingest import process_envelope
         try:
             async with self._sf() as session:
                 await process_envelope(payload, session)

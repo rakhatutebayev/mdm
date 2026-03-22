@@ -92,6 +92,9 @@ async def _ingest_metrics(record: dict, agent: Agent, db: AsyncSession) -> list[
     enqueue_ts = record.get("enqueue_ts", clock)
     data: dict[str, Any] = record.get("data", {})
 
+    # Fix 1: update device.last_seen on every metrics receipt
+    device.last_seen = clock
+
     for key, raw_value in data.items():
         item = await _resolve_item(key, device.id, tid, db)
         if item is None:
@@ -181,6 +184,28 @@ async def _ingest_event(record: dict, agent: Agent, db: AsyncSession) -> list[st
     code = record.get("code", "")
     message = record.get("message", "")
     item_key = record.get("item_key")
+
+    # Fix 2: normalize proxy agent PROBLEM/RESOLVED event format
+    # Proxy agent sends: event_type=PROBLEM|RESOLVED, label=..., metric_key=...
+    if event_type == "PROBLEM":
+        event_type = "threshold"
+        # remap severity: proxy agent uses critical/warning from alert_publisher
+        # keep severity as-is (already warning/critical)
+        if not message:
+            message = record.get("label", "") + ": " + record.get("detail", "")
+        if not item_key:
+            item_key = record.get("metric_key")
+        if not source:
+            source = record.get("metric_key", "")
+    elif event_type == "RESOLVED":
+        event_type = "threshold"
+        severity = "ok"  # Fix 3: RESOLVED → ok triggers alert close
+        if not message:
+            message = (record.get("label", "") or "") + " resolved"
+        if not item_key:
+            item_key = record.get("metric_key")
+        if not source:
+            source = record.get("metric_key", "")
 
     item_id: Optional[int] = None
     if item_key:
