@@ -42,6 +42,7 @@
 <nav>
   <span class="brand">⬡ NOCKO Agent</span>
   <a href="/" {% if request.url.path == '/' %}class="active"{% endif %}>Dashboard</a>
+  <a href="/profiles" {% if request.url.path.startswith('/profiles') %}class="active"{% endif %}>Profiles</a>
   <a href="/devices" {% if request.url.path.startswith('/devices') %}class="active"{% endif %}>Devices</a>
   <a href="/config" {% if request.url.path == '/config' %}class="active"{% endif %}>Config</a>
   <a href="/logs" {% if request.url.path == '/logs' %}class="active"{% endif %}>Logs</a>

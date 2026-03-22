@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Profiles{% endblock %}
+{% block content %}
+<h1>Device profiles</h1>
+<p class="hint">Per TZ §2.4: each profile has <code>profile_id</code>, <code>profile_name</code>, <code>profile_vendor</code>, <code>profile_version</code>, and <code>output_mapping</code> (OID → keys). Status shows whether the mapping is valid, devices are assigned, SNMP verify passed, or recent polling occurred.</p>
+
+{% if import_flash %}
+{% if import_flash.partial %}
+<div class="alert alert-warn">
+{% else %}
+<div class="alert" style="background:#14532d;border:1px solid #166534;color:#86efac">
+{% endif %}
+  <strong>Import successful.</strong>
+  Profile <code>{{ import_flash.profile_id }}</code> — <strong>{{ import_flash.items }}</strong> SNMP mapping(s). Edit vendor/version on the profile page if needed.
+  {% if import_flash.partial %}<br><span style="opacity:.9">Some template rows were skipped during import.</span>{% endif %}
+</div>
+{% endif %}
+
+{% if not rows %}
+<div class="card"><p>No profiles yet. Import a Zabbix template from the <a href="/">Dashboard</a>.</p></div>
+{% else %}
+<div class="card" style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>profile_id</th>
+        <th>Name</th>
+        <th>Vendor</th>
+        <th>Version</th>
+        <th>Items</th>
+        <th>Devices</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr {% if highlight == r.profile_id %}style="outline:1px solid #63b3ed"{% endif %}>
+        <td><code>{{ r.profile_id }}</code></td>
+        <td>{{ r.profile_name }}</td>
+        <td>{{ r.profile_vendor }}</td>
+        <td>{{ r.profile_version }}</td>
+        <td>{{ r.items_count }}</td>
+        <td>{{ r.devices_count }}{% if r.devices_recent %} <span class="hint">({{ r.devices_recent }} active)</span>{% endif %}</td>
+        <td>
+          <span class="badge {% if r.status_key == 'verified_ok' %}badge-green{% elif r.status_key == 'not_ready' or r.status_key == 'verify_failed' %}badge-red{% elif r.status_key == 'ready_unused' %}badge-yellow{% else %}badge-green{% endif %}">{{ r.status_label }}</span>
+          {% if r.verify_at %}
+          <div class="hint" style="margin-top:.25rem">Check: {% if r.verify_ok %}OK{% else %}fail{% endif %} — {{ r.verify_message[:120] }}{% if r.verify_message|length > 120 %}…{% endif %}</div>
+          {% endif %}
+        </td>
+        <td><a href="/profiles/{{ r.profile_id }}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

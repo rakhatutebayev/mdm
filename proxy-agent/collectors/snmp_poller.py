@@ -90,6 +90,17 @@ def _record_sent(device_id: str, key: str, value: Any) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # SNMP helpers
 # ──────────────────────────────────────────────────────────────────────────────
+async def snmp_probe_oid(device: Device, oid: str) -> tuple[bool, str]:
+    """
+    One-shot SNMP GET for UI verification (TZ — confirm profile works on a device).
+    Returns (success, short message for operator).
+    """
+    val = await _snmp_get(device.ip, oid, device)
+    if val is None:
+        return False, f"No SNMP response from {device.ip} for OID {oid}"
+    return True, f"OK from {device.ip}: {val!r}"
+
+
 async def _snmp_get(ip: str, oid: str, device: Device) -> Any:
     """Single SNMP GET. Returns the value or None on error."""
     try:

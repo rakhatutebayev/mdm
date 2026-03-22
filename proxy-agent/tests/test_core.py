@@ -333,6 +333,17 @@ zabbix_export:
         assert "1.3.6.1.2.1.2.2.1.10" in mapping[0]["source_oid"]
 
 
+class TestProfileReadiness:
+    def test_pick_probe_oid_skips_lld_macros(self):
+        from core.profile_readiness import pick_probe_oid
+
+        m = [
+            {"source_oid": "1.3.6.1.2.1.1.{#SNMPINDEX}", "key": "x", "poll_class": "fast"},
+            {"source_oid": "1.3.6.1.2.1.1.3.0", "key": "uptime", "poll_class": "slow"},
+        ]
+        assert pick_probe_oid(m) == "1.3.6.1.2.1.1.3.0"
+
+
 class TestParseMqttBrokerUrl:
     def test_wss_default_path_and_port(self):
         from core.mqtt_client import _parse_mqtt_broker_url

@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlencode
 
 import aiofiles
@@ -29,12 +31,44 @@ from fastapi.templating import Jinja2Templates
 from core.config import config
 from core.database import (
     Device, DeviceProfile, AuditLog, ProfileImportLog,
-    get_session, kv_get
+    get_session, kv_get, kv_set,
 )
 from core.logger import log
 from core import queue as q
 from core.zabbix_import import parse_zabbix_template_bytes
+from core.profile_readiness import build_profile_row, pick_probe_oid
+from collectors.snmp_poller import snmp_probe_oid
 from sqlmodel import select
+
+_VERIFY_KV_PREFIX = "profile_verify:"
+
+
+def _verify_kv_key(profile_id: str) -> str:
+    return f"{_VERIFY_KV_PREFIX}{profile_id}"
+
+
+def _load_verify_blob(profile_id: str) -> dict[str, Any] | None:
+    raw = kv_get(_verify_kv_key(profile_id), "")
+    if not raw.strip():
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _save_verify_blob(profile_id: str, ok: bool, message: str) -> None:
+    kv_set(
+        _verify_kv_key(profile_id),
+        json.dumps(
+            {"at": int(time.time()), "ok": ok, "message": message[:4000]},
+            ensure_ascii=False,
+        ),
+    )
+
+
+def _safe_profile_path_id(profile_id: str) -> bool:
+    return bool(re.match(r"^[a-zA-Z0-9_.-]+$", profile_id or ""))
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _LOG_FILE = Path(kv_get("log_file", "/var/log/nocko-agent/agent.log"))
@@ -194,7 +228,7 @@ async def profile_upload(request: Request, file: UploadFile = File(...)):
                 "partial": "1" if warnings else "0",
             }
         )
-        return RedirectResponse(f"/?{q}", status_code=303)
+        return RedirectResponse(f"/profiles?{q}", status_code=303)
 
     except Exception as e:
         log.error(f"Profile import failed: {e}\n{traceback.format_exc()}")
@@ -202,6 +236,160 @@ async def profile_upload(request: Request, file: UploadFile = File(...)):
             s.add(ProfileImportLog(filename=filename, status="error", warnings=json.dumps([str(e)])))
             s.commit()
         return HTMLResponse(f"<h1>Import failed</h1><pre>{e}</pre>", status_code=400)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Profiles (TZ §2.4 — list, requisites, readiness, SNMP verify)
+# ──────────────────────────────────────────────────────────────────────────────
+@app.get("/profiles", response_class=HTMLResponse)
+async def profiles_list(request: Request):
+    import_flash = None
+    if request.query_params.get("import_ok") == "1":
+        try:
+            n_items = int(request.query_params.get("items", 0))
+        except ValueError:
+            n_items = 0
+        import_flash = {
+            "profile_id": request.query_params.get("profile_id", ""),
+            "items": n_items,
+            "partial": request.query_params.get("partial") == "1",
+        }
+    highlight = request.query_params.get("highlight", "")
+
+    rows: list[Any] = []
+    with get_session() as s:
+        plist = s.exec(select(DeviceProfile).order_by(DeviceProfile.profile_id)).all()
+        for p in plist:
+            vb = _load_verify_blob(p.profile_id)
+            rows.append(build_profile_row(s, p, vb))
+
+    return templates.TemplateResponse(
+        "profiles.html",
+        _ctx(request, rows=rows, import_flash=import_flash, highlight=highlight),
+    )
+
+
+@app.get("/profiles/{profile_id}", response_class=HTMLResponse)
+async def profile_detail(request: Request, profile_id: str):
+    if not _safe_profile_path_id(profile_id):
+        return HTMLResponse("Invalid profile_id", status_code=400)
+
+    verify_banner = None
+    verify_ok = True
+    if request.query_params.get("vf") == "1":
+        verify_ok = request.query_params.get("ok") == "1"
+        verify_banner = (
+            "SNMP verification succeeded."
+            if verify_ok
+            else "SNMP verification failed — see message below."
+        )
+
+    with get_session() as s:
+        profile = s.exec(
+            select(DeviceProfile).where(DeviceProfile.profile_id == profile_id)
+        ).first()
+        if not profile:
+            return HTMLResponse("Profile not found", status_code=404)
+        vb = _load_verify_blob(profile_id)
+        row = build_profile_row(s, profile, vb)
+
+    try:
+        mapping = json.loads(profile.output_mapping or "[]")
+        if not isinstance(mapping, list):
+            mapping = []
+    except Exception:
+        mapping = []
+
+    probe_oid = pick_probe_oid(mapping)
+    preview = mapping[:40]
+    devices_count = row.devices_count
+
+    return templates.TemplateResponse(
+        "profile_detail.html",
+        _ctx(
+            request,
+            profile=profile,
+            row=row,
+            probe_oid=probe_oid,
+            devices_count=devices_count,
+            mapping_preview=preview,
+            mapping_total=len(mapping),
+            mapping_preview_json=json.dumps(preview, indent=2, ensure_ascii=False),
+            verify_banner=verify_banner,
+            verify_ok=verify_ok,
+        ),
+    )
+
+
+@app.post("/profiles/{profile_id}/meta")
+async def profile_meta_update(
+    request: Request,
+    profile_id: str,
+    profile_name: str = Form(...),
+    profile_vendor: str = Form(""),
+    profile_version: str = Form(""),
+):
+    if not _safe_profile_path_id(profile_id):
+        return HTMLResponse("Invalid profile_id", status_code=400)
+    with get_session() as s:
+        profile = s.exec(
+            select(DeviceProfile).where(DeviceProfile.profile_id == profile_id)
+        ).first()
+        if not profile:
+            return HTMLResponse("Not found", status_code=404)
+        profile.profile_name = profile_name.strip()
+        profile.profile_vendor = (profile_vendor or "").strip()
+        profile.profile_version = (profile_version or "").strip()
+        s.add(profile)
+        s.commit()
+    _audit("profile_meta", f"profile_id={profile_id}")
+    return RedirectResponse(f"/profiles/{profile_id}?updated=meta", status_code=303)
+
+
+@app.post("/profiles/{profile_id}/verify")
+async def profile_verify(profile_id: str):
+    if not _safe_profile_path_id(profile_id):
+        return HTMLResponse("Invalid profile_id", status_code=400)
+
+    with get_session() as s:
+        profile = s.exec(
+            select(DeviceProfile).where(DeviceProfile.profile_id == profile_id)
+        ).first()
+        if not profile:
+            return HTMLResponse("Not found", status_code=404)
+        try:
+            mapping = json.loads(profile.output_mapping or "[]")
+            if not isinstance(mapping, list):
+                mapping = []
+        except Exception:
+            mapping = []
+        oid = pick_probe_oid(mapping)
+        dev = s.exec(
+            select(Device)
+            .where(Device.profile_id == profile_id)
+            .where(Device.status == "active")
+        ).first()
+        if not dev:
+            dev = s.exec(
+                select(Device).where(Device.profile_id == profile_id)
+            ).first()
+
+    if not oid:
+        _save_verify_blob(profile_id, False, "No scalar OID in mapping (LLD-only template).")
+        return RedirectResponse(f"/profiles/{profile_id}?vf=1&ok=0", status_code=303)
+
+    if not dev:
+        _save_verify_blob(
+            profile_id,
+            False,
+            "No device assigned to this profile — add a device first.",
+        )
+        return RedirectResponse(f"/profiles/{profile_id}?vf=1&ok=0", status_code=303)
+
+    ok, msg = await snmp_probe_oid(dev, oid)
+    _save_verify_blob(profile_id, ok, msg)
+    log.info(f"Profile {profile_id} SNMP verify: ok={ok} {msg}")
+    return RedirectResponse(f"/profiles/{profile_id}?vf=1&ok={'1' if ok else '0'}", status_code=303)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
