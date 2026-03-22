@@ -4,6 +4,7 @@
 
 ## Design Goals
 
+- **Operator UI language:** local agent console and MDM portal user-facing strings are **English (en-US)** per product TZ (`proxy-agent-tz-v5.1.md`, `package-generation-tz.md`).
 - Keep `enrollment` reserved for onboarding managed endpoints.
 - Keep `devices` reserved for actively managed MDM devices and commands.
 - Store network-discovered equipment separately so iDRAC, Avaya, switches, printers, and other SNMP/Redfish targets do not pretend to be enrolled workstations.
