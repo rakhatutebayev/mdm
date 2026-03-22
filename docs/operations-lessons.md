@@ -39,6 +39,7 @@
 |----------|---------|
 | `Import failed: name '_convert_zabbix_xml' is not defined` | В `console/app.py` импорт профилей должен вызывать **`parse_zabbix_template_bytes(content, filename)`** из `core/zabbix_import` (XML/JSON/YAML). Не оставлять устаревшие хелперы без определения. |
 | Обновление профиля не срабатывает | `DeviceProfile` имеет PK **`id`**, slug в **`profile_id`** — искать через `select(...).where(DeviceProfile.profile_id == ...)`, не `session.get(DeviceProfile, profile_id)`. |
+| После импорта YAML «ничего не происходит» | Zabbix YAML часто даёт **`templates:` как один объект**, не список — парсер нормализует в список. SNMP может быть только в **`discovery_rules[].item_prototypes[]`** — тоже парсится. После успеха редирект на `/?import_ok=1&...` с зелёным баннером; **0 mappings** → страница ошибки с текстом, а не тихий успех. При обновлении существующего профиля вызывать **`session.add(existing)`** после правок полей. |
 
 ## Поведение ИИ в Cursor
 

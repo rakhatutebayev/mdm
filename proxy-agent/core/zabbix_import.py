@@ -136,42 +136,78 @@ def _parse_xml(content: bytes) -> tuple[str, str, list[dict[str, Any]], list[str
 # ─── JSON / YAML (zabbix_export) ─────────────────────────────────────────────
 
 
+def _row_from_item_dict(item: dict[str, Any], warnings: list[str], ctx: str) -> dict[str, Any] | None:
+    oid = str(item.get("snmp_oid", "") or item.get("SNMP_OID", "") or "").strip()
+    key_raw = str(item.get("key", "") or "").strip()
+    if not oid or not key_raw:
+        warnings.append(f"{ctx}: skipped item without snmp_oid/key ({key_raw or oid!r})")
+        return None
+    units = str(item.get("units", "") or "")
+    delay = item.get("delay", "60s")
+    interval = _parse_interval(delay)
+    data_type = _map_value_type(item.get("value_type", "UNSIGNED"))
+    mult = item.get("multiplier") or item.get("custom_multiplier")
+    try:
+        scale = float(mult) if mult is not None else 1.0
+    except (TypeError, ValueError):
+        scale = 1.0
+    return _mapping_row(
+        snmp_oid=oid,
+        target_key=_sanitize_key(key_raw),
+        data_type=data_type,
+        units=units,
+        scale=scale,
+        interval_sec=interval,
+    )
+
+
 def _items_from_template_dict(tmpl: dict[str, Any], warnings: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    tmpl_name = str(tmpl.get("name") or tmpl.get("template") or "?")
     for item in tmpl.get("items") or []:
         if not isinstance(item, dict):
             continue
-        oid = (
-            str(item.get("snmp_oid", "") or item.get("SNMP_OID", "") or "").strip()
-        )
-        key_raw = str(item.get("key", "") or "").strip()
-        if not oid or not key_raw:
-            warnings.append(f"Skipped item without snmp_oid/key: {key_raw or oid!r}")
+        row = _row_from_item_dict(item, warnings, f"Template {tmpl_name!r}")
+        if row:
+            rows.append(row)
+
+    # LLD: SNMP item prototypes (common in iDRAC / network templates)
+    for dr in tmpl.get("discovery_rules") or []:
+        if not isinstance(dr, dict):
             continue
-
-        name = str(item.get("name", "") or key_raw)
-        units = str(item.get("units", "") or "")
-        delay = item.get("delay", "60s")
-        interval = _parse_interval(delay)
-        data_type = _map_value_type(item.get("value_type", "UNSIGNED"))
-
-        mult = item.get("multiplier") or item.get("custom_multiplier")
-        try:
-            scale = float(mult) if mult is not None else 1.0
-        except (TypeError, ValueError):
-            scale = 1.0
-
-        rows.append(
-            _mapping_row(
-                snmp_oid=oid,
-                target_key=_sanitize_key(key_raw),
-                data_type=data_type,
-                units=units,
-                scale=scale,
-                interval_sec=interval,
+        dr_name = str(dr.get("name") or "?")
+        for proto in dr.get("item_prototypes") or []:
+            if not isinstance(proto, dict):
+                continue
+            row = _row_from_item_dict(
+                proto, warnings, f"Discovery {dr_name!r}"
             )
-        )
+            if row:
+                rows.append(row)
     return rows
+
+
+def _normalize_templates_list(raw: Any) -> list[dict[str, Any]]:
+    """
+    Zabbix YAML sometimes has `templates:` as one mapping (single template)
+    instead of a list — PyYAML loads that as dict, not [dict].
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [t for t in raw if isinstance(t, dict)]
+    if isinstance(raw, dict):
+        # Single template object
+        if any(
+            k in raw
+            for k in ("items", "discovery_rules", "name", "template", "uuid", "groups")
+        ):
+            return [raw]
+        # Map of uuid -> template
+        if raw and all(isinstance(v, dict) for v in raw.values()):
+            return [v for v in raw.values() if isinstance(v, dict)]
+        return [raw]
+    return []
 
 
 def _parse_zabbix_dict(data: dict[str, Any]) -> tuple[str, str, list[dict[str, Any]], list[str]]:
@@ -180,9 +216,12 @@ def _parse_zabbix_dict(data: dict[str, Any]) -> tuple[str, str, list[dict[str, A
     if not isinstance(export, dict):
         return "imported_profile", "Imported", [], ["Invalid root: expected object"]
 
-    templates = export.get("templates") or []
-    if not templates or not isinstance(templates, list):
-        return "imported_profile", "Imported", [], ["No templates[] in export"]
+    templates = _normalize_templates_list(export.get("templates"))
+    if not templates:
+        warnings.append(
+            "No templates found under zabbix_export.templates (expected a list or one template object)."
+        )
+        return "imported_profile", "Imported", [], warnings
 
     first = templates[0]
     profile_name = str(
@@ -197,7 +236,9 @@ def _parse_zabbix_dict(data: dict[str, Any]) -> tuple[str, str, list[dict[str, A
         tmpl_name = str(tmpl.get("name") or tmpl.get("template") or "?")
         added = _items_from_template_dict(tmpl, warnings)
         if not added:
-            warnings.append(f"Template {tmpl_name!r}: no SNMP items with snmp_oid")
+            warnings.append(
+                f"Template {tmpl_name!r}: no SNMP items (check items[] and discovery_rules.item_prototypes[] for snmp_oid + key)"
+            )
         output_mapping.extend(added)
 
     return profile_id, profile_name, output_mapping, warnings

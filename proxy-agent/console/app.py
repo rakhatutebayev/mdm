@@ -19,6 +19,7 @@ import os
 import traceback
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlencode
 
 import aiofiles
 from fastapi import FastAPI, Request, Form, UploadFile, File
@@ -65,11 +66,24 @@ async def dashboard(request: Request):
         active_devices = len(s.exec(select(Device).where(Device.status == "active")).all())
         profiles = len(s.exec(select(DeviceProfile)).all())
 
+    import_flash = None
+    if request.query_params.get("import_ok") == "1":
+        try:
+            n_items = int(request.query_params.get("items", 0))
+        except ValueError:
+            n_items = 0
+        import_flash = {
+            "profile_id": request.query_params.get("profile_id", ""),
+            "items": n_items,
+            "partial": request.query_params.get("partial") == "1",
+        }
+
     return templates.TemplateResponse("dashboard.html", _ctx(
         request,
         total_devices=total_devices,
         active_devices=active_devices,
         profiles=profiles,
+        import_flash=import_flash,
     ))
 
 
@@ -138,6 +152,16 @@ async def profile_upload(request: Request, file: UploadFile = File(...)):
             content, filename
         )
 
+        if not output_mapping:
+            lines = [
+                "No SNMP items were extracted (need snmp_oid + key on items or LLD item_prototypes).",
+                "",
+            ]
+            lines.extend(warnings[:40])
+            if len(warnings) > 40:
+                lines.append(f"... and {len(warnings) - 40} more warnings")
+            raise ValueError("\n".join(lines))
+
         with get_session() as s:
             existing = s.exec(
                 select(DeviceProfile).where(DeviceProfile.profile_id == profile_id)
@@ -145,6 +169,7 @@ async def profile_upload(request: Request, file: UploadFile = File(...)):
             if existing:
                 existing.output_mapping = json.dumps(output_mapping)
                 existing.profile_name = profile_name
+                s.add(existing)
             else:
                 s.add(DeviceProfile(
                     profile_id=profile_id,
@@ -161,7 +186,15 @@ async def profile_upload(request: Request, file: UploadFile = File(...)):
 
         _audit("profile_upload", f"profile_id={profile_id}, file={filename}")
         log.info(f"Profile {profile_id} imported from {filename} ({len(warnings)} warnings)")
-        return RedirectResponse("/", status_code=303)
+        q = urlencode(
+            {
+                "import_ok": "1",
+                "profile_id": profile_id,
+                "items": str(len(output_mapping)),
+                "partial": "1" if warnings else "0",
+            }
+        )
+        return RedirectResponse(f"/?{q}", status_code=303)
 
     except Exception as e:
         log.error(f"Profile import failed: {e}\n{traceback.format_exc()}")

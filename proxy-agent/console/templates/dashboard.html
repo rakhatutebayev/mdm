@@ -2,6 +2,17 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <h1>Dashboard</h1>
+{% if import_flash %}
+{% if import_flash.partial %}
+<div class="alert alert-warn">
+{% else %}
+<div class="alert" style="background:#14532d;border:1px solid #166534;color:#86efac">
+{% endif %}
+  <strong>Import successful.</strong>
+  Profile <code>{{ import_flash.profile_id }}</code> — <strong>{{ import_flash.items }}</strong> SNMP mapping(s) saved.
+  {% if import_flash.partial %}<br><span style="opacity:.9">Some rows were skipped; check logs if needed.</span>{% endif %}
+</div>
+{% endif %}
 <div class="card">
   <h2>Agent Status</h2>
   <div class="info-row">

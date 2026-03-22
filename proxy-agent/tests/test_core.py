@@ -292,6 +292,46 @@ zabbix_export:
         assert mapping[0]["target_key"] == "system.cpu.load"
         assert mapping[0]["data_type"] == "float"
 
+    def test_yaml_template_as_single_dict_not_list(self):
+        """PyYAML loads one template as mapping under templates:, not []."""
+        from core.zabbix_import import parse_zabbix_template_bytes
+
+        yaml_text = """
+zabbix_export:
+  version: '6.0'
+  templates:
+    name: Dell iDRAC YAML
+    items:
+      - name: Test
+        snmp_oid: 1.3.6.1.2.1.1.3.0
+        key: system.uptime
+        delay: 60s
+"""
+        pid, pname, mapping, _ = parse_zabbix_template_bytes(
+            yaml_text.encode("utf-8"), "t.yml"
+        )
+        assert pid == "dell_idrac_yaml"
+        assert len(mapping) == 1
+        assert mapping[0]["source_oid"] == "1.3.6.1.2.1.1.3.0"
+
+    def test_yaml_discovery_item_prototypes(self):
+        from core.zabbix_import import parse_zabbix_template_bytes
+
+        yaml_text = """
+zabbix_export:
+  templates:
+    - name: With LLD
+      discovery_rules:
+        - name: iface
+          item_prototypes:
+            - key: net.if.in[{#SNMPVALUE}]
+              snmp_oid: 1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}
+              delay: 1m
+"""
+        _, _, mapping, _ = parse_zabbix_template_bytes(yaml_text.encode(), "x.yml")
+        assert len(mapping) == 1
+        assert "1.3.6.1.2.1.2.2.1.10" in mapping[0]["source_oid"]
+
 
 class TestParseMqttBrokerUrl:
     def test_wss_default_path_and_port(self):
