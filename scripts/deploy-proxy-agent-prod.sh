@@ -73,4 +73,9 @@ else
   _ssh "rm -rf $STAGING" || true
 fi
 
-echo "==> OK: https://${HOST}:8443/"
+echo "==> post-check (service + listening port)"
+_ssh "sudo systemctl is-active nocko-agent || true; sudo ss -tlnp 2>/dev/null | grep -E ':8443|:8765' || true"
+
+echo "==> OK: https://${HOST}:8443/diagnostics"
+echo "    If connection refused: sudo ufw allow 8443/tcp  OR fix listen_port in /opt/nocko-agent/config.json"
+echo "    UI templates (e.g. Devices → Просмотр JSON): included in tarball; hard-refresh browser after deploy."

@@ -489,3 +489,271 @@ curl -sSL https://nocko-mdm.io/install.sh | sudo bash
   "agent_version": "1.2.3"
 }
 ```
+
+---
+
+## 8. Архитектура SNMP-сбора: Polling vs Traps, Профили и Zabbix-шаблоны
+
+> Этот раздел обязателен к прочтению перед настройкой профиля SNMP и объясняет, почему данные могут не собираться.
+
+---
+
+### 8.1. Два режима получения данных по SNMP
+
+| Режим | Механизм | Агент → Устройство? | Когда использовать |
+|---|---|---|---|
+| **SNMP Polling** (активный) | GET / BULKWALK по расписанию | **Да** (агент опрашивает IP) | Периодические метрики, инвентарь |
+| **SNMP Trap** (пассивный) | Устройство само отправляет UDP:162 на агент | Нет (устройство → агент) | Аварийные события: диск упал, перегрев, включение питания |
+
+NOCKO Proxy Agent реализует **оба режима одновременно**:
+- `collectors/snmp_poller.py` — активный polling по таймеру
+- `collectors/trap_receiver.py` — пассивный listener UDP:162
+
+---
+
+### 8.2. Как агент выполняет SNMP Polling
+
+Текущий poller (MVP) работает строго через **SNMP GET** по индивидуальным скалярным OID:
+
+```
+Для каждого устройства (Device.status == "active"):
+  Загрузить DeviceProfile.output_mapping (JSON)
+  Для каждой строки mapping с нужным poll_class:
+    Выполнить SNMP GET(device.ip, row["source_oid"])
+    Если OK → применить scale_multiplier → отправить по MQTT
+    Если ошибка → записать в error_samples
+```
+
+**Что работает сейчас:**
+- `SNMP GET` по конкретному скалярному OID (например, `1.3.6.1.2.1.1.1.0`)
+- SNMPv2c (community string) и SNMPv3 (auth/priv)
+- `scale_multiplier`, `valid_range`, dedup/keepalive
+
+**Что НЕ работает в MVP (причины, почему данные не собираются):**
+- `SNMP WALK` / `BULKWALK` — не реализован в polling (только в диагностическом `_snmp_walk`)
+- OID с LLD-макросами `{#SNMPINDEX}` — **пропускается** (`oid_has_lld_macro` → `continue`)
+- `DEPENDENT` items Zabbix — зависят от walk-мастера, у них нет прямого OID
+- Многозначные OID типа `walk[1.3.6.1.4.1.674.10892.5.5.1.20.130.1.1.38, ...]` — не парсятся
+
+---
+
+### 8.3. Анализ Zabbix-шаблона Dell iDRAC: Почему данные не собираются
+
+Шаблон **Dell iDRAC by SNMP** использует **двухуровневую архитектуру Zabbix**:
+
+#### Уровень 1 — Мастер-items (SNMP_AGENT, тип `walk[]`):
+```yaml
+key: dell.server.fan.walk
+snmp_oid: 'walk[1.3.6.1.4.1.674.10892.5.4.700.12.1.5, ...]'
+```
+Zabbix выполняет BULKWALK по нескольким OID сразу → получает таблицу всех вентиляторов.
+**NOCKO agent: MVP не умеет делать такой walk в polling** → эти items пустые.
+
+#### Уровень 2 — Scalar/DEPENDENT items, извлекаемые из мастера:
+```yaml
+key: dell.server.sensor.fan.status[{#FAN_DESCR}]
+type: DEPENDENT       # ← зависит от dell.server.fan.walk
+master_item: dell.server.fan.walk
+preprocessing:
+  - type: SNMP_WALK_VALUE
+    parameters: ['1.3.6.1.4.1.674.10892.5.4.700.12.1.5.{#SNMPINDEX}', '0']
+```
+У таких items **нет собственного OID** — они берут данные из мастера через preprocessing.
+**NOCKO agent: MVP не обрабатывает DEPENDENT items** → нет ни OID, ни данных.
+
+#### LLD Discovery rules:
+```yaml
+discovery_rules:
+  - key: fan.discovery
+    type: DEPENDENT
+    item_prototypes:
+      - key: 'dell.server.sensor.fan.status[{#FAN_DESCR}]'
+```
+Zabbix сначала выполняет discovery walk → создаёт динамические items по прототипам.
+**NOCKO agent: OID с `{#SNMPINDEX}` пропускаются (`macro_skip`)** → 0 данных.
+
+#### Скалярные items, которые работают прямо сейчас:
+Из всего Dell iDRAC шаблона только несколько items имеют прямой скалярный OID и работают в MVP:
+
+| Zabbix key | OID | Описание |
+|---|---|---|
+| `dell.server.bios.version` | `get[1.3.6.1.4.1.674.10892.5.4.300.50.1.8.1.1]` | Версия BIOS |
+| `dell.server.descr[sysDescr]` | `get[1.3.6.1.2.1.1.1.0]` | System description |
+| `dell.server.hw.firmware[racFirmwareVersion]` | `get[1.3.6.1.4.1.674.10892.5.1.1.8.0]` | Версия iDRAC firmware |
+| `dell.server.hw.model[systemModelName]` | `get[1.3.6.1.4.1.674.10892.5.1.3.12.0]` | Модель сервера |
+| `dell.server.hw.serialnumber[systemServiceTag]` | `get[1.3.6.1.4.1.674.10892.5.1.3.2.0]` | Серийный номер |
+| `dell.server.location[sysLocation]` | `get[1.3.6.1.2.1.1.6.0]` | Местоположение |
+| `dell.server.name[sysName]` | `get[1.3.6.1.2.1.1.5.0]` | Имя устройства |
+| `dell.server.sw.os[systemOSName]` | `get[1.3.6.1.4.1.674.10892.5.1.3.6.0]` | Операционная система |
+| `dell.server.status[globalSystemStatus]` | `get[1.3.6.1.4.1.674.10892.5.2.1.0]` | Общий статус системы |
+| `dell.server.hw.uptime[systemPowerUpTime]` | `get[1.3.6.1.4.1.674.10892.5.2.5.0]` | Uptime железа |
+| `dell.server.contact[sysContact]` | `get[1.3.6.1.2.1.1.4.0]` | Контакт |
+| `dell.server.objectid[sysObjectID]` | `get[1.3.6.1.2.1.1.2.0]` | System Object ID |
+| `dell.server.net.uptime[snmpEngineTime]` | `get[1.3.6.1.6.3.10.2.1.3.0]` | SNMP Engine uptime |
+
+> Эти OID импортируются при загрузке шаблона и работают без доработок агента.
+
+---
+
+### 8.4. Как должен быть настроен профиль (`output_mapping`) для работающего SNMP-опроса
+
+Профиль работает если **каждая строка `output_mapping` содержит конкретный скалярный OID** (не `walk[]`, не `{#MACRO}`).
+
+**Рабочий пример `output_mapping`** для Dell iDRAC:
+
+```json
+[
+  {
+    "source_oid": "1.3.6.1.2.1.1.1.0",
+    "target_key": "sys_descr",
+    "data_type": "string",
+    "poll_class": "inventory",
+    "interval_sec": 86400
+  },
+  {
+    "source_oid": "1.3.6.1.4.1.674.10892.5.2.1.0",
+    "target_key": "dell.server.status.globalSystemStatus",
+    "data_type": "uint",
+    "poll_class": "fast",
+    "interval_sec": 60
+  },
+  {
+    "source_oid": "1.3.6.1.4.1.674.10892.5.1.3.12.0",
+    "target_key": "dell.server.hw.model",
+    "data_type": "string",
+    "poll_class": "inventory",
+    "interval_sec": 86400
+  },
+  {
+    "source_oid": "1.3.6.1.4.1.674.10892.5.1.3.2.0",
+    "target_key": "dell.server.hw.serial",
+    "data_type": "string",
+    "poll_class": "inventory",
+    "interval_sec": 86400
+  },
+  {
+    "source_oid": "1.3.6.1.4.1.674.10892.5.1.1.8.0",
+    "target_key": "dell.server.hw.firmware",
+    "data_type": "string",
+    "poll_class": "slow",
+    "interval_sec": 3600
+  },
+  {
+    "source_oid": "1.3.6.1.4.1.674.10892.5.4.300.50.1.8.1.1",
+    "target_key": "dell.server.bios.version",
+    "data_type": "string",
+    "poll_class": "inventory",
+    "interval_sec": 86400
+  },
+  {
+    "source_oid": "1.3.6.1.2.1.1.5.0",
+    "target_key": "sys_name",
+    "data_type": "string",
+    "poll_class": "inventory",
+    "interval_sec": 86400
+  },
+  {
+    "source_oid": "1.3.6.1.6.3.10.2.1.3.0",
+    "target_key": "dell.server.net.uptime",
+    "data_type": "uint",
+    "unit": "uptime",
+    "poll_class": "slow",
+    "interval_sec": 300
+  },
+  {
+    "source_oid": "1.3.6.1.4.1.674.10892.5.2.5.0",
+    "target_key": "dell.server.hw.uptime",
+    "data_type": "uint",
+    "unit": "uptime",
+    "poll_class": "slow",
+    "interval_sec": 300
+  }
+]
+```
+
+---
+
+### 8.5. Правила настройки профиля — Чеклист
+
+| # | Проверка | Как проверить |
+|---|---|---|
+| 1 | `source_oid` — только скалярный OID, без `walk[...]`, без `{#MACRO}` | Открыть `output_mapping` в UI → "Preview" |
+| 2 | `poll_class` = `fast` / `slow` / `inventory` | Поллер читает именно это поле |
+| 3 | `Device.status == "active"` | Страница устройства в UI |
+| 4 | `Device.profile_id` ссылается на существующий реальный профиль | Проверить в Profiles → найти по `profile_id` |
+| 5 | Устройство доступно по `Device.ip` и порту UDP/161 | Verify SNMP в UI → должен вернуть `OK` |
+| 6 | SNMP credentials корректны (`community` для v2c, `user/auth/priv` для v3) | Verify SNMP → сообщение об ошибке auth |
+| 7 | Файрвол: порт UDP/161 открыт от хоста агента к IP устройства | `snmpwalk -v2c -c public <ip> 1.3.6.1.2.1.1.1.0` с хоста агента |
+| 8 | Trap receiver: устройство направляет трапы на IP агента UDP/162 | `/diagnostics` → trap_count растёт |
+
+---
+
+### 8.6. Диагностика: Почему SNMP не собирается (Алгоритм)
+
+```
+1. Открыть Local Web UI → /diagnostics (или /devices/{id}/snmp-debug.json)
+   ├── mib2_sysDescr OK?
+   │   ├── NO → проблема с сетью/сред(а/firewall/IP/community. Stop здесь.
+   │   └── YES → базовый SNMP работает
+   │
+   ├── profile_probe_oid OK?
+   │   ├── NO → OID из профиля недоступен (не та прошивка MIB, ограничение View)
+   │   └── YES → OID доступен
+   │
+   └── /poll_diag в UI:
+       ├── tier_total == 0    → в profile нет items для этого poll_class
+       ├── macro_skipped > 0  → OID содержат {#MACRO} — нужны скалярные OID
+       ├── snmp_failed > 0    → смотреть snmp_error_samples → конкретная ошибка
+       ├── dedup_skipped > 0  → данные собираются, но не изменились (норма)
+       └── values_published>0 → данные отправляются, проверяй MQTT и backend
+```
+
+**Частые ошибки:**
+
+| Симптом | Причина | Решение |
+|---|---|---|
+| `macro_skip == tier_total` | Все OID в профиле — LLD-прототипы с `{#SNMPINDEX}` | Добавить скалярные OID в профиль вручную |
+| `snmp_fail == tier_total` | Community/SNMPv3 creds неверны | Проверить Verify SNMP в UI |
+| `tier_total == 0` | Не тот `poll_class` или профиль пустой | Убедиться что mapping имеет строки с `poll_class: fast/slow` |
+| Device не опрашивается | `Device.status != "active"` | Активировать устройство в UI |
+| Данные есть, на портале нет | MQTT не подключён | Проверить `/diagnostics` → mqtt_status |
+
+---
+
+### 8.7. SNMP Trap — Настройка на стороне устройства (Dell iDRAC)
+
+Чтобы устройство отправляло трапы на агент, нужно настроить на iDRAC:
+
+1. **iDRAC Web UI** → Alerts → SNMP Trap Destination:
+   - IP: `<IP хоста агента>`
+   - Community: любое (для trap-receiver не проверяется в MVP)
+   - SNMP Version: v1 / v2c / v3 (агент принимает все)
+
+2. Убедиться что агентский хост слушает UDP:162. Проверка:
+   ```bash
+   sudo ss -ulnp | grep 162
+   # должна быть строка: 0.0.0.0:162 nocko-agent
+   ```
+
+3. Агент требует `CAP_NET_BIND_SERVICE` или запуск от root для UDP:162. В `install.sh` этот capability устанавливается автоматически.
+
+4. Если трапы приходят — они видны в **Local UI → Events** и в `/diagnostics` → `trap_count`.
+
+---
+
+### 8.8. Требования к реализации SNMP Walk в будущих версиях (Post-MVP)
+
+Для сбора данных из полного Dell iDRAC шаблона (температуры, вентиляторы, диски, RAID) агент должен поддерживать:
+
+| Функция | Zabbix механизм | Агент MVP | Планируется |
+|---|---|---|---|
+| Скалярный GET | `get[OID]`, `SNMP_AGENT` | ✅ Работает | — |
+| SNMP BULKWALK | `walk[OID1, OID2, ...]` | ❌ Нет | v5.2 |
+| SNMP_WALK_VALUE | `preprocessing: SNMP_WALK_VALUE` | ❌ Нет | v5.2 |
+| SNMP_WALK_TO_JSON | `preprocessing: SNMP_WALK_TO_JSON` | ❌ Нет | v5.2 |
+| LLD Discovery | `discovery_rules`, `{#SNMPINDEX}` | ❌ Нет | v6.0 |
+| DEPENDENT items | `master_item`, no-OID | ❌ Нет | v5.2 |
+| SNMP Trap receive | `SNMP_TRAP`, `snmptrap.fallback` | ✅ Работает | — |
+
+**Вывод для текущей версии:** профиль Dell iDRAC должен содержать только скалярные OID из раздела 8.3 таблицы. Полная поддержка walk + LLD — в roadmap v5.2.
+

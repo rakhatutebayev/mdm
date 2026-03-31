@@ -375,9 +375,22 @@ systemctl enable "$SERVICE_NAME"
 echo ""
 info "Installation complete!"
 echo ""
+
+LISTEN_PORT="8443"
+if command -v python3 >/dev/null 2>&1 && [[ -f "$CFG" ]]; then
+  LISTEN_PORT="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('listen_port',8443))" "$CFG" 2>/dev/null)" || LISTEN_PORT="8443"
+fi
+PRIMARY_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+
 echo "  Config:   $CFG"
 echo "  Logs:     $LOG_DIR/agent.log"
-echo "  Local UI: https://localhost:8443 (TLS, TZ §6.2) when console_tls + certs are set"
+echo "  Local UI: https://localhost:${LISTEN_PORT} (or http if TLS certs missing)"
+if [[ -n "$PRIMARY_IP" ]]; then
+  echo "  From LAN: https://${PRIMARY_IP}:${LISTEN_PORT}/diagnostics  (accept self-signed cert warning)"
+fi
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi "Status: active"; then
+  echo -e "${YELLOW}  UFW is active — open the UI port, e.g.: sudo ufw allow ${LISTEN_PORT}/tcp comment 'NOCKO agent UI'${NC}"
+fi
 echo ""
 if [[ -z "$ENROLLMENT_TOKEN" ]]; then
   echo -e "${YELLOW}  ⚠ Set 'enrollment_token' in $CFG then start the service.${NC}"

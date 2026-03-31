@@ -1,0 +1,378 @@
+zabbix_export:
+  version: '6.0'
+  date: '2024-01-01T00:00:00Z'
+  groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: af2b91c4e8d04c5bab7c1234567890ab
+      template: 'SNMP OS ESXi Extended'
+      name: 'SNMP OS ESXi Extended'
+      description: |
+        Extended ESXi hardware monitoring via SNMP.
+        Covers: CPU, Memory, Storage, VMs, Power/Cooling, Server Info.
+
+        MIBs used:
+          VMWARE-SYSTEM-MIB     (1.3.6.1.4.1.6876.1)
+          VMWARE-RESOURCES-MIB  (1.3.6.1.4.1.6876.3)
+          VMWARE-ENV-MIB        (1.3.6.1.4.1.6876.4)
+          HOST-RESOURCES-MIB    (1.3.6.1.2.1.25)
+          ENTITY-MIB            (1.3.6.1.2.1.47)
+
+        NOTE: Physical disk models/slots, DIMM details, PSU wattage
+        require iDRAC (Dell) or iLO (HP) SNMP agent — NOT available
+        through ESXi native SNMP.
+
+      groups:
+        - name: Templates
+
+      items:
+        # ── Server Identity ──────────────────────────────────────────────────
+        - uuid: a1000001000000000000000000000001
+          name: 'ESXi Product Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.6876.1.1.0
+          key: vmwProdName
+          delay: '86400'
+          value_type: TEXT
+          description: 'VMware product name (e.g. VMware ESXi)'
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: a1000001000000000000000000000002
+          name: 'ESXi Version'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.6876.1.2.0
+          key: vmwProdVersion
+          delay: '86400'
+          value_type: TEXT
+          description: 'ESXi version string (e.g. 6.7.0)'
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: a1000001000000000000000000000003
+          name: 'ESXi Build'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.6876.1.4.0
+          key: vmwProdBuild
+          delay: '86400'
+          value_type: TEXT
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: a1000001000000000000000000000004
+          name: 'Server Model (ENTITY-MIB)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.47.1.1.1.1.13.1
+          key: entPhysicalModelName
+          delay: '86400'
+          value_type: TEXT
+          description: |
+            Server hardware model name from ENTITY-MIB.
+            Example: ProLiant DL380 Gen9, PowerEdge R730
+            Returns empty string if vendor does not populate ENTITY-MIB.
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: a1000001000000000000000000000005
+          name: 'Server Serial Number (ENTITY-MIB)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.47.1.1.1.1.11.1
+          key: entPhysicalSerialNum
+          delay: '86400'
+          value_type: TEXT
+          description: |
+            Server serial number from ENTITY-MIB.
+            NOTE: May return empty — depends on vendor SNMP agent.
+            For Dell: use iDRAC SNMP instead (chassisSerialNumber).
+            For HP:   use iLO SNMP instead (cpqSiSysSerialNum).
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: a1000001000000000000000000000006
+          name: 'Server Description (sysDescr)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.1.0
+          key: sysDescr
+          delay: '86400'
+          value_type: TEXT
+          description: 'Full system description including OS, build, CPU architecture'
+          tags:
+            - tag: Application
+              value: Identity
+
+        # ── CPU ──────────────────────────────────────────────────────────────
+        - uuid: a1000002000000000000000000000001
+          name: 'Physical CPU count'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.6876.3.1.1.0
+          key: vmwNumCpus
+          delay: '86400'
+          description: 'Number of physical CPU sockets populated'
+          tags:
+            - tag: Application
+              value: CPU
+
+        # ── Memory ───────────────────────────────────────────────────────────
+        - uuid: a1000003000000000000000000000001
+          name: 'Memory total'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.6876.3.2.1.0
+          key: vmwMemSize
+          delay: '3600'
+          units: KB
+          description: 'Total physical RAM (KB)'
+          tags:
+            - tag: Application
+              value: Memory
+
+        - uuid: a1000003000000000000000000000002
+          name: 'Memory available'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.6876.3.2.3.0
+          key: vmwMemAvail
+          delay: 60s
+          units: KB
+          description: 'RAM available for VMs and hypervisor (KB)'
+          tags:
+            - tag: Application
+              value: Memory
+          triggers:
+            - uuid: b1000001000000000000000000000001
+              expression: '100*last(/SNMP OS ESXi Extended/vmwMemAvail)/last(/SNMP OS ESXi Extended/vmwMemSize)<10'
+              name: 'ESXi {HOST.NAME}: memory available < 10%'
+              priority: HIGH
+
+        - uuid: a1000003000000000000000000000003
+          name: 'Memory used %'
+          type: CALCULATED
+          key: vmwMemUsedPct
+          delay: 60s
+          value_type: FLOAT
+          units: '%'
+          params: '100*(1-last(//vmwMemAvail)/last(//vmwMemSize))'
+          tags:
+            - tag: Application
+              value: Memory
+
+        # ── Uptime ───────────────────────────────────────────────────────────
+        - uuid: a1000004000000000000000000000001
+          name: 'Uptime'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.3.0
+          key: sysUpTime
+          delay: 60s
+          units: uptime
+          description: 'System uptime in timeticks (1/100 sec)'
+          tags:
+            - tag: Application
+              value: System
+
+      discovery_rules:
+        # ── Per-CPU load (hrProcessorTable) ──────────────────────────────────
+        - uuid: d1000001000000000000000000000001
+          name: 'CPU discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},1.3.6.1.2.1.25.3.3.1.2]'
+          key: hrProcessorIndex
+          delay: '3600'
+          description: 'Discover logical CPUs for per-core load monitoring'
+          item_prototypes:
+            - uuid: p1000001000000000000000000000001
+              name: 'CPU {#SNMPINDEX} load'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.25.3.3.1.2.{#SNMPINDEX}'
+              key: 'hrProcessorLoad[{#SNMPINDEX}]'
+              delay: 60s
+              units: '%'
+              description: 'Recent average CPU usage % for logical CPU {#SNMPINDEX}'
+              tags:
+                - tag: Application
+                  value: CPU
+              trigger_prototypes:
+                - uuid: t1000001000000000000000000000001
+                  expression: 'last(/SNMP OS ESXi Extended/hrProcessorLoad[{#SNMPINDEX}])>95'
+                  name: 'ESXi {HOST.NAME}: CPU {#SNMPINDEX} load > 95%'
+                  priority: WARNING
+
+        # ── Storage filesystems (hrStorageTable) ──────────────────────────────
+        # Covers: VMFS datastores, /scratch, /tmp, memory (RAM disk)
+        - uuid: d1000002000000000000000000000001
+          name: 'Storage discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},1.3.6.1.2.1.25.2.3.1.3]'
+          key: hrStorageIndex
+          delay: '3600'
+          description: |
+            Discover storage partitions via HOST-RESOURCES-MIB.
+            Includes VMFS datastores, /scratch, /tmp, /bootbank etc.
+            NOT physical disk bays — use iDRAC/iLO for physical disk info.
+          item_prototypes:
+            - uuid: p1000002000000000000000000000001
+              name: 'Storage {#SNMPVALUE}: allocation unit'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.25.2.3.1.4.{#SNMPINDEX}'
+              key: 'hrStorageAllocUnits[{#SNMPINDEX}]'
+              delay: '3600'
+              units: B
+              description: 'Bytes per allocation unit'
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: p1000002000000000000000000000002
+              name: 'Storage {#SNMPVALUE}: total size'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.25.2.3.1.5.{#SNMPINDEX}'
+              key: 'hrStorageSize[{#SNMPINDEX}]'
+              delay: '3600'
+              description: 'Total size in allocation units'
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: p1000002000000000000000000000003
+              name: 'Storage {#SNMPVALUE}: used'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.2.1.25.2.3.1.6.{#SNMPINDEX}'
+              key: 'hrStorageUsed[{#SNMPINDEX}]'
+              delay: 60s
+              description: 'Used storage in allocation units'
+              tags:
+                - tag: Application
+                  value: Storage
+              trigger_prototypes:
+                - uuid: t1000002000000000000000000000001
+                  expression: |
+                    last(/SNMP OS ESXi Extended/hrStorageUsed[{#SNMPINDEX}]) /
+                    last(/SNMP OS ESXi Extended/hrStorageSize[{#SNMPINDEX}]) * 100 > 90
+                  name: 'ESXi {HOST.NAME}: storage {#SNMPVALUE} > 90% used'
+                  priority: HIGH
+
+        # ── Hardware subsystems (VMWARE-ENV-MIB) ─────────────────────────────
+        # Covers: fan, powerSupply, cpu, memory, battery,
+        #         temperatureSensor, raidController, voltage
+        - uuid: d1000003000000000000000000000001
+          name: 'Hardware environment discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},1.3.6.1.4.1.6876.4.20.3.1.1]'
+          key: vmwEnvIndex
+          delay: '3600'
+          description: |
+            Hardware subsystem health (fan, PSU, CPU, RAID, temperature, voltage).
+            Status values: 1=unknown 2=normal 3=marginal 4=critical 5=failed
+          item_prototypes:
+            - uuid: p1000003000000000000000000000001
+              name: 'HW subsystem {#SNMPINDEX} type'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.4.20.3.1.2.{#SNMPINDEX}'
+              key: 'vmwSubsystemType[{#SNMPINDEX}]'
+              delay: '3600'
+              description: |
+                1=unknown 2=chassis 3=powerSupply 4=fan 5=cpu
+                6=memory 7=battery 8=temperatureSensor 9=raidController 10=voltage
+              tags:
+                - tag: Application
+                  value: Hardware
+
+            - uuid: p1000003000000000000000000000002
+              name: 'HW subsystem {#SNMPINDEX} status'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.4.20.3.1.3.{#SNMPINDEX}'
+              key: 'vmwSubsystemStatus[{#SNMPINDEX}]'
+              delay: 60s
+              description: '2=normal 3=marginal 4=critical 5=failed'
+              tags:
+                - tag: Application
+                  value: Hardware
+              trigger_prototypes:
+                - uuid: t1000003000000000000000000000001
+                  expression: 'last(/SNMP OS ESXi Extended/vmwSubsystemStatus[{#SNMPINDEX}])>=4'
+                  name: 'ESXi {HOST.NAME}: hardware subsystem {#SNMPINDEX} CRITICAL/FAILED'
+                  priority: DISASTER
+
+            - uuid: p1000003000000000000000000000003
+              name: 'HW subsystem {#SNMPINDEX} description'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.4.20.3.1.4.{#SNMPINDEX}'
+              key: 'vmwEventDescription[{#SNMPINDEX}]'
+              delay: '3600'
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: Hardware
+
+        # ── Virtual Machines ──────────────────────────────────────────────────
+        - uuid: d1000004000000000000000000000001
+          name: 'Virtual Machines discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'discovery[{#SNMPVALUE},1.3.6.1.4.1.6876.2.1.1.2]'
+          key: vmwVmDisplayName
+          delay: '3600'
+          description: 'Discover all VMs on this ESXi host'
+          item_prototypes:
+            - uuid: p1000004000000000000000000000001
+              name: 'VM {#SNMPVALUE}: power state'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.2.1.1.6.{#SNMPINDEX}'
+              key: 'vmwVMState[{#SNMPINDEX}]'
+              delay: 60s
+              value_type: TEXT
+              description: 'poweredOn / poweredOff / suspended'
+              tags:
+                - tag: Application
+                  value: 'Virtual Machines'
+              trigger_prototypes:
+                - uuid: t1000004000000000000000000000001
+                  expression: 'find(/SNMP OS ESXi Extended/vmwVMState[{#SNMPINDEX}],,"regexp","poweredOff")=1'
+                  name: 'VM {#SNMPVALUE} on {HOST.NAME} is powered OFF'
+                  priority: WARNING
+
+            - uuid: p1000004000000000000000000000002
+              name: 'VM {#SNMPVALUE}: guest state'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.2.1.1.8.{#SNMPINDEX}'
+              key: 'vmwVMGuestState[{#SNMPINDEX}]'
+              delay: 60s
+              value_type: TEXT
+              description: 'running / shuttingdown / resetting / standby / notrunning / unknown'
+              tags:
+                - tag: Application
+                  value: 'Virtual Machines'
+
+            - uuid: p1000004000000000000000000000003
+              name: 'VM {#SNMPVALUE}: memory size (MB)'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.2.1.1.5.{#SNMPINDEX}'
+              key: 'vmwVMMemSize[{#SNMPINDEX}]'
+              delay: '3600'
+              units: MB
+              tags:
+                - tag: Application
+                  value: 'Virtual Machines'
+
+            - uuid: p1000004000000000000000000000004
+              name: 'VM {#SNMPVALUE}: CPU count'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.2.1.1.9.{#SNMPINDEX}'
+              key: 'vmwVMCPUs[{#SNMPINDEX}]'
+              delay: '3600'
+              tags:
+                - tag: Application
+                  value: 'Virtual Machines'
+
+            - uuid: p1000004000000000000000000000005
+              name: 'VM {#SNMPVALUE}: guest OS'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.6876.2.1.1.4.{#SNMPINDEX}'
+              key: 'vmwVMGuestOS[{#SNMPINDEX}]'
+              delay: '3600'
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: 'Virtual Machines'

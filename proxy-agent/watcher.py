@@ -15,7 +15,8 @@ import time
 from pathlib import Path
 
 _AGENT_SCRIPT = Path(__file__).parent / "main.py"
-_MAX_RESTARTS = 10
+# High cap: main.py no longer exits on missing token so crashes should be rare; systemd also Restart=always.
+_MAX_RESTARTS = 200
 _BACKOFF = [5, 10, 30, 60, 120]   # seconds between restart attempts
 
 

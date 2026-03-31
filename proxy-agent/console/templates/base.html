@@ -13,6 +13,7 @@
     .badge{display:inline-block;padding:.15rem .5rem;border-radius:.375rem;font-size:.7rem;font-weight:600}
     .badge-green{background:#14532d;color:#4ade80} .badge-red{background:#450a0a;color:#f87171}
     .badge-yellow{background:#422006;color:#fb923c}
+    .badge-gray{background:#1e293b;color:#94a3b8}
     main{padding:2rem 1.5rem;max-width:1200px;margin:0 auto}
     h1{font-size:1.5rem;font-weight:700;margin-bottom:1.5rem}
     h2{font-size:1.1rem;font-weight:600;margin-bottom:1rem;color:#94a3b8}
@@ -46,6 +47,8 @@
   <a href="/devices" {% if request.url.path.startswith('/devices') %}class="active"{% endif %}>Devices</a>
   <a href="/config" {% if request.url.path == '/config' %}class="active"{% endif %}>Config</a>
   <a href="/logs" {% if request.url.path == '/logs' %}class="active"{% endif %}>Logs</a>
+  <a href="/diagnostics" {% if request.url.path == '/diagnostics' %}class="active"{% endif %}>Diagnostics</a>
+  <a href="/debug/json" {% if request.url.path.startswith('/debug') or request.url.path == '/json-debug' %}class="active"{% endif %}>JSON debug</a>
   <div style="margin-left:auto;display:flex;align-items:center;gap:1rem;font-size:.8rem">
     <span class="info-item"><span class="k">Agent:</span><span class="v">{{ agent_id or '—' }}</span></span>
     {% if registered %}

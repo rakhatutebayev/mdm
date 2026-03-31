@@ -138,6 +138,7 @@ class MQTTClient:
 
         # Callbacks
         self._client.on_connect = self._on_connect
+        self._client.on_connect_fail = self._on_connect_fail
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message
 
@@ -256,6 +257,13 @@ class MQTTClient:
     # ──────────────────────────────────────────────────────────────────────────
     # Paho callbacks
     # ──────────────────────────────────────────────────────────────────────────
+    def _on_connect_fail(self, client, userdata) -> None:
+        """Сеть / TLS / WebSocket до CONNACK — paho вызывает отдельно от on_connect(rc≠0)."""
+        log.error(
+            "MQTT connect_fail — нет TCP/TLS/WebSocket до брокера или отказ прокси. "
+            "Проверьте URL, порт, firewall, nginx path /mqtt, сертификаты."
+        )
+
     def _on_connect(self, client, userdata, flags, rc, properties=None) -> None:
         if rc == 0:
             self._connected = True

@@ -1,0 +1,780 @@
+zabbix_export:
+  version: '6.0'
+  groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226339
+      name: Templates/Hardware
+
+  templates:
+    - uuid: cf3c82d1e9f04d7cb8e2345678901bcd
+      template: 'Dell OMSA by SNMP'
+      name: 'Dell OMSA by SNMP'
+      description: |
+        Full hardware inventory for Dell PowerEdge servers where
+        Dell OpenManage Server Administrator (OMSA) is installed on ESXi or OS.
+
+        Use when:
+          - OMSA VIB installed on VMware ESXi → poll ESXi management IP
+          - OMSA installed on Linux OS → poll OS IP
+          NOT for iDRAC6 BMC IP (use 'Dell iDRAC6 by SNMP' for that)
+
+        Converted from Zabbix Template-snmp-dell-openmanage (2016-07-26).
+
+        MIB: DELL-MIB enterprise 1.3.6.1.4.1.674.10892 and .10893
+        SNMP: v2c, community 'public'
+        Install OMSA VIB on ESXi: esxcli software vib install -d OM-SrvAdmin-*.zip
+
+      groups:
+        - name: Templates/Hardware
+
+      macros:
+        - macro: '{$SNMP_COMMUNITY}'
+          value: public
+
+      items:
+        # ── Probe (sysUpTime, MIB-II — always available) ──────────────────────
+        - uuid: cf000000000000000000000000000001
+          name: 'SNMP agent uptime'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.2.1.1.3.0
+          key: dellOmsaSnmpUptime
+          delay: 60s
+          description: 'MIB-II sysUpTime — probe OID and connectivity check'
+          tags:
+            - tag: Application
+              value: Identity
+
+        # ── Server Identity ───────────────────────────────────────────────────
+        - uuid: cf000000000000000000000000000002
+          name: 'OMSA: Chassis Model Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.300.10.1.9.1
+          key: chassisModelName
+          delay: 3600s
+          value_type: TEXT
+          description: 'Defines the system model type for this chassis.'
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: cf000000000000000000000000000003
+          name: 'OMSA: Chassis Manufacturer Name'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.300.10.1.8.1
+          key: chassisManufacturerName
+          delay: 3600s
+          value_type: TEXT
+          description: 'Defines the system manufacturer for this chassis.'
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: cf000000000000000000000000000004
+          name: 'OMSA: Chassis Service Tag'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.300.10.1.11.1
+          key: chassisServiceTagName
+          delay: 3600s
+          value_type: TEXT
+          description: 'Defines the service tag name for this chassis.'
+          tags:
+            - tag: Application
+              value: Identity
+
+        - uuid: cf000000000000000000000000000005
+          name: 'OMSA: Chassis Express Service Code'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.300.10.1.49.1
+          key: chassisExpressServiceCodeName
+          delay: 3600s
+          value_type: TEXT
+          description: 'Chassis express service code of the system.'
+          tags:
+            - tag: Application
+              value: Identity
+
+        # ── System Health Status ──────────────────────────────────────────────
+        - uuid: cf000000000000000000000000000006
+          name: 'OMSA: Event Log Status'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.200.10.1.41.1
+          key: systemStateEventLogStatus
+          delay: 900s
+          value_type: UNSIGNED
+          description: 'Overall status of chassis ESM event log. 1=other 2=unknown 3=ok 4=nonCritical 5=critical 6=nonRecoverable'
+          valuemap:
+            name: 'Dell OMSA System Status'
+          tags:
+            - tag: Application
+              value: Health
+
+        - uuid: cf000000000000000000000000000007
+          name: 'OMSA: Processor Status (combined)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.200.10.1.50.1
+          key: systemStateProcessorDeviceStatusCombined
+          delay: 900s
+          value_type: UNSIGNED
+          description: 'Combined status of all processor devices.'
+          valuemap:
+            name: 'Dell OMSA System Status'
+          tags:
+            - tag: Application
+              value: Health
+
+        - uuid: cf000000000000000000000000000008
+          name: 'OMSA: Temperature Status (combined)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.200.10.1.24.1
+          key: systemStateTemperatureStatusCombined
+          delay: 900s
+          value_type: UNSIGNED
+          description: 'Combined status of all temperature probes.'
+          valuemap:
+            name: 'Dell OMSA System Status'
+          tags:
+            - tag: Application
+              value: Health
+
+        - uuid: cf000000000000000000000000000009
+          name: 'OMSA: Voltage Status (combined)'
+          type: SNMP_AGENT
+          snmp_oid: 1.3.6.1.4.1.674.10892.1.200.10.1.12.1
+          key: systemStateVoltageStatusCombined
+          delay: 900s
+          value_type: UNSIGNED
+          description: 'Combined voltage status of all voltage probes.'
+          valuemap:
+            name: 'Dell OMSA System Status'
+          tags:
+            - tag: Application
+              value: Health
+
+      # ── Value Maps ──────────────────────────────────────────────────────────
+      valuemaps:
+        - name: 'Dell OMSA System Status'
+          mappings:
+            - value: '1'
+              newvalue: other
+            - value: '2'
+              newvalue: unknown
+            - value: '3'
+              newvalue: ok
+            - value: '4'
+              newvalue: nonCritical
+            - value: '5'
+              newvalue: critical
+            - value: '6'
+              newvalue: nonRecoverable
+
+        - name: 'Dell OMSA arrayDiskState'
+          mappings:
+            - value: '1'
+              newvalue: ready
+            - value: '2'
+              newvalue: failed
+            - value: '3'
+              newvalue: online
+            - value: '4'
+              newvalue: offline
+            - value: '6'
+              newvalue: degraded
+            - value: '7'
+              newvalue: recovering
+            - value: '11'
+              newvalue: removed
+            - value: '15'
+              newvalue: resynching
+            - value: '22'
+              newvalue: replacing
+            - value: '24'
+              newvalue: rebuilding
+            - value: '25'
+              newvalue: noMedia
+            - value: '26'
+              newvalue: formatting
+
+        - name: 'Dell OMSA virtualDiskState'
+          mappings:
+            - value: '1'
+              newvalue: ready
+            - value: '2'
+              newvalue: failed
+            - value: '3'
+              newvalue: online
+            - value: '4'
+              newvalue: offline
+            - value: '6'
+              newvalue: degraded
+            - value: '15'
+              newvalue: resynching
+            - value: '24'
+              newvalue: rebuilding
+
+        - name: 'Dell OMSA probe status'
+          mappings:
+            - value: '1'
+              newvalue: other
+            - value: '2'
+              newvalue: unknown
+            - value: '3'
+              newvalue: ok
+            - value: '4'
+              newvalue: nonCriticalUpper
+            - value: '5'
+              newvalue: criticalUpper
+            - value: '6'
+              newvalue: nonRecoverableUpper
+            - value: '7'
+              newvalue: nonCriticalLower
+            - value: '8'
+              newvalue: criticalLower
+            - value: '9'
+              newvalue: nonRecoverableLower
+            - value: '10'
+              newvalue: failed
+
+        - name: 'Dell OMSA arrayDiskBusType'
+          mappings:
+            - value: '1'
+              newvalue: SCSI
+            - value: '2'
+              newvalue: IDE
+            - value: '3'
+              newvalue: FibreChannel
+            - value: '6'
+              newvalue: USB
+            - value: '7'
+              newvalue: SATA
+            - value: '8'
+              newvalue: SAS
+
+        - name: 'Dell OMSA arrayDiskMediaType'
+          mappings:
+            - value: '1'
+              newvalue: unknown
+            - value: '2'
+              newvalue: HDD
+            - value: '3'
+              newvalue: SSD
+
+        - name: 'Dell OMSA virtualDiskLayout'
+          mappings:
+            - value: '1'
+              newvalue: other
+            - value: '2'
+              newvalue: RAID-0
+            - value: '3'
+              newvalue: RAID-1
+            - value: '4'
+              newvalue: RAID-5
+            - value: '5'
+              newvalue: RAID-6
+            - value: '7'
+              newvalue: RAID-10
+            - value: '8'
+              newvalue: RAID-50
+            - value: '10'
+              newvalue: RAID-60
+
+      discovery_rules:
+        # ── Physical Array Disks ───────────────────────────────────────────────
+        - uuid: cf100000000000000000000000000001
+          name: 'OMSA: ArrayDisk discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10893.1.20.130.4.1.7]'
+          key: ArrayDisk.discovery
+          delay: 60s
+          description: 'Discovery of physical array disks by serial number.'
+          item_prototypes:
+            - uuid: cf110000000000000000000000000001
+              name: 'OMSA: Array Disk name [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.2.{#SNMPINDEX}'
+              key: 'arrayDiskName[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              description: 'Array disk name'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000002
+              name: 'OMSA: Array Disk vendor [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.3.{#SNMPINDEX}'
+              key: 'arrayDiskVendor[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              description: 'Array disk vendor'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000003
+              name: 'OMSA: Array Disk productID [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.6.{#SNMPINDEX}'
+              key: 'arrayDiskProductID[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              description: 'Array disk product ID / model'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000004
+              name: 'OMSA: Array Disk serial number [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.7.{#SNMPINDEX}'
+              key: 'arrayDiskSerialNo[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              description: 'Array disk serial number'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000005
+              name: 'OMSA: Array Disk state [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.4.{#SNMPINDEX}'
+              key: 'arrayDiskState[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA arrayDiskState'
+              description: 'Current state of the array disk.'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000006
+              name: 'OMSA: Array Disk capacity [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.11.{#SNMPINDEX}'
+              key: 'arrayDiskCapacity[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              units: B
+              multiplier: '1048576'
+              description: 'Array disk capacity in bytes (raw value in MB)'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000007
+              name: 'OMSA: Array Disk bus type [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.21.{#SNMPINDEX}'
+              key: 'arrayDiskBusType[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA arrayDiskBusType'
+              description: 'Bus type of the array disk (SAS/SATA/etc)'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000008
+              name: 'OMSA: Array Disk media type [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.35.{#SNMPINDEX}'
+              key: 'arrayDiskMediaType[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA arrayDiskMediaType'
+              description: 'Media type: HDD or SSD'
+              tags:
+                - tag: Application
+                  value: Disks
+
+            - uuid: cf110000000000000000000000000009
+              name: 'OMSA: Array Disk SMART alert [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.4.1.31.{#SNMPINDEX}'
+              key: 'arrayDiskSmartAlert[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              description: 'SMART predictive failure alert. 1=not detected, 2=detected'
+              tags:
+                - tag: Application
+                  value: Disks
+
+          trigger_prototypes:
+            - uuid: cf120000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:arrayDiskState[{#SNMPVALUE}].last()}<>3 and {dell_omsa_by_snmp:arrayDiskState[{#SNMPVALUE}].last()}<>1 and {dell_omsa_by_snmp:arrayDiskState[{#SNMPVALUE}].last()}<>22 and {dell_omsa_by_snmp:arrayDiskState[{#SNMPVALUE}].last()}<>24'
+              name: 'OMSA: Array disk [{#SNMPVALUE}] is not Ready/Online — State: {ITEM.LASTVALUE1}'
+              priority: HIGH
+              description: 'Physical array disk is in a failed/degraded state.'
+
+            - uuid: cf120000000000000000000000000002
+              expression: '{dell_omsa_by_snmp:arrayDiskSmartAlert[{#SNMPVALUE}].last()}<>1'
+              name: 'OMSA: Predictive disk failure (SMART) on [{#SNMPVALUE}]'
+              priority: WARNING
+              description: 'SMART predictive failure detected on array disk.'
+
+        # ── Virtual Disks (RAID arrays) ────────────────────────────────────────
+        - uuid: cf200000000000000000000000000001
+          name: 'OMSA: VirtualDisk discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10893.1.20.140.1.1.3]'
+          key: virtualDisk.discovery
+          delay: 60s
+          description: 'Discovery of RAID virtual disks.'
+          item_prototypes:
+            - uuid: cf210000000000000000000000000001
+              name: 'OMSA: Virtual Disk name [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.140.1.1.3.{#SNMPINDEX}'
+              key: 'virtualDiskName[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: RAID
+
+            - uuid: cf210000000000000000000000000002
+              name: 'OMSA: Virtual Disk state [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.140.1.1.4.{#SNMPINDEX}'
+              key: 'virtualDiskState[{#SNMPVALUE}]'
+              delay: 120s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA virtualDiskState'
+              tags:
+                - tag: Application
+                  value: RAID
+
+            - uuid: cf210000000000000000000000000003
+              name: 'OMSA: Virtual Disk layout (RAID level) [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.140.1.1.13.{#SNMPINDEX}'
+              key: 'virtualDiskLayout[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA virtualDiskLayout'
+              tags:
+                - tag: Application
+                  value: RAID
+
+            - uuid: cf210000000000000000000000000004
+              name: 'OMSA: Virtual Disk capacity [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.140.1.1.6.{#SNMPINDEX}'
+              key: 'virtualDiskCapacity[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              units: B
+              multiplier: '1048576'
+              tags:
+                - tag: Application
+                  value: RAID
+
+          trigger_prototypes:
+            - uuid: cf220000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:virtualDiskState[{#SNMPVALUE}].last()}<>3 and {dell_omsa_by_snmp:virtualDiskState[{#SNMPVALUE}].last()}<>1'
+              name: 'OMSA: Virtual disk [{#SNMPVALUE}] is not Ready/Online — State: {ITEM.LASTVALUE1}'
+              priority: HIGH
+              description: 'RAID virtual disk is in a degraded or failed state.'
+
+        # ── Memory Devices (DIMM) ──────────────────────────────────────────────
+        - uuid: cf300000000000000000000000000001
+          name: 'OMSA: MemoryDevice discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10892.1.1100.50.1.8.1]'
+          key: memoryDevice.discovery
+          delay: 60s
+          description: 'Discovery of memory DIMM slots.'
+          item_prototypes:
+            - uuid: cf310000000000000000000000000001
+              name: 'OMSA: Memory Device location [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.1100.50.1.8.1.{#SNMPINDEX}'
+              key: 'memoryDeviceLocationName[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              description: 'DIMM slot location name (e.g. DIMM_A1)'
+              tags:
+                - tag: Application
+                  value: Memory
+
+            - uuid: cf310000000000000000000000000002
+              name: 'OMSA: Memory Device size [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.1100.50.1.14.1.{#SNMPINDEX}'
+              key: 'memoryDeviceSize[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              units: B
+              multiplier: '1024'
+              description: 'DIMM size in bytes (raw value in KB)'
+              tags:
+                - tag: Application
+                  value: Memory
+
+            - uuid: cf310000000000000000000000000003
+              name: 'OMSA: Memory Device status [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.1100.50.1.5.1.{#SNMPINDEX}'
+              key: 'memoryDeviceStatus[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA System Status'
+              description: 'DIMM health status'
+              tags:
+                - tag: Application
+                  value: Memory
+
+            - uuid: cf310000000000000000000000000004
+              name: 'OMSA: Memory Device failure mode [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.1100.50.1.20.1.{#SNMPINDEX}'
+              key: 'memoryDeviceFailureMode[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              description: 'DIMM failure mode bitmask (ECC errors etc)'
+              tags:
+                - tag: Application
+                  value: Memory
+
+          trigger_prototypes:
+            - uuid: cf320000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:memoryDeviceStatus[{#SNMPVALUE}].last()}>3'
+              name: 'OMSA: Memory DIMM [{#SNMPVALUE}] status is not OK — {ITEM.LASTVALUE1}'
+              priority: HIGH
+              description: 'Memory DIMM is in a critical/failed state (ECC or hardware failure).'
+
+        # ── Chassis Fans ───────────────────────────────────────────────────────
+        - uuid: cf400000000000000000000000000001
+          name: 'OMSA: ChassisFan discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10892.1.700.12.1.8.1]'
+          key: chassisFan.discovery
+          delay: 60s
+          description: 'Discovery of chassis cooling fans.'
+          item_prototypes:
+            - uuid: cf410000000000000000000000000001
+              name: 'OMSA: Chassis fan name [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.700.12.1.8.1.{#SNMPINDEX}'
+              key: 'chassisFanName[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: Fans
+
+            - uuid: cf410000000000000000000000000002
+              name: 'OMSA: Chassis fan RPM [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.700.12.1.6.1.{#SNMPINDEX}'
+              key: 'chassisFanReading[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              units: RPM
+              tags:
+                - tag: Application
+                  value: Fans
+
+            - uuid: cf410000000000000000000000000003
+              name: 'OMSA: Chassis fan status [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.700.12.1.5.1.{#SNMPINDEX}'
+              key: 'chassisFanStatus[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA probe status'
+              tags:
+                - tag: Application
+                  value: Fans
+
+            - uuid: cf410000000000000000000000000004
+              name: 'OMSA: Chassis fan critical threshold [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.700.12.1.13.1.{#SNMPINDEX}'
+              key: 'chassisFanCriticalThreshold[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              units: RPM
+              tags:
+                - tag: Application
+                  value: Fans
+
+          trigger_prototypes:
+            - uuid: cf420000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:chassisFanStatus[{#SNMPVALUE}].last()}<>3'
+              name: 'OMSA: Chassis fan [{#SNMPVALUE}] status is not OK — {ITEM.LASTVALUE1}'
+              priority: WARNING
+              description: 'Fan probe status is not OK.'
+
+        # ── Power Supplies ─────────────────────────────────────────────────────
+        - uuid: cf500000000000000000000000000001
+          name: 'OMSA: ChassisPowerSupply discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10892.1.600.12.1.2.1]'
+          key: chassisPowerSuply.discovery
+          delay: 60s
+          description: 'Discovery of chassis power supplies.'
+          item_prototypes:
+            - uuid: cf510000000000000000000000000001
+              name: 'OMSA: PSU status [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.600.12.1.5.1.{#SNMPINDEX}'
+              key: 'chassisPowerSupplyStatus[{#SNMPVALUE}]'
+              delay: 120s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA System Status'
+              tags:
+                - tag: Application
+                  value: PSU
+
+            - uuid: cf510000000000000000000000000002
+              name: 'OMSA: PSU sensor state [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.600.12.1.11.1.{#SNMPINDEX}'
+              key: 'chassisPowerSupplySensorState[{#SNMPVALUE}]'
+              delay: 120s
+              value_type: UNSIGNED
+              description: 'PSU sensor state bitmask (AC lost, predictive failure etc)'
+              tags:
+                - tag: Application
+                  value: PSU
+
+            - uuid: cf510000000000000000000000000003
+              name: 'OMSA: PSU type [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10892.1.600.12.1.7.1.{#SNMPINDEX}'
+              key: 'chassisPowerSupplyType[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: UNSIGNED
+              tags:
+                - tag: Application
+                  value: PSU
+
+          trigger_prototypes:
+            - uuid: cf520000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:chassisPowerSupplyStatus[{#SNMPVALUE}].last()}<>3'
+              name: 'OMSA: Power supply [{#SNMPVALUE}] status is not OK — {ITEM.LASTVALUE1}'
+              priority: HIGH
+              description: 'PSU is in a failed or critical state.'
+
+        # ── Enclosures / Storage Controllers ──────────────────────────────────
+        - uuid: cf600000000000000000000000000001
+          name: 'OMSA: Enclosure discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10893.1.20.130.3.1.25]'
+          key: enclosure.discovery
+          delay: 60s
+          description: 'Discovery of storage enclosures.'
+          item_prototypes:
+            - uuid: cf610000000000000000000000000001
+              name: 'OMSA: Enclosure name [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.3.1.2.{#SNMPINDEX}'
+              key: 'enclosureName[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: cf610000000000000000000000000002
+              name: 'OMSA: Enclosure state [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.3.1.4.{#SNMPINDEX}'
+              key: 'enclosureState[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: cf610000000000000000000000000003
+              name: 'OMSA: Enclosure rollup status [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.3.1.23.{#SNMPINDEX}'
+              key: 'enclosureRollUpStatus[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA System Status'
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: cf610000000000000000000000000004
+              name: 'OMSA: Enclosure serial number [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.3.1.29.{#SNMPINDEX}'
+              key: 'enclosureSerialNumber[{#SNMPVALUE}]'
+              delay: 3600s
+              value_type: TEXT
+              tags:
+                - tag: Application
+                  value: Storage
+
+          trigger_prototypes:
+            - uuid: cf620000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:enclosureRollUpStatus[{#SNMPVALUE}].last()}<>3 and {dell_omsa_by_snmp:enclosureState[{#SNMPVALUE}].last()}<>1'
+              name: 'OMSA: Enclosure [{#SNMPVALUE}] status is not OK — {ITEM.LASTVALUE1}'
+              priority: HIGH
+              description: 'Storage enclosure is in a non-OK state.'
+
+        # ── Cache Batteries (RAID controller BBU) ─────────────────────────────
+        - uuid: cf700000000000000000000000000001
+          name: 'OMSA: CacheBattery discovery'
+          type: SNMP_AGENT
+          snmp_oid: 'walk[{#SNMPVALUE},1.3.6.1.4.1.674.10893.1.20.130.15.1.1]'
+          key: cacheBattery.discovery
+          delay: 60s
+          description: 'Discovery of RAID controller cache batteries (BBU).'
+          item_prototypes:
+            - uuid: cf710000000000000000000000000001
+              name: 'OMSA: Cache battery state [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.15.1.4.{#SNMPINDEX}'
+              key: 'cacheBatteryState[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: cf710000000000000000000000000002
+              name: 'OMSA: Cache battery rollup status [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.15.1.5.{#SNMPINDEX}'
+              key: 'cacheBatteryRollUpStatus[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              valuemap:
+                name: 'Dell OMSA System Status'
+              tags:
+                - tag: Application
+                  value: Storage
+
+            - uuid: cf710000000000000000000000000003
+              name: 'OMSA: Cache battery predicted capacity [{#SNMPVALUE}]'
+              type: SNMP_AGENT
+              snmp_oid: '1.3.6.1.4.1.674.10893.1.20.130.15.1.10.{#SNMPINDEX}'
+              key: 'cacheBatteryPredictedCapacity[{#SNMPVALUE}]'
+              delay: 300s
+              value_type: UNSIGNED
+              description: 'BBU predicted capacity. 1=failed, 2=ready'
+              tags:
+                - tag: Application
+                  value: Storage
+
+          trigger_prototypes:
+            - uuid: cf720000000000000000000000000001
+              expression: '{dell_omsa_by_snmp:cacheBatteryRollUpStatus[{#SNMPVALUE}].last()}<>3'
+              name: 'OMSA: Cache battery [{#SNMPVALUE}] status is not OK — {ITEM.LASTVALUE1}'
+              priority: WARNING
+              description: 'RAID controller cache battery (BBU) is in a non-OK state.'

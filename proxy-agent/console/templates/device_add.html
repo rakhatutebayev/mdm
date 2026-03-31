@@ -160,6 +160,7 @@
     <select name="collector_type" id="collectorType" onchange="toggleCollectorFields()">
       <option value="snmp">SNMP (UDP/161)</option>
       <option value="vmware">VMware ESXi / vCenter</option>
+      <option value="esxi_ssh" {% if collector_type == 'esxi_ssh' %}selected{% endif %}>ESXi SSH — perccli/esxcli hardware</option>
     </select>
   </div>
 
@@ -201,6 +202,19 @@
     </div>
   </div>
 
+  <!-- ESXi SSH fields -->
+  <div id="esxiSshFields" style="display:none">
+    <div class="form-row">
+      <label>SSH Username</label>
+      <input type="text" name="ssh_user" placeholder="root" autocomplete="off" value="root">
+    </div>
+    <div class="form-row">
+      <label>SSH Password</label>
+      <input type="password" name="ssh_password" autocomplete="off">
+      <small>Используется для SSH + perccli/esxcli. Хранится в поле snmp_community в БД.</small>
+    </div>
+  </div>
+
   <hr>
 
   <div class="form-row">
@@ -223,9 +237,12 @@
 <script>
 function toggleCollectorFields() {
   var ct = document.getElementById('collectorType').value;
-  document.getElementById('snmpFields').style.display = ct === 'snmp' ? '' : 'none';
-  document.getElementById('vmwareFields').style.display = ct === 'vmware' ? '' : 'none';
+  document.getElementById('snmpFields').style.display    = ct === 'snmp'     ? '' : 'none';
+  document.getElementById('vmwareFields').style.display  = ct === 'vmware'   ? '' : 'none';
+  document.getElementById('esxiSshFields').style.display = ct === 'esxi_ssh' ? '' : 'none';
 }
+// Run on page load for pre-selected value
+toggleCollectorFields();
 </script>
 
 {% endif %}

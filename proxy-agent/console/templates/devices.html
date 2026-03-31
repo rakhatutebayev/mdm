@@ -27,6 +27,14 @@ function openAddDevice(profileId) {
     Math.round((screen.height - 740) / 2));
   if (popup) popup.focus();
 }
+function openEditDevice(deviceId) {
+  var url = '/devices/' + encodeURIComponent(deviceId) + '/edit';
+  var popup = window.open(url, 'edit_device',
+    'width=660,height=740,resizable=yes,scrollbars=yes,left=' +
+    Math.round((screen.width - 660) / 2) + ',top=' +
+    Math.round((screen.height - 740) / 2));
+  if (popup) popup.focus();
+}
 </script>
 
 <div class="card" style="padding:0">
@@ -54,6 +62,8 @@ function openAddDevice(profileId) {
         <td>
           {% if d.collector_type == 'vmware' %}
             <span class="badge" style="background:#1e3a5f;color:#93c5fd">VMware</span>
+          {% elif d.collector_type == 'esxi_ssh' %}
+            <span class="badge" style="background:#064e3b;color:#6ee7b7">ESXi SSH</span>
           {% else %}
             <span class="badge badge-green">SNMP</span>
           {% endif %}
@@ -70,9 +80,10 @@ function openAddDevice(profileId) {
         <td>{% if d.last_seen %}{{ d.last_seen }}{% else %}—{% endif %}</td>
         <td style="white-space:nowrap">
           <a href="/devices/{{ d.device_id }}/latest.json" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#1e3a5f;padding:.35rem .6rem;font-size:.75rem;border-radius:4px;color:#e2e8f0;text-decoration:none;margin-right:.35rem">Просмотр JSON</a>
-          {% if d.collector_type != 'vmware' %}
+          {% if d.collector_type not in ['vmware', 'esxi_ssh'] %}
           <a href="/devices/{{ d.device_id }}/snmp-debug.json" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:#14532d;padding:.35rem .6rem;font-size:.75rem;border-radius:4px;color:#86efac;text-decoration:none;margin-right:.35rem">SNMP debug</a>
           {% endif %}
+          <button onclick="openEditDevice('{{ d.device_id }}')" style="background:#1e293b;padding:.35rem .6rem;font-size:.75rem;border-radius:4px;color:#94a3b8;border:1px solid #334155;margin-right:.35rem;cursor:pointer">Изменить</button>
           <form action="/devices/remove" method="post" style="display:inline;margin:0;vertical-align:middle" onsubmit="return confirm('Удалить устройство {{ d.device_id }}?');">
             <input type="hidden" name="device_id" value="{{ d.device_id }}">
             <button type="submit" style="background:#7f1d1d;padding:.35rem .6rem;font-size:.75rem">Удалить</button>

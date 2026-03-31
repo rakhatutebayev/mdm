@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Diagnostics{% endblock %}
+{% block content %}
+<h1>Proxy data path (SNMP → MQTT)</h1>
+<p class="hint"><strong>Agent-only:</strong> SNMP GET → <code>target_key</code> map → JSON envelope → MQTT publish (or SQLite queue if offline). <code>pub&gt;0</code> and <code>keys=…</code> mean the agent <strong>received</strong> values and <strong>prepared</strong> a payload; <code>mqtt=ok</code> means it left the process toward the broker. Portal/MDM ingestion is separate. Колонка <strong>JSON</strong> и страница <a href="/debug/json"><strong>JSON debug</strong></a> — ссылки на <code>latest.json</code> / <code>snmp-debug.json</code>.</p>
+
+<div class="card">
+  <h2>Agent identity &amp; MQTT</h2>
+  <div class="info-row">
+    <div class="info-item"><span class="k">tenant_id:</span><span class="v">{{ tenant_id or '—' }}</span></div>
+    <div class="info-item"><span class="k">agent_id:</span><span class="v">{{ agent_id or '—' }}</span></div>
+    <div class="info-item"><span class="k">broker_url:</span><span class="v">{{ broker_url or '—' }}</span></div>
+    <div class="info-item"><span class="k">MQTT connected:</span>
+      {% if mqtt_connected %}<span class="badge badge-green">yes</span>{% else %}<span class="badge badge-red">no</span> (metrics go to offline queue){% endif %}
+    </div>
+    <div class="info-item"><span class="k">Queue pending:</span><span class="v">{{ queue_pending }}</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Приём данных по устройствам (SNMP → агент)</h2>
+  <p class="hint">Статус строится по последним снимкам поллера: есть ли <strong>pub&gt;0</strong> (значения попали в payload) и насколько свежий опрос (≤15 мин = «принимает»). Колонки fast/slow/inventory — детализация и MQTT.</p>
+  {% if not devices %}
+  <p>В локальной БД нет устройств — добавьте на <a href="/devices">/devices</a> и укажите <code>profile_id</code>.</p>
+  {% else %}
+  <div class="info-row" style="margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+    <div class="info-item"><span class="k">Всего устройств:</span><span class="v">{{ diag_summary.total }}</span></div>
+    <div class="info-item"><span class="k">Принимает данные:</span><span class="v"><span class="badge badge-green">{{ diag_summary.receiving }}</span></span></div>
+    <div class="info-item"><span class="k">Данные устарели:</span><span class="v"><span class="badge badge-yellow">{{ diag_summary.stale }}</span></span></div>
+    <div class="info-item"><span class="k">Только инвентарь:</span><span class="v"><span class="badge badge-yellow">{{ diag_summary.inventory_only }}</span></span></div>
+    <div class="info-item"><span class="k">Метрик нет / нет опроса:</span><span class="v"><span class="badge badge-gray">{{ diag_summary.idle + diag_summary.unknown }}</span></span></div>
+    <div class="info-item"><span class="k">Проблемы (конфиг / LLD / SNMP):</span><span class="v"><span class="badge badge-red">{{ diag_summary.problems }}</span></span></div>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Device</th>
+          <th>IP</th>
+          <th>Profile</th>
+          <th>Приём данных</th>
+          <th>JSON</th>
+          <th>fast</th>
+          <th>slow</th>
+          <th>inventory</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in devices %}
+        {% set r = row.receipt %}
+        <tr>
+          <td><code style="font-size:.75rem">{{ row.device_id }}</code></td>
+          <td>{{ row.ip }}</td>
+          <td>{{ row.profile_id or '—' }}</td>
+          <td style="max-width:14rem">
+            <span class="badge {{ r.badge_class }}">{{ r.label }}</span>
+            <div class="hint" style="font-size:.68rem;margin-top:.35rem;line-height:1.35">{{ r.detail }}</div>
+          </td>
+          <td style="white-space:nowrap;font-size:.72rem">
+            {% if row.latest_json %}
+            <a href="{{ row.latest_json }}" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc">latest</a>
+            {% endif %}
+            {% if row.snmp_debug_json %}
+            {% if row.latest_json %}<br>{% endif %}<a href="{{ row.snmp_debug_json }}" target="_blank" rel="noopener noreferrer" style="color:#86efac">snmp</a>
+            {% endif %}
+            {% if not row.latest_json and not row.snmp_debug_json %}
+            <span class="hint">—</span>
+            {% endif %}
+          </td>
+          <td><pre style="font-size:.7rem;margin:0;white-space:pre-wrap">{{ row.fast }}</pre></td>
+          <td><pre style="font-size:.7rem;margin:0;white-space:pre-wrap">{{ row.slow }}</pre></td>
+          <td><pre style="font-size:.7rem;margin:0;white-space:pre-wrap">{{ row.inv }}</pre></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  <p class="hint" style="margin-top:1rem">Технические колонки: размер tier, LLD macro, SNMP failures, <strong>pub</strong>, <strong>keys=</strong>, <strong>mqtt</strong>, <strong>age</strong>.</p>
+</div>
+
+<div class="card">
+  <h2>Common causes (proxy only)</h2>
+  <ul class="hint" style="line-height:1.6;margin-left:1.2rem">
+    <li><strong>macro_skipped = tier_total</strong> — template only has discovery prototypes; poller cannot GET. Add scalar items (e.g. sysUpTime) or extend agent for LLD.</li>
+    <li><strong>snmp_failed = all tries</strong> — wrong community / SNMPv3 / ACL / wrong IP / device off.</li>
+    <li><strong>MQTT connected: no</strong> — broker URL/firewall; payloads stay in SQLite queue until connect.</li>
+    <li><strong>pub &gt; 0, keys visible, mqtt ok</strong> — agent side is fine; if nothing appears upstream, that is outside this agent (broker consumer / MDM).</li>
+  </ul>
+</div>
+{% endblock %}

@@ -65,10 +65,16 @@ Start EMQX + nginx path `/mqtt` when using WSS (`docker-compose.mqtt.yml` + TLS 
 | **Боевой proxy-agent** | **`192.168.11.153`** |
 | SSH (пример) | `ssh <user>@192.168.11.153` |
 | Локальная веб-консоль агента | **`https://192.168.11.153:8443`** (TZ §6.2; самоподписанный `ui.crt`) |
+| **JSON debug** (меню консоли) | `https://192.168.11.153:8443/debug/json` — таблица ссылок **latest.json** + **snmp-debug.json** по всем устройствам (не зависит от старой страницы Devices). |
+| **SNMP debug** (JSON, MIB-II + probe OID) | `…/devices/<DEVICE_UID>/snmp-debug.json` — **только после выката свежего `proxy-agent/`** (см. ниже). |
 | Конфиг после install | `/opt/nocko-agent/config.json` |
 | Сервис | `sudo systemctl restart nocko-agent` |
 
-**Правки коду агента для боя** вносят на этой машине (или доставляют сюда с рабочей станции), затем перезапуск сервиса. Пример обновления только файлов из репозитория:
+**Правки коду агента для боя** вносят на этой машине (или доставляют сюда с рабочей станции), затем перезапуск сервиса.
+
+> **Важно:** частичная доставка только `proxy-agent/core/` **не обновляет консоль** (`console/app.py`, `console/templates/`, `collectors/`). Если на бою **нет** кнопки SNMP debug или `snmp-debug.json` отдаёт **404**, нужен **полный** выкат `proxy-agent/` (скрипт ниже), а не только `core/`.
+
+Пример обновления **только** `core/` (остальное не трогает):
 
 ```bash
 # с машины разработчика, из корня репозитория NOCKO MDM:
@@ -87,6 +93,17 @@ ssh <user>@192.168.11.153 'sudo cp -a /tmp/nocko-agent-core/. /opt/nocko-agent/c
 ```
 
 Скрипт [`scripts/deploy-proxy-agent-prod.sh`](../scripts/deploy-proxy-agent-prod.sh): архив по SSH → `/opt/nocko-agent`, `pip install -r requirements.txt`, `systemctl restart nocko-agent` (на сервере **не нужен** `rsync`).
+
+### Автовыкат proxy-agent вместе с порталом (по умолчанию без правок `.env`)
+
+После **`git push` → CI Deploy** на портале вызывается [`scripts/deploy-proxy-agent-from-portal-host.sh`](../scripts/deploy-proxy-agent-from-portal-host.sh): в репозитории задан **дефолтный** хост агента **`192.168.11.153`** (как в таблице выше). Дополнительно ничего в `.env` указывать не нужно, если агент именно на этом IP.
+
+**Один раз настроить:** с портала **SSH без пароля** на агент (`ssh-copy-id`), на агенте — sudo/NOPASSWD как в [`agent-prod-ssh-and-sudo.md`](agent-prod-ssh-and-sudo.md).
+
+**Переопределить IP:** в `/opt/nocko-mdm/.env` — `PROXY_AGENT_TARGET_HOST=…`  
+**Отключить** (портал в облаке, до агента нет SSH): `PROXY_AGENT_TARGET_HOST=disable`
+
+Если шаг падает по SSH — деплой портала **не отменяется** (в логе CI будет WARN); можно по-прежнему выкатывать агент с ноутбука: `./scripts/deploy-proxy-agent-prod.sh`.
 
 **SSH без пароля и sudo без пароля для деплоя:** см. **[`docs/agent-prod-ssh-and-sudo.md`](agent-prod-ssh-and-sudo.md)** и [`scripts/setup-agent-prod-ssh.sh`](../scripts/setup-agent-prod-ssh.sh).
 

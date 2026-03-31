@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import sys
 import time
 
 import uvicorn
@@ -59,6 +58,18 @@ async def _queue_flush_loop() -> None:
             q.prune_sent(older_than_hours=48)
         except Exception as e:
             log.debug(f"Queue flush error: {e}")
+
+
+async def _health_log_loop(interval_sec: int) -> None:
+    """Периодически пишет HEALTH_SUMMARY в лог — без запросов к оператору."""
+    from core.diagnostics_report import health_log_line
+
+    while True:
+        await asyncio.sleep(interval_sec)
+        try:
+            log.info(health_log_line())
+        except Exception as e:
+            log.debug(f"HEALTH_SUMMARY error: {e}")
 
 
 async def _command_handler(payload: dict) -> None:
@@ -191,36 +202,58 @@ async def main(dev_mode: bool = False, config_path: str | None = None) -> None:
     Path(config.local.db_path).parent.mkdir(parents=True, exist_ok=True)
     init_db(config.local.db_path)
 
+    # Bootstrap + MQTT only when registered; console + poller always start (ops / diagnostics).
+    mqtt_ready = False
     if not dev_mode:
-        # 3. Bootstrap: register if needed
-        from core.bootstrap import register, fetch_config
+        from core.bootstrap import apply_kv_identity_to_server_config, fetch_config, register
+
         registered = kv_get("registered", "false") == "true"
         if not registered:
-            token = config.local.enrollment_token
+            token = (config.local.enrollment_token or "").strip()
             if not token:
-                log.error("enrollment_token not set in config.json. Cannot register.")
-                sys.exit(1)
-            register(token)
+                log.error(
+                    "enrollment_token empty — skipping MDM register and MQTT. "
+                    "Local web UI still runs: set token in config.json and restart for full mode."
+                )
+            else:
+                try:
+                    register(token)
+                    registered = kv_get("registered", "false") == "true"
+                except Exception as e:
+                    log.error(
+                        "Registration failed (%s). Local UI still runs; fix MDM URL/token/certs and restart.",
+                        e,
+                    )
 
-        # 4. Fetch server config
-        from core.bootstrap import apply_kv_identity_to_server_config
-        try:
-            fetch_config()
-        except Exception as e:
-            log.warning(f"Could not fetch server config: {e}. Using cached values.")
-        # Envelopes need tenant_id/agent_id even if GET /config failed (use KV from register)
-        apply_kv_identity_to_server_config()
-
-        # 5. Setup + connect MQTT
-        mqtt_client.setup()
-        mqtt_client.on_command(lambda p: asyncio.create_task(_command_handler(p)))
-        mqtt_client.on_config_signal(lambda: asyncio.create_task(_on_config_signal()))
-        mqtt_client.connect()
+        if registered:
+            try:
+                fetch_config()
+            except Exception as e:
+                log.warning(f"Could not fetch server config: {e}. Using cached values.")
+            apply_kv_identity_to_server_config()
+            try:
+                mqtt_client.setup()
+                mqtt_client.on_command(lambda p: asyncio.create_task(_command_handler(p)))
+                mqtt_client.on_config_signal(lambda: asyncio.create_task(_on_config_signal()))
+                mqtt_client.connect()
+                mqtt_ready = True
+            except Exception as e:
+                log.error("MQTT setup/connect failed (%s). Metrics will queue until broker is reachable.", e)
 
     # 6. Assemble async tasks
     from collectors.snmp_poller import run_poller
     from collectors.trap_receiver import run_trap_receiver
     from console.app import app as console_app
+    from core.diagnostics_report import health_log_interval_sec
+
+    _vmware_stop = asyncio.Event()
+
+    async def _mqtt_publish_fn(topic: str, payload: str):
+        """Adapter: publish via mqtt_client from vmware_poller."""
+        try:
+            mqtt_client.publish(topic, payload)
+        except Exception as e:
+            log.debug(f"VMware MQTT publish adapter error: {e}")
 
     tasks = [
         asyncio.create_task(run_poller()),
@@ -228,8 +261,30 @@ async def main(dev_mode: bool = False, config_path: str | None = None) -> None:
         asyncio.create_task(_queue_flush_loop()),
     ]
 
-    if not dev_mode:
+    # Start VMware poller (no-op if no vmware devices configured)
+    try:
+        from collectors.vmware_poller import vmware_poll_loop
+        tasks.append(asyncio.create_task(vmware_poll_loop(_mqtt_publish_fn, _vmware_stop)))
+        log.info("VMware poller task started")
+    except Exception as e:
+        log.warning(f"VMware poller not started: {e}")
+
+    # Start ESXi SSH poller (no-op if no esxi_ssh devices configured)
+    try:
+        from collectors.esxi_ssh_collector import run_esxi_poller
+        tasks.append(asyncio.create_task(run_esxi_poller(mqtt_client, config)))
+        log.info("ESXi SSH poller task started")
+    except Exception as e:
+        log.warning(f"ESXi SSH poller not started: {e}")
+
+
+    if not dev_mode and mqtt_ready:
         tasks.append(asyncio.create_task(_heartbeat_loop()))
+
+    if not dev_mode:
+        _health_sec = health_log_interval_sec()
+        if _health_sec > 0:
+            tasks.append(asyncio.create_task(_health_log_loop(_health_sec)))
 
     # 7. Start Uvicorn (Local Web Console) — HTTPS when ui.crt/ui.key exist (see install.sh)
     uv_kwargs: dict = {

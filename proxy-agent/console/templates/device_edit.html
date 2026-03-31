@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Изменить устройство — NOCKO</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 0;
+    }
+    .popup-header {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: .75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .popup-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .popup-header .brand {
+      font-size: .75rem;
+      color: #64748b;
+    }
+    .popup-body { padding: 1.25rem; }
+
+    .alert { padding: .75rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: .875rem; }
+    .alert-ok  { background: #14532d; border: 1px solid #166534; color: #86efac; }
+    .alert-err { background: #450a0a; border: 1px solid #991b1b; color: #fca5a5; }
+
+    .form-row { margin-bottom: .9rem; }
+    .form-row label {
+      display: block;
+      font-size: .8rem;
+      color: #94a3b8;
+      margin-bottom: .3rem;
+      font-weight: 500;
+    }
+    .form-row input,
+    .form-row select,
+    .form-row textarea {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: .5rem .75rem;
+      font-size: .875rem;
+      transition: border-color .15s;
+      outline: none;
+    }
+    .form-row input:focus,
+    .form-row select:focus { border-color: #6366f1; }
+    .form-row input:disabled { background: #0f172a; color: #64748b; cursor: not-allowed; }
+    .form-row small { display: block; margin-top: .3rem; font-size: .72rem; color: #64748b; }
+
+    .form-actions {
+      display: flex;
+      gap: .75rem;
+      margin-top: 1.25rem;
+    }
+    .btn-primary {
+      flex: 1;
+      padding: .6rem 1rem;
+      background: #4f46e5;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: .9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-cancel {
+      padding: .6rem 1rem;
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      font-size: .9rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-cancel:hover { background: #334155; color: #e2e8f0; }
+
+    .section-label {
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #475569;
+      margin: 1rem 0 .6rem 0;
+    }
+    hr { border: none; border-top: 1px solid #1e293b; margin: .75rem 0; }
+  </style>
+</head>
+<body>
+
+{% if closed %}
+<script>
+  if (window.opener && !window.opener.closed) {
+    window.opener.location.href = '/devices';
+  }
+  window.close();
+</script>
+<div style="padding:2rem;text-align:center;color:#86efac">Настройки сохранены. Закрываю...</div>
+{% else %}
+
+<div class="popup-header">
+  <h2>Изменить устройство — {{ device.device_id }}</h2>
+  <span class="brand">NOCKO Agent Console</span>
+</div>
+
+<div class="popup-body">
+
+{% if flash_err %}
+<div class="alert alert-err">{{ flash_err }}</div>
+{% endif %}
+
+<form action="/devices/{{ device.device_id }}/edit?popup=1" method="post" id="editDeviceForm">
+
+  <div class="section-label">Идентификация</div>
+
+  <div class="form-row">
+    <label>Device UID</label>
+    <input type="text" value="{{ device.device_id }}" disabled>
+    <input type="hidden" name="device_uid" value="{{ device.device_id }}">
+  </div>
+  <div class="form-row">
+    <label>IP адрес</label>
+    <input type="text" name="ip" required value="{{ device.ip }}" autocomplete="off">
+  </div>
+  <div class="form-row">
+    <label>Профиль (шаблон)</label>
+    <select name="profile_id">
+      <option value="">— без профиля —</option>
+      {% for p in profile_list %}
+      <option value="{{ p.profile_id }}"
+        {% if device.profile_id == p.profile_id %}selected{% endif %}>
+        {{ p.profile_id }} — {{ p.profile_name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <hr>
+  <div class="section-label">Коллектор</div>
+
+  <div class="form-row">
+    <label>Тип коллектора</label>
+    <select name="collector_type" id="collectorType" onchange="toggleCollectorFields()">
+      <option value="snmp" {% if device.collector_type == 'snmp' %}selected{% endif %}>SNMP (UDP/161)</option>
+      <option value="vmware" {% if device.collector_type == 'vmware' %}selected{% endif %}>VMware ESXi / vCenter</option>
+      <option value="esxi_ssh" {% if device.collector_type == 'esxi_ssh' %}selected{% endif %}>ESXi SSH — perccli/esxcli hardware</option>
+    </select>
+  </div>
+
+  <!-- SNMP fields -->
+  <div id="snmpFields">
+    <div class="form-row">
+      <label>SNMP version</label>
+      <select name="snmp_version">
+        <option value="2c" {% if device.snmp_version == '2c' %}selected{% endif %}>v2c (community)</option>
+        <option value="3" {% if device.snmp_version == '3' %}selected{% endif %}>v3</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Community (v2c)</label>
+      <input type="text" name="snmp_community" value="{% if device.collector_type == 'snmp' %}{{ device.snmp_community }}{% else %}public{% endif %}" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>SNMPv3 user / auth key / priv key</label>
+      <input type="text" name="snmp_v3_user" placeholder="user" autocomplete="off" value="{% if device.collector_type == 'snmp' %}{{ device.snmp_v3_user }}{% endif %}" style="margin-bottom:.4rem">
+      <input type="password" name="snmp_v3_auth_key" placeholder="auth key" autocomplete="off" value="{{ device.snmp_v3_auth_key }}" style="margin-bottom:.4rem">
+      <input type="password" name="snmp_v3_priv_key" placeholder="priv key" autocomplete="off" value="{{ device.snmp_v3_priv_key }}">
+    </div>
+  </div>
+
+  <!-- VMware fields -->
+  <div id="vmwareFields" style="display:none">
+    <div class="form-row">
+      <label>VMware SDK URL</label>
+      <input type="text" name="vmware_url" placeholder="https://192.168.1.50/sdk" value="{{ device.vmware_url }}" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>VMware Username</label>
+      <input type="text" name="vmware_username" placeholder="root" value="{{ device.vmware_username }}" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label>VMware Password</label>
+      <input type="password" name="vmware_password" value="{{ device.vmware_password }}" autocomplete="off">
+    </div>
+  </div>
+
+  <!-- ESXi SSH fields -->
+  <div id="esxiSshFields" style="display:none">
+    <div class="form-row">
+      <label>SSH Username</label>
+      <input type="text" name="ssh_user" placeholder="root" autocomplete="off" value="{% if device.collector_type == 'esxi_ssh' %}{{ device.snmp_v3_user }}{% else %}root{% endif %}">
+    </div>
+    <div class="form-row">
+      <label>SSH Password</label>
+      <input type="password" name="ssh_password" autocomplete="off" value="{% if device.collector_type == 'esxi_ssh' %}{{ device.snmp_community }}{% endif %}">
+      <small>Хранится в поле snmp_community в БД.</small>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="form-row">
+    <label>Статус опроса</label>
+    <select name="status">
+      <option value="active" {% if device.status == 'active' %}selected{% endif %}>active</option>
+      <option value="offline" {% if device.status == 'offline' %}selected{% endif %}>offline</option>
+      <option value="unsupported" {% if device.status == 'unsupported' %}selected{% endif %}>unsupported</option>
+    </select>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" class="btn-cancel" onclick="window.close()">Отмена</button>
+    <button type="submit" class="btn-primary">✓ Сохранить изменения</button>
+  </div>
+
+</form>
+</div>
+
+<script>
+function toggleCollectorFields() {
+  var ct = document.getElementById('collectorType').value;
+  document.getElementById('snmpFields').style.display    = ct === 'snmp'     ? '' : 'none';
+  document.getElementById('vmwareFields').style.display  = ct === 'vmware'   ? '' : 'none';
+  document.getElementById('esxiSshFields').style.display = ct === 'esxi_ssh' ? '' : 'none';
+}
+toggleCollectorFields();
+</script>
+
+{% endif %}
+</body>
+</html>

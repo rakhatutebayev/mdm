@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import text
 from sqlmodel import Field, SQLModel, Session, create_engine, select
 from core.logger import log
 
@@ -44,6 +45,8 @@ class DeviceProfile(SQLModel, table=True):
     profile_vendor: str = Field(default="")
     profile_version: str = Field(default="")
     output_mapping: str = Field(default="[]")           # JSON array of output_mapping objects
+    # Zabbix template description + agent_playbook + stats (JSON), set on import
+    import_meta_json: str = Field(default="{}")
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -57,11 +60,18 @@ class Device(SQLModel, table=True):
     ip: str = Field(index=True)
     device_id: str = Field(unique=True, index=True)     # fingerprint = device_uid
     profile_id: Optional[str] = Field(default=None, index=True, foreign_key="device_profiles.profile_id")
+    # Collector type: "snmp" (default) or "vmware"
+    collector_type: str = Field(default="snmp")
+    # SNMP fields
     snmp_version: str = Field(default="2c")             # 2c | 3
     snmp_community: str = Field(default="public")
     snmp_v3_user: str = Field(default="")
     snmp_v3_auth_key: str = Field(default="")
     snmp_v3_priv_key: str = Field(default="")
+    # VMware fields
+    vmware_url: str = Field(default="")                 # https://esxi-ip/sdk
+    vmware_username: str = Field(default="")
+    vmware_password: str = Field(default="")
     poll_interval_fast: int = Field(default=60)
     poll_interval_slow: int = Field(default=300)
     poll_interval_inventory: int = Field(default=86400)
@@ -224,12 +234,51 @@ class AgentCertMeta(SQLModel, table=True):
 _engine = None
 
 
+def _migrate_device_profiles_columns(engine) -> None:
+    """Add columns introduced after first release (SQLite has no ALTER complex)."""
+    try:
+        with engine.begin() as conn:
+            r = conn.execute(text("PRAGMA table_info(device_profiles)"))
+            cols = {row[1] for row in r.fetchall()}
+            if "import_meta_json" not in cols:
+                conn.execute(
+                    text(
+                        "ALTER TABLE device_profiles ADD COLUMN import_meta_json TEXT NOT NULL DEFAULT '{}'"
+                    )
+                )
+                log.info("SQLite migration: device_profiles.import_meta_json added")
+    except Exception as e:
+        log.warning(f"SQLite migration device_profiles: {e}")
+
+
+def _migrate_devices_columns(engine) -> None:
+    """Add VMware + collector_type columns to devices table (added after initial release)."""
+    try:
+        with engine.begin() as conn:
+            r = conn.execute(text("PRAGMA table_info(devices)"))
+            cols = {row[1] for row in r.fetchall()}
+            migrations = [
+                ("collector_type", "TEXT NOT NULL DEFAULT 'snmp'"),
+                ("vmware_url", "TEXT NOT NULL DEFAULT ''"),
+                ("vmware_username", "TEXT NOT NULL DEFAULT ''"),
+                ("vmware_password", "TEXT NOT NULL DEFAULT ''"),
+            ]
+            for col, definition in migrations:
+                if col not in cols:
+                    conn.execute(text(f"ALTER TABLE devices ADD COLUMN {col} {definition}"))
+                    log.info(f"SQLite migration: devices.{col} added")
+    except Exception as e:
+        log.warning(f"SQLite migration devices: {e}")
+
+
 def init_db(db_path: str) -> None:
     """Create engine and all tables. Call once at startup."""
     global _engine
     url = f"sqlite:///{db_path}"
     _engine = create_engine(url, connect_args={"check_same_thread": False})
     SQLModel.metadata.create_all(_engine)
+    _migrate_device_profiles_columns(_engine)
+    _migrate_devices_columns(_engine)
     log.info(f"SQLite DB initialised at {db_path}")
 
 
@@ -256,3 +305,12 @@ def kv_set(key: str, value: str) -> None:
         else:
             s.add(AgentConfigKV(key=key, value=value))
         s.commit()
+
+
+def kv_delete(key: str) -> None:
+    """Remove a key from agent_config if present."""
+    with get_session() as s:
+        row = s.get(AgentConfigKV, key)
+        if row:
+            s.delete(row)
+            s.commit()

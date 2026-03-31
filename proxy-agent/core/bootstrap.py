@@ -18,8 +18,10 @@ from typing import Any
 
 import httpx
 
+from core.broker_url import normalize_broker_url_from_mdm
 from core.config import config, ServerConfig
 from core.database import kv_get, kv_set, ConfigVersion, get_session
+from core.device_assignments import apply_device_assignments_from_config
 from core.logger import log
 
 _REGISTER_PATH = "/api/v1/agent/register"
@@ -99,6 +101,10 @@ def register(enrollment_token: str) -> dict:
         resp.raise_for_status()
         data = resp.json()
 
+    br = data.get("broker_url")
+    if br:
+        data["broker_url"] = normalize_broker_url_from_mdm(str(br))
+
     # Persist registration data
     kv_set("agent_id", data.get("agent_id", ""))
     kv_set("tenant_id", data.get("tenant_id", ""))
@@ -131,6 +137,10 @@ def fetch_config() -> ServerConfig:
         resp = client.get(_CONFIG_PATH)
         resp.raise_for_status()
         data = resp.json()
+
+    br0 = data.get("broker_url")
+    if br0:
+        data["broker_url"] = normalize_broker_url_from_mdm(str(br0))
 
     # Map response fields to ServerConfig
     sc = config.server
@@ -165,6 +175,10 @@ def fetch_config() -> ServerConfig:
         ))
         session.commit()
         log.info(f"Server config applied (version={version})")
+
+    n_dev, _lines = apply_device_assignments_from_config(data)
+    if n_dev:
+        log.info(f"Synced {n_dev} device(s) from server device_assignments")
 
     return sc
 

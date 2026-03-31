@@ -478,6 +478,8 @@ async def devices_add(
     vmware_url: str = Form(""),
     vmware_username: str = Form(""),
     vmware_password: str = Form(""),
+    ssh_user: str = Form("root"),
+    ssh_password: str = Form(""),
     status: str = Form("active"),
 ):
     popup = request.query_params.get("popup") == "1"
@@ -509,11 +511,25 @@ async def devices_add(
                     return RedirectResponse(f"/devices/add?err=profile&bind={bind}", status_code=303)
                 return RedirectResponse("/devices?err=profile", status_code=303)
 
-    ctype = "vmware" if (collector_type or "").strip() == "vmware" else "snmp"
+    ct_raw = (collector_type or "").strip()
+    if ct_raw == "vmware":
+        ctype = "vmware"
+    elif ct_raw == "esxi_ssh":
+        ctype = "esxi_ssh"
+    else:
+        ctype = "snmp"
     ver = "3" if (snmp_version or "").strip() == "3" else "2c"
     st = (status or "active").strip()
     if st not in ("active", "offline", "unsupported"):
         st = "active"
+
+    # For esxi_ssh: store SSH password in snmp_community, SSH user in snmp_v3_user
+    if ctype == "esxi_ssh":
+        effective_community = (ssh_password or "").strip()
+        effective_v3_user   = (ssh_user or "root").strip()
+    else:
+        effective_community = (snmp_community or "public").strip() or "public"
+        effective_v3_user   = (snmp_v3_user or "").strip()
 
     dev = Device(
         device_id=uid,
@@ -521,8 +537,8 @@ async def devices_add(
         profile_id=pid,
         collector_type=ctype,
         snmp_version=ver,
-        snmp_community=(snmp_community or "public").strip() or "public",
-        snmp_v3_user=(snmp_v3_user or "").strip(),
+        snmp_community=effective_community,
+        snmp_v3_user=effective_v3_user,
         snmp_v3_auth_key=(snmp_v3_auth_key or "").strip(),
         snmp_v3_priv_key=(snmp_v3_priv_key or "").strip(),
         vmware_url=(vmware_url or "").strip(),
@@ -576,6 +592,139 @@ async def devices_add(
     )
     return RedirectResponse(f"/devices?{q}", status_code=303)
 
+
+
+@app.get("/devices/{device_id}/edit", response_class=HTMLResponse)
+async def devices_edit_form(request: Request, device_id: str, closed: bool = False, err: str = ""):
+    """Popup page for editing a device."""
+    did = (device_id or "").strip()
+    if not device_id_path_ok(did):
+        return HTMLResponse("Invalid device ID", status_code=400)
+
+    with get_session() as s:
+        device = s.exec(select(Device).where(Device.device_id == did)).first()
+        if not device:
+            return HTMLResponse("Device not found", status_code=404)
+        profile_list = s.exec(select(DeviceProfile).order_by(DeviceProfile.profile_id)).all()
+
+    flash_err = {
+        "bad_ip": "Неверный формат IP адреса",
+        "profile": "Профиль не найден",
+    }.get(err, "")
+
+    return templates.TemplateResponse(
+        "device_edit.html",
+        _ctx(
+            request,
+            device=device,
+            profile_list=profile_list,
+            closed=closed,
+            flash_err=flash_err,
+        ),
+    )
+
+
+@app.post("/devices/{device_id}/edit")
+async def devices_edit(
+    request: Request,
+    device_id: str,
+    ip: str = Form(...),
+    profile_id: str = Form(""),
+    collector_type: str = Form("snmp"),
+    snmp_version: str = Form("2c"),
+    snmp_community: str = Form("public"),
+    snmp_v3_user: str = Form(""),
+    snmp_v3_auth_key: str = Form(""),
+    snmp_v3_priv_key: str = Form(""),
+    vmware_url: str = Form(""),
+    vmware_username: str = Form(""),
+    vmware_password: str = Form(""),
+    ssh_user: str = Form("root"),
+    ssh_password: str = Form(""),
+    status: str = Form("active"),
+):
+    did = (device_id or "").strip()
+    if not device_id_path_ok(did):
+        return HTMLResponse("Invalid device ID", status_code=400)
+
+    popup = request.query_params.get("popup") == "1"
+
+    ip_s = (ip or "").strip()
+    try:
+        ipaddress.ip_address(ip_s)
+    except ValueError:
+        if popup:
+            return RedirectResponse(f"/devices/{did}/edit?err=bad_ip&popup=1", status_code=303)
+        return RedirectResponse(f"/devices?err=bad_ip", status_code=303)
+
+    pid = (profile_id or "").strip() or None
+    if pid:
+        with get_session() as s:
+            if not s.exec(select(DeviceProfile).where(DeviceProfile.profile_id == pid)).first():
+                if popup:
+                    return RedirectResponse(f"/devices/{did}/edit?err=profile&popup=1", status_code=303)
+                return RedirectResponse("/devices?err=profile", status_code=303)
+
+    st = (status or "active").strip()
+    if st not in ("active", "offline", "unsupported"):
+        st = "active"
+
+    ct_raw = (collector_type or "").strip()
+    if ct_raw == "vmware":
+        ctype = "vmware"
+    elif ct_raw == "esxi_ssh":
+        ctype = "esxi_ssh"
+    else:
+        ctype = "snmp"
+
+    # Credential routing
+    if ctype == "esxi_ssh":
+        effective_community = (ssh_password or "").strip()
+        effective_v3_user   = (ssh_user or "root").strip()
+    else:
+        effective_community = (snmp_community or "public").strip() or "public"
+        effective_v3_user   = (snmp_v3_user or "").strip()
+
+    with get_session() as s:
+        dev = s.exec(select(Device).where(Device.device_id == did)).first()
+        if not dev:
+            return RedirectResponse("/devices?err=missing", status_code=303)
+
+        dev.ip = ip_s
+        dev.profile_id = pid
+        dev.collector_type = ctype
+        dev.snmp_version = "3" if (snmp_version or "").strip() == "3" else "2c"
+        dev.snmp_community = effective_community
+        dev.snmp_v3_user = effective_v3_user
+        dev.snmp_v3_auth_key = (snmp_v3_auth_key or "").strip()
+        dev.snmp_v3_priv_key = (snmp_v3_priv_key or "").strip()
+        dev.vmware_url = (vmware_url or "").strip()
+        dev.vmware_username = (vmware_username or "").strip()
+        dev.vmware_password = (vmware_password or "").strip()
+        dev.status = st
+
+        s.add(dev)
+        s.commit()
+        s.refresh(dev)
+        s.expunge(dev)
+
+    _audit("device_edit", f"device_id={did} ip={ip_s} profile_id={pid or ''}")
+    log.info(f"Console: updated device {did} @ {ip_s}")
+
+    if popup:
+        return RedirectResponse(f"/devices/{did}/edit?closed=1&popup=1", status_code=303)
+
+    if not pid or ctype == "vmware":
+        return RedirectResponse("/devices?updated=1", status_code=303)
+
+    # SNMP probe if profile changed or IP changed
+    probe_oid = _profile_probe_oid(pid)
+    if probe_oid:
+        ok, msg = await snmp_probe_oid(dev, probe_oid)
+        _save_verify_blob(pid, ok, msg)
+        log.info(f"Auto-verify after device update profile={pid}: ok={ok} {msg}")
+
+    return RedirectResponse("/devices?updated=1", status_code=303)
 
 
 @app.post("/devices/remove")

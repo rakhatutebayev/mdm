@@ -4,6 +4,12 @@
 <p><a href="/profiles">← All profiles</a></p>
 <h1>Profile <code>{{ row.profile_id }}</code></h1>
 
+{% if delete_err == 'in_use' %}
+<div class="alert alert-warn">
+  <strong>Удаление отклонено:</strong> к этому профилю привязано одно или несколько устройств. Сначала смените профиль у устройств на странице <a href="/devices">Devices</a> или удалите устройства.
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Requisites (TZ §2.4)</h2>
   <form method="post" action="/profiles/{{ row.profile_id }}/meta">
@@ -28,8 +34,35 @@
 </div>
 
 <div class="card">
+  <h2>Инструкция для агента (после импорта Zabbix)</h2>
+  <p class="hint">Сгенерировано при загрузке шаблона: что NOCKO proxy-agent <strong>делает</strong> и чего <strong>нет</strong> (LLD как в Zabbix). Текст из поля <code>description</code> шаблона — справочно.</p>
+  {% set playbook = import_meta.get('agent_playbook') %}
+  {% if playbook %}
+  <ol class="hint" style="line-height:1.55;margin-left:1.25rem;margin-bottom:1rem">
+    {% for line in playbook %}
+    <li style="margin-bottom:.35rem">{{ line }}</li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="hint">Нет данных playbook — профиль создан до обновления агента; переимпортируйте YAML/XML.</p>
+  {% endif %}
+  {% set st = import_meta.get('stats') %}
+  {% if st %}
+  <p class="hint"><strong>Сводка:</strong> скалярных строк mapping: {{ st.get('scalar_mapping_rows', 0) }}; с LLD-макросом: {{ st.get('lld_prototype_rows', 0) }}; всего: {{ st.get('total_mapping_rows', 0) }}. Zabbix export: {{ import_meta.get('zabbix_export_version') or '—' }}; discovery rules: {{ import_meta.get('discovery_rules_count', 0) }}.</p>
+  {% endif %}
+  {% set tdesc = import_meta.get('template_description') %}
+  {% if tdesc %}
+  <details style="margin-top:.75rem">
+    <summary style="cursor:pointer;color:#94a3b8;font-size:.85rem">Описание шаблона из Zabbix (description)</summary>
+    <pre style="margin-top:.75rem;white-space:pre-wrap;max-height:24rem;overflow-y:auto">{{ tdesc }}</pre>
+  </details>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>Readiness & SNMP check</h2>
   <p class="hint">Status: <strong>{{ row.status_label }}</strong>. Run <strong>Verify SNMP</strong> to perform a live GET against the first assigned device using the first scalar OID in the mapping (LLD macro OIDs are skipped).</p>
+  <p class="hint"><a href="/devices?bind_profile={{ row.profile_id }}">Привязать устройство к этому профилю</a> — если импорт уже выполнен, но агент ещё не знает IP/учётные данные устройства.</p>
   {% if not probe_oid %}
   <p class="alert alert-warn">No scalar OID available for probe (only LLD macros?). Poller may still work for discovered instances once devices are assigned.</p>
   {% elif devices_count == 0 %}
@@ -56,5 +89,17 @@
 <div class="card">
   <h2>output_mapping preview (first {{ mapping_preview|length }} of {{ mapping_total }})</h2>
   <pre>{{ mapping_preview_json }}</pre>
+</div>
+
+<div class="card">
+  <h2>Удаление профиля</h2>
+  {% if devices_count > 0 %}
+  <p class="hint">Пока к профилю привязано <strong>{{ devices_count }}</strong> устройств(а), удаление недоступно. Отвяжите или удалите устройства на странице <a href="/devices">Devices</a>.</p>
+  {% else %}
+  <p class="hint">Профиль не используется ни одним устройством. Удаление необратимо (mapping и связанные записи импорта будут удалены).</p>
+  <form method="post" action="/profiles/{{ row.profile_id }}/delete" onsubmit="return confirm('Удалить профиль {{ row.profile_id }}? Это необратимо.');">
+    <button type="submit" style="background:#7f1d1d">Удалить профиль</button>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}

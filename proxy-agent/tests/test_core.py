@@ -262,6 +262,100 @@ class TestDatabase:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# broker URL normalization (LAN agents vs docker :1883)
+# ──────────────────────────────────────────────────────────────────────────────
+class TestBrokerUrlNormalize:
+    def test_mqtt_1883_to_wss(self, monkeypatch):
+        from core.broker_url import normalize_broker_url_from_mdm
+
+        monkeypatch.delenv("NOCKO_MQTT_BROKER_RAW", raising=False)
+        assert normalize_broker_url_from_mdm("mqtt://mdm.nocko.com:1883") == "wss://mdm.nocko.com/mqtt"
+        assert normalize_broker_url_from_mdm("mqtt://mdm.nocko.com") == "wss://mdm.nocko.com/mqtt"
+
+    def test_localhost_unchanged(self):
+        from core.broker_url import normalize_broker_url_from_mdm
+
+        assert normalize_broker_url_from_mdm("mqtt://localhost:1883") == "mqtt://localhost:1883"
+
+    def test_raw_override(self, monkeypatch):
+        from core.broker_url import normalize_broker_url_from_mdm
+
+        monkeypatch.setenv("NOCKO_MQTT_BROKER_RAW", "1")
+        u = "mqtt://mdm.nocko.com:1883"
+        assert normalize_broker_url_from_mdm(u) == u
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# device_assignments sync (server config)
+# ──────────────────────────────────────────────────────────────────────────────
+class TestDeviceAssignments:
+    @pytest.fixture(autouse=True)
+    def fresh_db(self, tmp_path):
+        from core.database import init_db
+
+        init_db(str(tmp_path / "test.db"))
+        yield
+
+    def test_missing_key_leaves_db_untouched(self):
+        from core.device_assignments import apply_device_assignments_from_config
+
+        n, _ = apply_device_assignments_from_config({})
+        assert n == 0
+
+    def test_upsert_creates_when_profile_exists(self):
+        from core.device_assignments import apply_device_assignments_from_config
+        from core.database import Device, DeviceProfile, get_session
+        from sqlmodel import select
+
+        with get_session() as s:
+            s.add(
+                DeviceProfile(
+                    profile_id="dell_idrac",
+                    profile_name="Dell",
+                    output_mapping="[]",
+                )
+            )
+            s.commit()
+
+        n, lines = apply_device_assignments_from_config(
+            {
+                "device_assignments": [
+                    {
+                        "device_uid": "idrac-01",
+                        "ip": "10.0.0.7",
+                        "profile_slug": "dell_idrac",
+                        "snmp_community": "secret",
+                    }
+                ]
+            }
+        )
+        assert n == 1
+        assert any("created" in x for x in lines)
+        with get_session() as s:
+            d = s.exec(select(Device).where(Device.device_id == "idrac-01")).first()
+            assert d is not None
+            assert d.ip == "10.0.0.7"
+            assert d.profile_id == "dell_idrac"
+            assert d.snmp_community == "secret"
+
+        n2, _ = apply_device_assignments_from_config(
+            {
+                "device_assignments": [
+                    {
+                        "device_uid": "idrac-01",
+                        "ip": "10.0.0.8",
+                        "profile_slug": "dell_idrac",
+                    }
+                ]
+            }
+        )
+        assert n2 == 1
+        with get_session() as s:
+            d = s.exec(select(Device).where(Device.device_id == "idrac-01")).first()
+            assert d.ip == "10.0.0.8"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # MQTT broker URL (WSS / TCP)
 # ──────────────────────────────────────────────────────────────────────────────
 class TestZabbixImportYaml:
@@ -282,7 +376,7 @@ zabbix_export:
           value_type: FLOAT
           units: '%'
 """
-        pid, pname, mapping, warns = parse_zabbix_template_bytes(
+        pid, pname, mapping, warns, meta = parse_zabbix_template_bytes(
             yaml_text.encode("utf-8"), "t.yml"
         )
         assert pid == "test_snmp_template"
@@ -291,6 +385,10 @@ zabbix_export:
         assert mapping[0]["source_oid"] == "1.3.6.1.4.1.2021.10.1.3.1"
         assert mapping[0]["target_key"] == "system.cpu.load"
         assert mapping[0]["data_type"] == "float"
+        assert meta["stats"]["scalar_mapping_rows"] == 1
+        assert meta["stats"]["lld_prototype_rows"] == 0
+        assert isinstance(meta.get("agent_playbook"), list)
+        assert len(meta["agent_playbook"]) >= 3
 
     def test_yaml_template_as_single_dict_not_list(self):
         """PyYAML loads one template as mapping under templates:, not []."""
@@ -307,12 +405,13 @@ zabbix_export:
         key: system.uptime
         delay: 60s
 """
-        pid, pname, mapping, _ = parse_zabbix_template_bytes(
+        pid, pname, mapping, _, meta = parse_zabbix_template_bytes(
             yaml_text.encode("utf-8"), "t.yml"
         )
         assert pid == "dell_idrac_yaml"
         assert len(mapping) == 1
         assert mapping[0]["source_oid"] == "1.3.6.1.2.1.1.3.0"
+        assert meta["stats"]["scalar_mapping_rows"] == 1
 
     def test_yaml_discovery_item_prototypes(self):
         from core.zabbix_import import parse_zabbix_template_bytes
@@ -328,9 +427,35 @@ zabbix_export:
               snmp_oid: 1.3.6.1.2.1.2.2.1.10.{#SNMPINDEX}
               delay: 1m
 """
-        _, _, mapping, _ = parse_zabbix_template_bytes(yaml_text.encode(), "x.yml")
+        _, _, mapping, _, meta = parse_zabbix_template_bytes(yaml_text.encode(), "x.yml")
         assert len(mapping) == 1
         assert "1.3.6.1.2.1.2.2.1.10" in mapping[0]["source_oid"]
+        assert meta["stats"]["lld_prototype_rows"] == 1
+        assert meta["stats"]["scalar_mapping_rows"] == 0
+        assert meta["discovery_rules_count"] == 1
+
+    def test_yaml_template_description_in_import_meta(self):
+        from core.zabbix_import import parse_zabbix_template_bytes
+
+        yaml_text = """
+zabbix_export:
+  version: '6.0'
+  templates:
+    - name: TmplWithDesc
+      description: |
+        ## Overview
+        Hello from Zabbix template notes.
+      items:
+        - snmp_oid: 1.3.6.1.2.1.1.3.0
+          key: system.uptime
+          delay: 60s
+"""
+        _, _, mapping, _, meta = parse_zabbix_template_bytes(
+            yaml_text.encode("utf-8"), "d.yml"
+        )
+        assert "Overview" in (meta.get("template_description") or "")
+        assert meta.get("zabbix_export_version") == "6.0"
+        assert len(mapping) == 1
 
 
 class TestProfileReadiness:

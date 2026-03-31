@@ -44,6 +44,54 @@
 </div>
 
 <div class="card">
+  <h2>Приём данных с устройств (SNMP)</h2>
+  <p class="hint">По последнему циклу поллера: зелёный — агент получил значения по SNMP и собрал словарь метрик (fast/slow). Подробности: <a href="/diagnostics">Diagnostics</a>. JSON: <a href="/debug/json"><strong>JSON debug</strong></a> (всегда в верхнем меню).</p>
+  <div class="info-row" style="margin-bottom:1rem">
+    <div class="info-item"><span class="k">Принимают сейчас:</span><span class="v"><span class="badge badge-green">{{ receiving_n }}</span></span></div>
+    <div class="info-item"><span class="k">Проблемы (конфиг / LLD / SNMP):</span><span class="v"><span class="badge badge-red">{{ receipt_issue_n }}</span></span></div>
+  </div>
+  {% if receipt_rows %}
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Устройство</th>
+          <th>IP</th>
+          <th>Профиль</th>
+          <th>Статус приёма SNMP</th>
+          <th>JSON debug</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in receipt_rows %}
+        <tr>
+          <td><code style="font-size:.75rem">{{ row.device_id }}</code></td>
+          <td>{{ row.ip }}</td>
+          <td>{{ row.profile_id or '—' }}</td>
+          <td>
+            <span class="badge {{ row.badge_class }}">{{ row.label }}</span>
+            <div class="hint" style="margin:.35rem 0 0 0">{{ row.detail }}</div>
+          </td>
+          <td style="white-space:nowrap;font-size:.75rem">
+            {% if row.latest_json_url %}
+            <a href="{{ row.latest_json_url }}" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc">latest</a>
+            {% endif %}
+            {% if row.snmp_debug_url %}
+            {% if row.latest_json_url %} · {% endif %}<a href="{{ row.snmp_debug_url }}" target="_blank" rel="noopener noreferrer" style="color:#86efac">snmp</a>
+            {% endif %}
+            {% if not row.latest_json_url and not row.snmp_debug_url %}<span class="hint">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="hint">Нет устройств в базе — добавьте записи и назначьте профиль.</p>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>Импорт профиля (Zabbix)</h2>
   <p class="hint">Экспорт шаблона Zabbix: <strong>.xml</strong>, <strong>.json</strong> или <strong>.yaml / .yml</strong>. Нужны SNMP items с полем <code>snmp_oid</code>.</p>
   <form action="/profiles/upload" method="post" enctype="multipart/form-data">

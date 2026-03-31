@@ -1,4 +1,4 @@
-{
+потеря входного питания на Power Supply 2{
   "imports": {
     "class": "imports",
     "SNMPv2-CONF": [

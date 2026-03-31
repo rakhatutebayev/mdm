@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}JSON debug{% endblock %}
+{% block content %}
+<h1>JSON debug</h1>
+<p class="hint">
+  Прямые ссылки на <strong>latest.json</strong> (снимок poll_diag + инвентарь) и <strong>snmp-debug.json</strong> (MIB-II + probe OID).
+  Страница в меню <strong>JSON debug</strong> — не зависит от таблицы на <a href="/devices">Devices</a>.
+  Если колонок «Просмотр JSON» / «SNMP debug» там нет — обновите код агента (полный деплой <code>proxy-agent/</code>) и обновите страницу в браузере.
+</p>
+<p class="hint">
+  {% raw %}Если видите JSON вида {"detail":"Not Found"}:{% endraw %}
+  (1) откройте <a href="/api/v1/console-meta.json" target="_blank" rel="noopener"><code>/api/v1/console-meta.json</code></a> — должен быть ответ с <code>service</code> = <code>nocko-agent-console</code>;
+  если снова 404 — это не консоль агента или очень старая версия. (2) Попробуйте <a href="/json-debug">/json-debug</a> или <a href="/debug">/debug</a> (редирект).
+</p>
+
+<div class="card">
+  <h2>Устройства ({{ debug_device_count }})</h2>
+  {% if debug_device_rows %}
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Device UID</th>
+          <th>IP</th>
+          <th>Профиль</th>
+          <th>latest.json</th>
+          <th>snmp-debug.json</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in debug_device_rows %}
+        <tr>
+          <td><code style="font-size:.75rem">{{ row.device_id }}</code></td>
+          <td>{{ row.ip }}</td>
+          <td>{{ row.profile_id or '—' }}</td>
+          <td>
+            {% if row.latest_json %}
+            <a href="{{ row.latest_json }}" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc">Открыть ↗</a>
+            {% else %}
+            <span class="hint">UID не подходит для URL</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.snmp_debug_json %}
+            <a href="{{ row.snmp_debug_json }}" target="_blank" rel="noopener noreferrer" style="color:#86efac">Открыть ↗</a>
+            {% else %}
+            <span class="hint">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="hint">Нет устройств — добавьте на <a href="/devices">Devices</a>.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>API</h2>
+  <p class="hint">Сводка + те же пути в поле <code>debug_urls</code> у каждого устройства:</p>
+  <p><a href="/api/v1/diagnostics.json" target="_blank" rel="noopener noreferrer"><code>/api/v1/diagnostics.json</code> ↗</a></p>
+</div>
+{% endblock %}
