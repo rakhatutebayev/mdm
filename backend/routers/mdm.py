@@ -884,10 +884,12 @@ async def portal_update_agent(body: UpdateAgentPayload, db: AsyncSession = Depen
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    # Resolve the latest EXE artifact URL from the catalog
-    release, artifact = find_artifact("exe", "x64")
+    # Resolve the latest artifact URL from the catalog based on platform
+    fmt = "linux-binary" if device.platform and device.platform.lower() == "linux" else "exe"
+    release, artifact = find_artifact(fmt, "amd64" if fmt == "linux-binary" else "x64")
     if not release or not artifact:
-        raise HTTPException(status_code=404, detail="No EXE artifact found in release catalog")
+        raise HTTPException(status_code=404, detail=f"No {fmt} artifact found in release catalog")
+
 
     target_version = str(release.get("version", ""))
     download_url   = str(artifact.get("url", ""))

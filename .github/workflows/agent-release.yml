@@ -16,7 +16,7 @@ permissions:
   actions: write
 
 jobs:
-  build-agent:
+  build-agent-windows:
     runs-on: windows-latest
     env:
       AGENT_DIR: agent-gui
@@ -77,67 +77,130 @@ jobs:
         shell: pwsh
         run: Get-ChildItem "${env:RELEASE_DIR}"
 
+      - name: Upload Windows Asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-asset
+          path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-x64-portable.exe
+
+  build-agent-linux:
+    runs-on: ubuntu-latest
+    env:
+      AGENT_DIR: agent-gui
+      RELEASE_DIR: release-assets
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: agent-gui/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-dev
+          python -m pip install --upgrade pip
+          pip install -r agent-gui/requirements.txt pyinstaller
+
+      - name: Build Linux executable
+        working-directory: agent-gui
+        env:
+          NOCKO_AGENT_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p ../${{ env.RELEASE_DIR }}
+          # Create a basic spec or just run pyinstaller directly
+          pyinstaller --onefile --name nocko-agent --clean main.py
+          mv dist/nocko-agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
+
+      - name: Upload Linux Asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-asset
+          path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
+
+  publish-release:
+    needs: [build-agent-windows, build-agent-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows Asset
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-asset
+          path: release-assets
+      
+      - name: Download Linux Asset
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-asset
+          path: release-assets
+
       - name: Publish GitHub release
         if: ${{ inputs.publish_release == 'true' }}
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "agent-v${{ inputs.version }}"
-          $assets = Get-ChildItem "${env:RELEASE_DIR}" | ForEach-Object { $_.FullName }
-          if ($assets.Count -eq 0) {
-            Write-Error "No release assets were produced."
+          tag="agent-v${{ inputs.version }}"
+          assets=$(find release-assets -type f)
+          if [ -z "$assets" ]; then
+            echo "No release assets were produced."
             exit 1
-          }
-          gh release view $tag *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $assets --clobber
-          } else {
-            gh release create $tag $assets --title "Agent ${{ inputs.version }}" --notes "Windows agent release ${{ inputs.version }}"
-          }
+          fi
+          
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" release-assets/* --clobber
+          else
+            gh release create "$tag" release-assets/* --title "Agent ${{ inputs.version }}" --notes "Agent release ${{ inputs.version }}"
+          fi
 
       - name: Update agent release manifest
-        shell: pwsh
         env:
           REPO: ${{ github.repository }}
         run: |
-          $generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          $tag = "agent-v${{ inputs.version }}"
-          $args = @(
-            "scripts/update_agent_release_manifest.py",
-            "--manifest", "backend/package_builder/agent_releases.json",
-            "--repo", $env:REPO,
-            "--tag", $tag,
-            "--version", "${{ inputs.version }}",
-            "--generated-at", $generatedAt
+          generatedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          tag="agent-v${{ inputs.version }}"
+          
+          args=(
+            "scripts/update_agent_release_manifest.py"
+            "--manifest" "backend/package_builder/agent_releases.json"
+            "--repo" "$REPO"
+            "--tag" "$tag"
+            "--version" "${{ inputs.version }}"
+            "--generated-at" "$generatedAt"
           )
 
-          if (Test-Path "${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64-portable.exe") {
-            $args += @("--asset", "exe:x64:${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64-portable.exe")
-          }
+          if [ -f "release-assets/nocko-agent-${{ inputs.version }}-x64-portable.exe" ]; then
+            args+=("--asset" "exe:x64:release-assets/nocko-agent-${{ inputs.version }}-x64-portable.exe")
+          fi
+          
+          if [ -f "release-assets/nocko-agent-${{ inputs.version }}-amd64-linux" ]; then
+            args+=("--asset" "linux-binary:amd64:release-assets/nocko-agent-${{ inputs.version }}-amd64-linux")
+          fi
 
-          python @args
+          python "${args[@]}"
 
       - name: Commit updated manifest
-        shell: pwsh
         run: |
-          if (-not (git diff --quiet -- backend/package_builder/agent_releases.json)) {
+          if ! git diff --quiet -- backend/package_builder/agent_releases.json; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add backend/package_builder/agent_releases.json
             git commit -m "Update agent release manifest for v${{ inputs.version }}"
             git push
-          } else {
-            Write-Host "Manifest already up to date."
-          }
+          else
+            echo "Manifest already up to date."
+          fi
 
       - name: Trigger portal deploy
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-        shell: pwsh
         run: |
-          # GitHub Actions bot commits don't auto-trigger deploy.yml (GITHUB_TOKEN limitation).
-          # Explicitly dispatch deploy workflow so the portal gets the new agent version.
           gh workflow run deploy.yml --repo ${{ github.repository }} --ref main
-          Write-Host "Portal deploy triggered for v${{ inputs.version }}"
+          echo "Portal deploy triggered for v${{ inputs.version }}"

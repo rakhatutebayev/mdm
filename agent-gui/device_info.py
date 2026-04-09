@@ -579,29 +579,150 @@ def _collect_windows_inventory() -> dict[str, Any]:
 
 
 def _identity_payload(config) -> dict[str, Any]:
-    windows_inventory = _collect_windows_inventory()
     interactive_user = _get_interactive_username()
+    
+    if os.name == "nt":
+        os_inv = _collect_windows_inventory()
+    else:
+        os_inv = _collect_linux_inventory()
+        
     return {
         "device_name": socket.gethostname(),
         "platform": "Windows" if os.name == "nt" else platform.system(),
-        "device_type": windows_inventory.get("device_type") or "Desktop",
-        "model": windows_inventory.get("model") or platform.machine(),
-        "manufacturer": windows_inventory.get("manufacturer") or platform.node(),
-        "serial_number": windows_inventory.get("serial_number") or "",
+        "device_type": os_inv.get("device_type") or "Desktop",
+        "model": os_inv.get("model") or platform.machine(),
+        "manufacturer": os_inv.get("manufacturer") or platform.node(),
+        "serial_number": os_inv.get("serial_number") or "",
         "udid": hex(uuid.getnode())[2:].upper(),
         "os_version": _get_os_version(),
         "architecture": platform.machine(),
         "owner": interactive_user,
         "real_username": interactive_user,
-        "enrollment_method": "WindowsService",
+        "enrollment_method": "WindowsService" if os.name == "nt" else "LinuxDaemon",
         "agent_version": config.agent_version,
-        "hardware_inventory": windows_inventory.get("hardware_inventory"),
-        "physical_disks": windows_inventory.get("physical_disks", []),
-        "logical_disks": windows_inventory.get("logical_disks", []),
+        "hardware_inventory": os_inv.get("hardware_inventory"),
+        "physical_disks": os_inv.get("physical_disks", []),
+        "logical_disks": os_inv.get("logical_disks", []),
         "monitors": _collect_monitors(),
         "printers": _collect_printers(),
         "user_profiles": _collect_user_profiles(),
     }
+
+
+def _collect_linux_inventory() -> dict[str, Any]:
+    if os.name != "posix":
+        return {}
+    
+    try:
+        import subprocess
+        
+        # Processor
+        processor_model = ""
+        processor_vendor = ""
+        physical_cores = None
+        logical_processors = None
+        try:
+            lscpu = subprocess.run(["lscpu"], capture_output=True, text=True, check=False).stdout
+            for line in lscpu.split("\n"):
+                if "Model name:" in line:
+                    processor_model = line.split(":", 1)[1].strip()
+                elif "Vendor ID:" in line:
+                    processor_vendor = line.split(":", 1)[1].strip()
+                elif "Core(s) per socket:" in line:
+                    physical_cores = int(line.split(":", 1)[1].strip())
+                elif "CPU(s):" in line and not "NUMA" in line:
+                    logical_processors = int(line.split(":", 1)[1].strip())
+        except Exception:
+            pass
+
+        # Memory
+        memory_total_gb = None
+        try:
+            meminfo = Path("/proc/meminfo").read_text()
+            for line in meminfo.split("\n"):
+                if line.startswith("MemTotal:"):
+                    kb = int(line.split()[1])
+                    memory_total_gb = round(kb / (1024 * 1024), 2)
+                    break
+        except Exception:
+            pass
+
+        # System info via dmidecode (requires root)
+        manufacturer = ""
+        model = ""
+        serial_number = ""
+        try:
+            dmi = subprocess.run(["dmidecode", "-t", "system"], capture_output=True, text=True, check=False).stdout
+            for line in dmi.split("\n"):
+                if "Manufacturer:" in line:
+                    manufacturer = line.split(":", 1)[1].strip()
+                elif "Product Name:" in line:
+                    model = line.split(":", 1)[1].strip()
+                elif "Serial Number:" in line:
+                    serial_number = line.split(":", 1)[1].strip()
+        except Exception:
+            pass
+
+        # Disks (Physical and Logical)
+        logical_disk_items = []
+        try:
+            parts = psutil.disk_partitions(all=False)
+            for p in parts:
+                try:
+                    usage = psutil.disk_usage(p.mountpoint)
+                    logical_disk_items.append({
+                        "name": p.device,
+                        "volume_name": p.mountpoint,
+                        "file_system": p.fstype,
+                        "drive_type": "Local Disk",
+                        "size_gb": round(usage.total / (1024 ** 3), 2),
+                        "free_gb": round(usage.free / (1024 ** 3), 2),
+                        "used_gb": round(usage.used / (1024 ** 3), 2),
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            pass
+            
+        physical_disk_items = []
+        try:
+            lsblk = subprocess.run(["lsblk", "-d", "-n", "-o", "NAME,MODEL,SERIAL,ROTA,SIZE"], capture_output=True, text=True, check=False).stdout
+            for idx, line in enumerate(lsblk.strip().split("\n")):
+                if not line.strip(): continue
+                parts = line.split()
+                if len(parts) >= 5:
+                    sz_str = parts[-1]
+                    rota = parts[-2]
+                    sn = parts[-3]
+                    mdl = " ".join(parts[1:-3])
+                    physical_disk_items.append({
+                        "disk_index": idx,
+                        "model": mdl,
+                        "serial_number": sn if sn != "-" else "",
+                        "media_type": "HDD" if rota == "1" else "SSD",
+                        "interface_type": "",
+                        "size_gb": float(sz_str.replace("G", "")) if "G" in sz_str else 0.0,
+                    })
+        except Exception:
+            pass
+
+        return {
+            "device_type": "Server" if not manufacturer else "Desktop",
+            "manufacturer": manufacturer,
+            "model": model,
+            "serial_number": serial_number,
+            "hardware_inventory": {
+                "processor_model": processor_model,
+                "processor_vendor": processor_vendor,
+                "physical_cores": physical_cores,
+                "logical_processors": logical_processors,
+                "memory_total_gb": memory_total_gb,
+            },
+            "physical_disks": physical_disk_items,
+            "logical_disks": logical_disk_items,
+        }
+    except Exception:
+        return {}
 
 
 def _network_payload() -> dict[str, Any]:
@@ -961,10 +1082,46 @@ def _get_interactive_username() -> str:
     return os.getenv("USERNAME", "")
 
 
-def _collect_installed_software() -> list[dict[str, str]]:
-    """Scan Registry Uninstall keys for installed software list."""
-    if os.name != "nt":
+def _collect_linux_installed_software() -> list[dict[str, str]]:
+    if os.name != "posix":
         return []
+    software = []
+    try:
+        import subprocess
+        # Try dpkg
+        if Path("/usr/bin/dpkg").exists():
+            out = subprocess.run(["dpkg-query", "-W", "-f=${Package}||${Version}||${Maintainer}\n"], capture_output=True, text=True, check=False).stdout
+            for line in out.split("\n"):
+                if "||" in line:
+                    parts = line.split("||")
+                    software.append({
+                        "name": parts[0],
+                        "version": parts[1] if len(parts) > 1 else "",
+                        "publisher": parts[2] if len(parts) > 2 else "",
+                        "install_date": ""
+                    })
+        # Try rpm
+        elif Path("/usr/bin/rpm").exists():
+            out = subprocess.run(["rpm", "-qa", "--qf", "%{NAME}||%{VERSION}||%{VENDOR}\n"], capture_output=True, text=True, check=False).stdout
+            for line in out.split("\n"):
+                if "||" in line:
+                    parts = line.split("||")
+                    software.append({
+                        "name": parts[0],
+                        "version": parts[1] if len(parts) > 1 else "",
+                        "publisher": parts[2] if len(parts) > 2 else "",
+                        "install_date": ""
+                    })
+    except Exception:
+        pass
+    return software
+
+
+def _collect_installed_software() -> list[dict[str, str]]:
+    """List installed applications from the Windows Uninstall registry. 
+    On Linux, uses dpkg or rpm."""
+    if os.name != "nt":
+        return _collect_linux_installed_software()
 
     software: list[dict[str, str]] = []
     import winreg
@@ -1033,11 +1190,32 @@ def _collect_installed_software() -> list[dict[str, str]]:
 
 
 def _collect_user_profiles() -> list[dict[str, Any]]:
-    """Collect user profiles using WMI Win32_UserProfile."""
+    """Collect user profiles using WMI Win32_UserProfile or /etc/passwd."""
+    profiles: list[dict[str, Any]] = []
+    
+    if os.name == "posix":
+        try:
+            passwd = Path("/etc/passwd").read_text()
+            for line in passwd.split("\n"):
+                if not line: continue
+                parts = line.split(":")
+                if len(parts) >= 6:
+                    uid = int(parts[2])
+                    if uid >= 1000 and uid < 65534:
+                        profiles.append({
+                            "sid": str(uid),
+                            "local_path": parts[5],
+                            "loaded": False,
+                            "last_use_time": "",
+                            "username": parts[0]
+                        })
+        except Exception:
+            pass
+        return profiles
+
     if os.name != "nt":
         return []
 
-    profiles: list[dict[str, Any]] = []
     try:
         if wmi and pythoncom:
             pythoncom.CoInitialize()
@@ -1069,13 +1247,18 @@ def _collect_user_profiles() -> list[dict[str, Any]]:
 
 def _collect_anydesk_id() -> str | None:
     """Read AnyDesk ID from system or service configuration files."""
-    if os.name != "nt":
-        return None
-
-    paths = [
-        r"C:\ProgramData\AnyDesk\system.conf",
-        r"C:\ProgramData\AnyDesk\service.conf",
-    ]
+    paths = []
+    if os.name == "nt":
+        paths = [
+            r"C:\ProgramData\AnyDesk\system.conf",
+            r"C:\ProgramData\AnyDesk\service.conf",
+        ]
+    elif os.name == "posix":
+        paths = [
+            "/etc/anydesk/system.conf",
+            "/etc/anydesk/service.conf",
+            "/root/.anydesk/system.conf",
+        ]
 
     for path in paths:
         try:

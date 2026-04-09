@@ -35,15 +35,25 @@ def _handle_rename_computer(
         return "failed", "new_name is empty"
 
     try:
-        # Use PowerShell — works on all Windows versions
-        result = subprocess.run(
-            ["powershell", "-NonInteractive", "-Command",
-             f"Rename-Computer -NewName '{new_name}' -Force"],
-            capture_output=True, text=True, timeout=30,
-        )
-        if result.returncode != 0:
-            err = result.stderr.strip() or result.stdout.strip()
-            return "failed", f"Rename-Computer failed (rc={result.returncode}): {err}"
+        if os.name == "nt":
+            # Use PowerShell — works on all Windows versions
+            result = subprocess.run(
+                ["powershell", "-NonInteractive", "-Command",
+                 f"Rename-Computer -NewName '{new_name}' -Force"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                err = result.stderr.strip() or result.stdout.strip()
+                return "failed", f"Rename-Computer failed (rc={result.returncode}): {err}"
+        else:
+            # Use hostnamectl on Linux
+            result = subprocess.run(
+                ["hostnamectl", "set-hostname", str(new_name)],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                err = result.stderr.strip() or result.stdout.strip()
+                return "failed", f"hostnamectl failed (rc={result.returncode}): {err}"
 
         logger.info("Computer renamed to '%s' successfully", new_name)
 
@@ -65,11 +75,13 @@ def _handle_rename_computer(
 
         if restart_after:
             # Delayed restart so the agent can ack the command first
-            subprocess.Popen(
-                ["powershell", "-NonInteractive", "-Command",
-                 "Start-Sleep 10; Restart-Computer -Force"],
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
+            if os.name == "nt":
+                subprocess.Popen(
+                    ["powershell", "-NonInteractive", "-Command", "Start-Sleep 10; Restart-Computer -Force"],
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            else:
+                subprocess.Popen(["sh", "-c", "sleep 10 && reboot"])
             return "acked", f"Renamed to '{new_name}'. Restarting in 10 seconds."
 
         return "acked", f"Renamed to '{new_name}'. Restart required to apply."
@@ -99,9 +111,52 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
         return "failed", "sha256 is missing in payload"
 
     # Installed EXE path — this is where the service binary lives
+    import os
     installed_exe = sys.executable  # service runs from the installed location
 
     try:
+        if os.name == "posix":
+            # Linux update path
+            bash_script = f"""#!/bin/bash
+set -e
+TEMP_DIR=$(mktemp -d)
+TEMP_BIN="$TEMP_DIR/nocko-agent"
+curl -sSL "{download_url}" -o "$TEMP_BIN"
+
+if [ -n "{expected_sha256}" ]; then
+    ACTUAL_HASH=$(sha256sum "$TEMP_BIN" | awk '{{print $1}}')
+    if [ "$ACTUAL_HASH" != "{expected_sha256}" ]; then
+        echo "SHA256 mismatch. expected={expected_sha256} actual=$ACTUAL_HASH"
+        exit 1
+    fi
+fi
+
+# Stop service, backup and replace binary
+systemctl stop nocko-agent || true
+cp "$TEMP_BIN" "{installed_exe}"
+chmod +x "{installed_exe}"
+
+# Update config.json optionally if exists
+CONFIG_PATH="{AgentConfig.config_path()}"
+if [ -f "$CONFIG_PATH" ]; then
+    sed -i 's/"agent_version": "[^"]*"/"agent_version": "{target_version}"/' "$CONFIG_PATH" || true
+fi
+
+# ACK the command
+ACK_URL="{config.server_url.rstrip("/")}/api/v1/mdm/windows/commands/ack"
+curl -X POST "$ACK_URL" -H "Content-Type: application/json" -d '{{"command_id": "{command_id}", "status": "acked", "result": "Update installed successfully."}}' || true
+
+systemctl start nocko-agent || true
+rm -rf "$TEMP_DIR"
+"""
+            import tempfile
+            with tempfile.NamedTemporaryFile("w", delete=False) as f:
+                f.write(bash_script)
+                temp_script = f.name
+            
+            proc = subprocess.Popen(["bash", temp_script])
+            logger.info("Update to v%s started via bash (pid=%s)", target_version, proc.pid)
+            return "deferred", f"Update to v{target_version} started. Final status will be reported after restart."
         checksum_block = ""
         if expected_sha256:
             checksum_block = (
@@ -216,19 +271,23 @@ def _handle_restart_agent(
             logger.warning("Pre-restart inventory push failed (non-fatal): %s", exc)
 
     try:
-        # Prefer restarting the Windows service (runs in elevated SYSTEM context)
-        ps_cmd = (
-            "Start-Sleep 5; "
-            "Restart-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue; "
-            # Fallback: trigger the scheduled task directly if service is not installed
-            "if (-not (Get-Service 'NOCKOAgent' -ErrorAction SilentlyContinue)) { "
-            "  Start-ScheduledTask -TaskName 'NOCKO MDM Agent Check-In' -ErrorAction SilentlyContinue; "
-            "}"
-        )
-        subprocess.Popen(
-            ["powershell", "-NonInteractive", "-Command", ps_cmd],
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        if os.name == "nt":
+            # Prefer restarting the Windows service (runs in elevated SYSTEM context)
+            ps_cmd = (
+                "Start-Sleep 5; "
+                "Restart-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue; "
+                # Fallback: trigger the scheduled task directly if service is not installed
+                "if (-not (Get-Service 'NOCKOAgent' -ErrorAction SilentlyContinue)) { "
+                "  Start-ScheduledTask -TaskName 'NOCKO MDM Agent Check-In' -ErrorAction SilentlyContinue; "
+                "}"
+            )
+            subprocess.Popen(
+                ["powershell", "-NonInteractive", "-Command", ps_cmd],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        else:
+            subprocess.Popen(["sh", "-c", "sleep 5 && systemctl restart nocko-agent"])
+            
         return "acked", "Agent restart scheduled in 5 seconds. Full inventory will be sent on next checkin."
     except Exception as exc:
         logger.exception("restart_agent error: %s", exc)
