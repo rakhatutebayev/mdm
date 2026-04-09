@@ -35,6 +35,7 @@ export interface DeviceListItem {
   owner: string;
   enrollment_method: string;
   agent_version: string;
+  anydesk_id?: string;
   status: string;
   enrolled_at: string | null;
   last_checkin: string | null;

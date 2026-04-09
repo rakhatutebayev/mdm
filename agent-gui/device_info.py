@@ -5,6 +5,7 @@ import platform
 import socket
 import time
 import uuid
+import re
 from typing import Any
 
 import psutil
@@ -1066,6 +1067,30 @@ def _collect_user_profiles() -> list[dict[str, Any]]:
     return profiles
 
 
+def _collect_anydesk_id() -> str | None:
+    """Read AnyDesk ID from system or service configuration files."""
+    if os.name != "nt":
+        return None
+
+    paths = [
+        r"C:\ProgramData\AnyDesk\system.conf",
+        r"C:\ProgramData\AnyDesk\service.conf",
+    ]
+
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                    # Look for ad.anydesk.id=123456789
+                    match = re.search(r"ad\.anydesk\.id=(\d+)", content)
+                    if match:
+                        return match.group(1)
+        except Exception:
+            continue
+    return None
+
+
 def collect_enrollment_payload(config) -> dict[str, Any]:
     return {
         "customer_id": config.customer_id,
@@ -1074,6 +1099,7 @@ def collect_enrollment_payload(config) -> dict[str, Any]:
         **_network_payload(),
         "monitors": _collect_monitors(),
         "printers": _collect_printers(),
+        "anydesk_id": _collect_anydesk_id(),
     }
 
 
@@ -1114,5 +1140,6 @@ def collect_inventory_payload(config) -> dict[str, Any]:
         "printers": _collect_printers(),
         "installed_software": _collect_installed_software(),
         "user_profiles": _collect_user_profiles(),
+        "anydesk_id": _collect_anydesk_id(),
     }
     return payload

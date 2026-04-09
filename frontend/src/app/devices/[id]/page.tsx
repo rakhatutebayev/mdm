@@ -460,6 +460,7 @@ export default function DeviceDetailPage() {
     'Enrolled Time':     device.enrolled_at ? new Date(device.enrolled_at).toLocaleString() : '—',
     'MDM Status':        device.status,
     'Agent Version':     device.agent_version || '—',
+    'AnyDesk ID':        device.anydesk_id || '—',
     'Customer':          device.customer_name || customer,
   };
 

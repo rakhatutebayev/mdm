@@ -151,6 +151,7 @@ class EnrollPayload(BaseModel):
     shared_device: bool = False
     enrollment_method: str = "Agent"
     agent_version: str = ""
+    anydesk_id: Optional[str] = None
     network: Optional[NetworkPayload] = None
     monitors: Optional[list[MonitorPayload]] = None
     hardware_inventory: Optional[HardwareInventoryPayload] = None
@@ -196,6 +197,7 @@ class InventoryPayload(BaseModel):
     shared_device: bool = False
     enrollment_method: str = "WindowsService"
     agent_version: str = ""
+    anydesk_id: Optional[str] = None
     network: Optional[NetworkPayload] = None
     monitors: Optional[list[MonitorPayload]] = None
     hardware_inventory: Optional[HardwareInventoryPayload] = None
@@ -297,6 +299,8 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
             reported_version=body.agent_version,
             db=db,
         )
+    if body.anydesk_id:
+        device.anydesk_id = body.anydesk_id
 
     if body.network:
         net = body.network

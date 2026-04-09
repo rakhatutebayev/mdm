@@ -46,6 +46,7 @@ class Device(Base):
     owner: Mapped[str] = mapped_column(String(255), default="")
     enrollment_method: Mapped[str] = mapped_column(String(100), default="Agent")
     status: Mapped[str] = mapped_column(String(50), default="Pending")  # Pending | Enrolled | Deprovisioned | Failed
+    anydesk_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     enrolled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_checkin: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     agent_version: Mapped[str] = mapped_column(String(50), default="")
