@@ -1,17 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
 from pathlib import Path
 
 block_cipher = None
 root = Path.cwd()
 icon_path = root / "assets" / "favicon.ico"
-
-a = Analysis(
-    ["main.py"],
-    pathex=[str(root)],
-    binaries=[],
-    datas=[],
-import sys
 
 hidden_imports = [
     "paho.mqtt.client",
