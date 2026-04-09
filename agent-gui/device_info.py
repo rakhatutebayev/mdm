@@ -1113,5 +1113,6 @@ def collect_inventory_payload(config) -> dict[str, Any]:
         "monitors": _collect_monitors(),
         "printers": _collect_printers(),
         "installed_software": _collect_installed_software(),
+        "user_profiles": _collect_user_profiles(),
     }
     return payload

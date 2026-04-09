@@ -684,6 +684,8 @@ async def inventory(body: InventoryPayload, db: AsyncSession = Depends(get_db)):
             selectinload(Device.physical_disks),
             selectinload(Device.logical_disks),
             selectinload(Device.printers),
+            selectinload(Device.installed_software),
+            selectinload(Device.user_profiles),
         )
         .where(Device.id == body.device_id)
     )
