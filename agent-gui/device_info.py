@@ -1039,8 +1039,7 @@ def _collect_user_profiles() -> list[dict[str, Any]]:
 
     profiles: list[dict[str, Any]] = []
     try:
-        if wmi:
-            import pythoncom
+        if wmi and pythoncom:
             pythoncom.CoInitialize()
             try:
                 c = wmi.WMI()
@@ -1061,7 +1060,8 @@ def _collect_user_profiles() -> list[dict[str, Any]]:
                         "username": path.split("\\")[-1]
                     })
             finally:
-                pythoncom.CoUninitialize()
+                if pythoncom:
+                    pythoncom.CoUninitialize()
     except Exception:
         pass
     return profiles

@@ -3,6 +3,21 @@
   "generated_at": "2026-04-09T13:53:53Z",
   "releases": [
     {
+      "version": "1.7.6",
+      "tag": "agent-v1.7.6",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.7.6-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.7.6/nocko-agent-1.7.6-x64-portable.exe",
+          "sha256": "",
+          "size_bytes": 0,
+          "notes": "Remote fixes for AnyDesk ID collection and stability"
+        }
+      ]
+    },
+    {
       "version": "1.7.5",
       "tag": "agent-v1.7.5",
       "artifacts": [
