@@ -978,3 +978,18 @@ async def decommission(body: DecommissionPayload, db: AsyncSession = Depends(get
         "device_id": body.device_id,
         "message": f"Device decommissioned: {body.reason}",
     }
+
+@router.get("/bootstrap/install-linux.sh", tags=["bootstrap"])
+async def bootstrap_install_linux_sh():
+    """Return the bash-based Linux MDM agent installer."""
+    import os
+    # Path inside the Docker container (see Dockerfile COPY)
+    path = "/app/agent_bootstrap/install-linux.sh"
+    if not os.path.exists(path):
+        # Fallback to local path for development/testing
+        path = "agent_bootstrap/install-linux.sh"
+    
+    if not os.path.exists(path):
+         raise HTTPException(status_code=404, detail="Installer script not found")
+         
+    return FileResponse(path, media_type="text/x-shellscript")

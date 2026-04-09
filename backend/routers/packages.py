@@ -8,7 +8,7 @@ from urllib.request import urlopen
 import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -302,3 +302,18 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         media_type=mime,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+@router.get("/install-linux.sh", tags=["bootstrap"])
+async def bootstrap_install_linux_sh():
+    """Return the bash-based Linux MDM agent installer."""
+    import os
+    # Path inside the Docker container (see Dockerfile COPY in backend/Dockerfile)
+    path = "/app/agent_bootstrap/install-linux.sh"
+    if not os.path.exists(path):
+        # Fallback for development (assuming run from NOCKO MDM/backend)
+        path = "../agent-gui/installer/install-linux.sh"
+    
+    if not os.path.exists(path):
+         raise HTTPException(status_code=404, detail="Installer script not found")
+         
+    return FileResponse(path, media_type="text/x-shellscript")
