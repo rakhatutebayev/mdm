@@ -108,6 +108,7 @@ const SECTION_ICONS: Record<string, string> = {
   'Physical Disks':  '💽',
   'Logical Disks':   '🗂️',
   'Monitor Summary': '🖱️',
+  'User Profiles':   '👥',
 };
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -121,6 +122,7 @@ export default function DeviceDetailPage() {
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [softSearch, setSoftSearch] = useState('');
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -527,6 +529,21 @@ export default function DeviceDetailPage() {
         },
       }];
 
+  const profileSections = !device.user_profiles?.length
+    ? [{ title: 'User Profiles', data: { 'User Profiles': 'No profile data available' } }]
+    : [{
+        title: 'User Profiles',
+        data: {
+          'Count': String(device.user_profiles.length),
+          ...Object.fromEntries(device.user_profiles.flatMap((p) => [
+            [`Profile — ${p.username}`, p.sid || '—'],
+            [`${p.username} Path`, p.local_path || '—'],
+            [`${p.username} Loaded`, p.loaded ? 'Yes' : 'No'],
+            [`${p.username} Last Use`, p.last_use_time ? new Date(p.last_use_time).toLocaleString() : '—'],
+          ])),
+        },
+      }];
+
   const sections = [
     { title: 'Device Summary',  data: summarySec },
     { title: 'Hardware Summary', data: hardwareSec },
@@ -536,6 +553,7 @@ export default function DeviceDetailPage() {
     ...logicalDiskSections,
     ...monitorSections,
     ...printerSections,
+    ...profileSections,
   ];
 
   const statusClass =
@@ -1006,6 +1024,49 @@ export default function DeviceDetailPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Installed Software Table ── */}
+      {device.installed_software && device.installed_software.length > 0 && (
+        <div className={styles.card} style={{ marginTop: 16 }}>
+          <div className={styles.cardHeader}>
+            <span className={styles.cardIcon}>📦</span>
+            <h2 className={styles.cardTitle}>Installed Software ({device.installed_software.length})</h2>
+          </div>
+          <div style={{ padding: '16px 20px' }}>
+            <input 
+              type="text" 
+              placeholder="Search software by name or publisher..." 
+              className={styles.searchInput}
+              value={softSearch}
+              onChange={e => setSoftSearch(e.target.value)}
+            />
+            <div className={styles.tableContainer} style={{ maxHeight: 600 }}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Version</th>
+                    <th>Publisher</th>
+                    <th>Install Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {device.installed_software
+                    .filter(s => (s.name||'').toLowerCase().includes(softSearch.toLowerCase()) || (s.publisher||'').toLowerCase().includes(softSearch.toLowerCase()))
+                    .map((s, i) => (
+                    <tr key={i}>
+                      <td style={{ fontWeight: 500 }}>{s.name || '—'}</td>
+                      <td>{s.version || '—'}</td>
+                      <td>{s.publisher || '—'}</td>
+                      <td className={styles.mono}>{s.install_date ? s.install_date.substring(0, 10) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

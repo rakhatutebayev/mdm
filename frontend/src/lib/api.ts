@@ -130,6 +130,8 @@ export interface DeviceDetail extends DeviceListItem {
   physical_disks: PhysicalDiskInfo[];
   logical_disks: LogicalDiskInfo[];
   printers: PrinterInfo[];
+  installed_software: { name: string; version: string; publisher: string; install_date: string }[];
+  user_profiles: { username: string; sid: string; local_path: string; loaded: boolean; last_use_time: string }[];
   customer_name: string;
 }
 

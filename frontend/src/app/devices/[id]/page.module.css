@@ -283,3 +283,49 @@
 }
 .noMetrics span { font-size: 32px; }
 .noMetrics p { margin: 0; line-height: 1.5; }
+
+/* ── Software & Profiles ── */
+.searchInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e4ec;
+  border-radius: 6px;
+  background: #f8f9fc;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.tableContainer {
+  overflow-x: auto;
+  margin: -14px -20px -20px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #23252e;
+}
+
+.table th {
+  background: #fafbfd;
+  color: #8b90a4;
+  font-weight: 600;
+  padding: 10px 20px;
+  text-align: left;
+  border-bottom: 1px solid #e2e4ec;
+  position: sticky;
+  top: 0;
+}
+
+.table td {
+  padding: 10px 20px;
+  border-bottom: 1px solid #f0f1f7;
+  word-break: break-word;
+}
+
+.table tbody tr:hover {
+  background: #f8f9fc;
+}
