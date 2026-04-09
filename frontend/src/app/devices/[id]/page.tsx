@@ -758,16 +758,32 @@ export default function DeviceDetailPage() {
               </div>
             )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => { setUpdateOpen(false); stopUpdatePolling(); setUpdateStatus(null); }}
-                style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
-                {updateStatus?.phase === 'acked' ? 'Close' : 'Cancel'}
-              </button>
-              <button
-                onClick={handleUpdateAgent}
-                disabled={updating || !!updateStatus}
-                style={{ background: '#f59e0b', border: 'none', borderRadius: 6, color: '#000', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (updating || !!updateStatus) ? 0.5 : 1 }}>
-                {updating ? 'Sending…' : '⬆️ Update Agent'}
-              </button>
+              {!(['updated', 'failed', 'timeout'].includes(updateStatus?.phase || '')) && (
+                <button onClick={() => { setUpdateOpen(false); stopUpdatePolling(); setUpdateStatus(null); }}
+                  style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                  Cancel
+                </button>
+              )}
+              {['failed', 'timeout'].includes(updateStatus?.phase || '') ? (
+                <button
+                  onClick={() => { setUpdateStatus(null); stopUpdatePolling(); handleUpdateAgent(); }}
+                  style={{ background: '#ef4444', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                  🔄 Retry
+                </button>
+              ) : updateStatus?.phase === 'updated' ? (
+                <button
+                  onClick={() => { setUpdateOpen(false); stopUpdatePolling(); setUpdateStatus(null); }}
+                  style={{ background: '#22c55e', border: 'none', borderRadius: 6, color: '#000', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                  OK
+                </button>
+              ) : (
+                <button
+                  onClick={handleUpdateAgent}
+                  disabled={updating || !!updateStatus}
+                  style={{ background: '#f59e0b', border: 'none', borderRadius: 6, color: '#000', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (updating || !!updateStatus) ? 0.5 : 1 }}>
+                  {updating ? 'Sending…' : '⬆️ Update Agent'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -818,16 +834,32 @@ export default function DeviceDetailPage() {
               </div>
             )}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => { setRestartOpen(false); stopRestartPolling(); setRestartStatus(null); }}
-                style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
-                {restartStatus?.phase === 'acked' ? 'Close' : 'Cancel'}
-              </button>
-              <button
-                onClick={handleRestartAgent}
-                disabled={restarting || !!restartStatus}
-                style={{ background: '#a78bfa', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (restarting || !!restartStatus) ? 0.5 : 1 }}>
-                {restarting ? 'Sending…' : '🔁 Restart Agent'}
-              </button>
+              {!(['acked', 'failed', 'timeout'].includes(restartStatus?.phase || '')) && (
+                <button onClick={() => { setRestartOpen(false); stopRestartPolling(); setRestartStatus(null); }}
+                  style={{ background: 'none', border: '1px solid #2a2d3a', borderRadius: 6, color: '#94a3b8', padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                  Cancel
+                </button>
+              )}
+              {['failed', 'timeout'].includes(restartStatus?.phase || '') ? (
+                <button
+                  onClick={() => { setRestartStatus(null); stopRestartPolling(); handleRestartAgent(); }}
+                  style={{ background: '#ef4444', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                  🔄 Retry
+                </button>
+              ) : restartStatus?.phase === 'acked' ? (
+                <button
+                  onClick={() => { setRestartOpen(false); stopRestartPolling(); setRestartStatus(null); }}
+                  style={{ background: '#22c55e', border: 'none', borderRadius: 6, color: '#000', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13 }}>
+                  OK
+                </button>
+              ) : (
+                <button
+                  onClick={handleRestartAgent}
+                  disabled={restarting || !!restartStatus}
+                  style={{ background: '#a78bfa', border: 'none', borderRadius: 6, color: '#fff', fontWeight: 600, padding: '7px 18px', cursor: 'pointer', fontSize: 13, opacity: (restarting || !!restartStatus) ? 0.5 : 1 }}>
+                  {restarting ? 'Sending…' : '🔁 Restart Agent'}
+                </button>
+              )}
             </div>
           </div>
         </div>
