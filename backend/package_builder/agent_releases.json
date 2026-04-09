@@ -1,7 +1,22 @@
 {
   "channel": "stable",
-  "generated_at": "2026-04-09T11:11:39Z",
+  "generated_at": "2026-04-09T13:34:36Z",
   "releases": [
+    {
+      "version": "1.7.5",
+      "tag": "agent-v1.7.5",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.7.5-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.7.5/nocko-agent-1.7.5-x64-portable.exe",
+          "sha256": "105043843bb25310db749b4579f249740ec94612a39bece5ed6f7438eadc0e1b",
+          "size_bytes": 13733550,
+          "notes": "Published by GitHub Actions Windows release workflow"
+        }
+      ]
+    },
     {
       "version": "1.8.0",
       "tag": "agent-v1.8.0",
