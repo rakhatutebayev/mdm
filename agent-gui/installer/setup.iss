@@ -1,5 +1,5 @@
 #define MyAppName "NOCKO MDM Agent"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.7.5"
 #define MyAppPublisher "NOCKO IT"
 #define MyAppExeName "NOCKO-Agent.exe"
 
