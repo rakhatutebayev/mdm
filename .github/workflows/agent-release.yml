@@ -112,9 +112,9 @@ jobs:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p ../${{ env.RELEASE_DIR }}
-          # Create a basic spec or just run pyinstaller directly
-          pyinstaller --onefile --name nocko-agent --clean main.py
-          mv dist/nocko-agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
+          pyinstaller agent.spec --noconfirm
+          # The name in the spec is 'NOCKO-Agent'
+          mv dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
 
       - name: Upload Linux Asset
         uses: actions/upload-artifact@v4

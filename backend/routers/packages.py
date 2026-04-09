@@ -317,3 +317,21 @@ async def bootstrap_install_linux_sh():
          raise HTTPException(status_code=404, detail="Installer script not found")
          
     return FileResponse(path, media_type="text/x-shellscript")
+@router.get("/latest/linux-binary", tags=["bootstrap"])
+async def get_latest_linux_binary():
+    """Return the raw Linux MDM agent binary for the latest release."""
+    _, artifact = find_artifact("linux-binary", "amd64")
+    if not artifact:
+        raise HTTPException(status_code=404, detail="No Linux binary artifact found in release catalog")
+    
+    url = str(artifact["url"])
+    sha256 = artifact.get("sha256")
+    
+    # Download or get from cache
+    data = _download_or_cache(url=url, sha256_expected=sha256, fmt="linux-binary")
+    
+    return Response(
+        content=data,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": 'attachment; filename="nocko-agent"'},
+    )

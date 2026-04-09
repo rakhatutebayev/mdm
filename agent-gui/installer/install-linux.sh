@@ -43,12 +43,7 @@ LOG_DIR="/var/log/nocko-agent"
 
 mkdir -p "$BIN_DIR" "$CFG_DIR" "$LOG_DIR"
 
-# Download the latest Linux built PyInstaller binary from the releases using the API and the token...
-# Wait! Instead of figuring out the exact release URL in bash, we should make the portal endpoint
-# serve the exact URL of the artifact to download... Oh wait, the enrollment script API can actually
-# download the latest Linux binary directly!
-
-DOWNLOAD_URL="${SERVER_URL}/api/v1/mdm/agent/download?format=exe&arch=amd64&platform=linux"
+DOWNLOAD_URL="${SERVER_URL}/api/v1/packages/latest/linux-binary"
 
 echo "Downloading agent binary from $DOWNLOAD_URL..."
 curl -sSL "$DOWNLOAD_URL" -o "$BIN_DIR/nocko-agent" || { echo "Failed to download agent."; exit 1; }

@@ -11,17 +11,30 @@ a = Analysis(
     pathex=[str(root)],
     binaries=[],
     datas=[],
-    hiddenimports=[
+import sys
+
+hidden_imports = [
+    "paho.mqtt.client",
+    "paho.mqtt.properties",
+    "paho.mqtt.packettypes",
+]
+
+if sys.platform == "win32":
+    hidden_imports += [
         "win32timezone",
         "servicemanager",
         "win32service",
         "win32serviceutil",
         "win32event",
         "pywintypes",
-        "paho.mqtt.client",
-        "paho.mqtt.properties",
-        "paho.mqtt.packettypes",
-    ],
+    ]
+
+a = Analysis(
+    ["main.py"],
+    pathex=[str(root)],
+    binaries=[],
+    datas=[],
+    hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
