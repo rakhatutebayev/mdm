@@ -59,6 +59,8 @@ class Device(Base):
     logical_disks: Mapped[list["LogicalDisk"]] = relationship(back_populates="device", cascade="all, delete-orphan")
     metrics: Mapped[list["DeviceMetrics"]] = relationship(back_populates="device", cascade="all, delete-orphan", order_by="DeviceMetrics.recorded_at.desc()")
     printers: Mapped[list["PrinterInfo"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    installed_software: Mapped[list["InstalledSoftware"]] = relationship(back_populates="device", cascade="all, delete-orphan")
+    user_profiles: Mapped[list["UserProfile"]] = relationship(back_populates="device", cascade="all, delete-orphan")
 
 
 class NetworkInfo(Base):
@@ -422,3 +424,29 @@ class DeviceCommand(Base):
     acked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     device: Mapped["Device"] = relationship()
+
+class InstalledSoftware(Base):
+    __tablename__ = "installed_software"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[str] = mapped_column(String(100), default="")
+    publisher: Mapped[str] = mapped_column(String(255), default="")
+    install_date: Mapped[str] = mapped_column(String(50), default="")
+
+    device: Mapped["Device"] = relationship(back_populates="installed_software")
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"))
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    sid: Mapped[str] = mapped_column(String(255), default="")
+    local_path: Mapped[str] = mapped_column(String(500), default="")
+    loaded: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_use_time: Mapped[str] = mapped_column(String(100), default="")
+
+    device: Mapped["Device"] = relationship(back_populates="user_profiles")

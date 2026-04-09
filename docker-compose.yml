@@ -24,6 +24,9 @@ services:
       MDM_SERVER_URL: ${MDM_SERVER_URL:-https://mdm.nocko.com}
       MQTT_HOST: ${MQTT_HOST:-localhost}
       MQTT_PORT: ${MQTT_PORT:-1883}
+      # URL returned to proxy agents (outside Docker): WSS /mqtt on 443 unless overridden
+      MQTT_PUBLIC_TRANSPORT: ${MQTT_PUBLIC_TRANSPORT:-websockets}
+      MQTT_PATH: ${MQTT_PATH:-/mqtt}
     depends_on:
       postgres:
         condition: service_healthy

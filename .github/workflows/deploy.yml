@@ -28,6 +28,12 @@ jobs:
             cd /opt/nocko-mdm
             git pull origin main || git pull origin master
 
+            echo "==> proxy-agent → on-prem (по умолчанию 192.168.11.153; отключить: PROXY_AGENT_TARGET_HOST=disable в .env)..."
+            set -a
+            [ -f /opt/nocko-mdm/.env ] && . /opt/nocko-mdm/.env || true
+            set +a
+            bash /opt/nocko-mdm/scripts/deploy-proxy-agent-from-portal-host.sh || echo "WARN: proxy-agent deploy failed (SSH/sudo до агента или PROXY_AGENT_TARGET_HOST=disable)"
+
             echo "==> Refreshing Docker builder cache..."
             docker builder prune -af || true
 

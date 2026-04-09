@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 import uuid
 from typing import Any, Optional
@@ -34,9 +35,20 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from database import get_db
 from package_builder.release_catalog import find_linux_proxy_bundle
 from agent_models import (
-    Agent, AgentDevice, Item, Template, DeviceTemplate, Profile,
-    DeviceInventory, Event, Alert, AgentAuditLog, AgentCommand, AgentCommandResult,
-    LastValue, HISTORY_TABLE_MAP,
+    Agent,
+    AgentDevice,
+    Item,
+    Template,
+    DeviceTemplate,
+    Profile,
+    DeviceInventory,
+    Event,
+    Alert,
+    AgentAuditLog,
+    AgentCommand,
+    AgentCommandResult,
+    LastValue,
+    HISTORY_TABLE_MAP,
 )
 
 router = APIRouter(prefix="/api/v1/agent", tags=["Agent API"])
@@ -63,8 +75,12 @@ def _mqtt_broker_url_for_agents() -> str:
     transport = (
         os.getenv("MQTT_PUBLIC_TRANSPORT", "").strip()
         or os.getenv("MQTT_TRANSPORT", "").strip()
-        or "tcp"
+        or ""
     ).lower()
+    if not transport:
+        # Site agents cannot reach in-cluster :1883; public MDM host → WSS :443
+        _local = frozenset({"localhost", "127.0.0.1", "::1", "emqx"})
+        transport = "tcp" if host in _local else "websockets"
 
     # MQTT over WebSocket Secure — typically nginx :443 → broker (see nginx/mdm-mqtt.conf)
     if transport in ("websockets", "websocket", "wss", "ws"):
@@ -282,10 +298,42 @@ async def unregister_agent(
 # ──────────────────────────────────────────────────────────────────────────────
 # GET /api/v1/agent/config
 # ──────────────────────────────────────────────────────────────────────────────
+def _profile_slug_for_agent(name: str) -> str:
+    """Match proxy-agent zabbix_import._slug_profile_id (template name → local profile_id)."""
+    return re.sub(r"[^a-z0-9_]", "_", (name or "").lower().strip()) or "profile"
+
+
 @router.get("/config")
-async def get_agent_config(agent: Agent = Depends(_get_agent)):
+async def get_agent_config(
+    agent: Agent = Depends(_get_agent),
+    db: AsyncSession = Depends(get_db),
+):
     """Return server-managed configuration for this agent."""
     import os
+
+    result = await db.execute(
+        select(AgentDevice, Profile)
+        .outerjoin(Profile, AgentDevice.profile_id == Profile.id)
+        .where(
+            AgentDevice.device_owner_agent_id == agent.id,
+            AgentDevice.tenant_id == agent.tenant_id,
+        )
+    )
+    device_assignments: list[dict[str, Any]] = []
+    for dev, prof in result.all():
+        device_assignments.append(
+            {
+                "device_uid": dev.device_uid,
+                "ip": dev.ip or "",
+                "profile_slug": _profile_slug_for_agent(prof.name) if prof else "",
+                "profile_id": dev.profile_id,
+                "name": dev.name or dev.device_uid,
+                "snmp_version": os.getenv("AGENT_DEVICE_DEFAULT_SNMP_VERSION", "2c"),
+                "snmp_community": os.getenv("AGENT_DEVICE_DEFAULT_SNMP_COMMUNITY", "public"),
+                "status": "active",
+            }
+        )
+
     return {
         "agent_id": agent.id,
         "tenant_id": agent.tenant_id,
@@ -296,6 +344,7 @@ async def get_agent_config(agent: Agent = Depends(_get_agent)):
         "inventory_interval": int(os.getenv("AGENT_INVENTORY_INTERVAL", 86400)),
         "broker_url": _mqtt_broker_url_for_agents(),
         "broker_port": int(os.getenv("MQTT_BROKER_PORT", 8883)),
+        "device_assignments": device_assignments,
     }
 
 

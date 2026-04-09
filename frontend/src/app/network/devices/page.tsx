@@ -19,6 +19,8 @@ interface DeviceRow {
   active_alerts: number;
   profile_id: number | null;
   owner_agent_id: number | null;
+  /** https://{agent_ip}:8443/devices/{uid}/latest.json — локальная консоль proxy-agent */
+  console_latest_json_url?: string | null;
 }
 
 const HEALTH_COLOR: Record<string, string> = {
@@ -145,6 +147,7 @@ export default function NetworkDevicesPage() {
                 <th>Health</th>
                 <th>Alerts</th>
                 <th>Last Seen</th>
+                <th>JSON</th>
                 <th></th>
               </tr>
             </thead>
@@ -177,6 +180,21 @@ export default function NetworkDevicesPage() {
                   <td>
                     <span className={`${styles.dot} ${d.online ? styles.dotOnline : styles.dotOffline}`} />
                     <span className={styles.muted}> {timeAgo(d.last_seen)}</span>
+                  </td>
+                  <td>
+                    {d.console_latest_json_url ? (
+                      <a
+                        href={d.console_latest_json_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.jsonLink}
+                        title="Последние данные с proxy-agent (локальная консоль, self-signed TLS)"
+                      >
+                        Открыть ↗
+                      </a>
+                    ) : (
+                      <span className={styles.muted}>—</span>
+                    )}
                   </td>
                   <td>
                     <Link href={`/network/devices/${d.id}`} className={styles.actionBtn}>View →</Link>

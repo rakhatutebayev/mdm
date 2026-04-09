@@ -21,6 +21,8 @@ interface DeviceDetail {
   active_alerts: number;
   profile_id: number | null;
   owner_agent_id: number | null;
+  owner: string;
+  console_latest_json_url?: string | null;
   inventory: {
     vendor: string; model: string; serial: string;
     cpu_model: string; ram_gb: number | null;
@@ -29,6 +31,8 @@ interface DeviceDetail {
   } | null;
   last_values: { key: string; name: string; value: string; value_type: string; clock: number }[];
   alerts: { id: number; severity: string; message: string; source: string; opened_at: number }[];
+  installed_software: { name: string; version: string; publisher: string; install_date: string }[];
+  user_profiles: { username: string; sid: string; local_path: string; loaded: boolean; last_use_time: string }[];
 }
 
 interface HistoryPoint { clock: number; value: number }
@@ -74,7 +78,8 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
   const [history, setHistory] = useState<Record<string, HistoryPoint[]>>({});
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'metrics' | 'inventory' | 'alerts' | 'events' | 'templates'>('metrics');
+  const [tab, setTab] = useState<'metrics' | 'inventory' | 'software' | 'alerts' | 'events' | 'templates'>('metrics');
+  const [softSearch, setSoftSearch] = useState('');
 
   const fetchDevice = useCallback(async () => {
     const r = await fetch(`/api/agent/devices/${params.id}`);
@@ -139,6 +144,7 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
             <span className={styles.metaItem}>🌐 {device.ip || '—'}</span>
             <span className={styles.metaItem}>🔑 {device.device_uid}</span>
             {device.serial && <span className={styles.metaItem}>S/N: {device.serial}</span>}
+            {device.owner && <span className={styles.metaItem}>👤 {device.owner}</span>}
             {device.location && <span className={styles.metaItem}>📍 {device.location}</span>}
           </div>
         </div>
@@ -153,16 +159,28 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
             <div className={styles.alertPill}>{device.active_alerts} alert{device.active_alerts > 1 ? 's' : ''}</div>
           )}
           <div className={styles.lastSeen}>Last seen: {timeAgo(device.last_seen)}</div>
+          {device.console_latest_json_url && (
+            <a
+              href={device.console_latest_json_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.agentJsonLink}
+              title="Локальная консоль агента (HTTPS, свой сертификат)"
+            >
+              Agent latest JSON ↗
+            </a>
+          )}
         </div>
       </div>
 
       {/* Tabs */}
       <div className={styles.tabs}>
-        {(['metrics', 'inventory', 'alerts', 'events', 'templates'] as const).map(t => (
+        {(['metrics', 'inventory', 'software', 'alerts', 'events', 'templates'] as const).map(t => (
           <button key={t} className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
             onClick={() => setTab(t)}>
             {t === 'alerts' && device.active_alerts > 0
               ? `Alerts (${device.active_alerts})`
+              : t === 'software' ? `Software (${device.installed_software?.length || 0})`
               : t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
@@ -227,26 +245,85 @@ export default function DeviceDetailPage({ params }: { params: { id: string } })
 
       {/* INVENTORY TAB */}
       {tab === 'inventory' && (
-        <div className={styles.inventoryGrid}>
-          {!device.inventory ? (
-            <div className={styles.emptyState}>No inventory data collected yet.</div>
-          ) : (
-            [
-              { label: 'Vendor', value: device.inventory.vendor },
-              { label: 'Model', value: device.inventory.model },
-              { label: 'Serial Number', value: device.inventory.serial },
-              { label: 'CPU Model', value: device.inventory.cpu_model },
-              { label: 'RAM', value: device.inventory.ram_gb != null ? `${device.inventory.ram_gb} GB` : '—' },
-              { label: 'Disks', value: device.inventory.disk_count != null ? String(device.inventory.disk_count) : '—' },
-              { label: 'Firmware', value: device.inventory.firmware_version },
-              { label: 'Last Updated', value: device.inventory.updated_at },
-            ].map(row => (
-              <div key={row.label} className={styles.invRow}>
-                <span className={styles.invLabel}>{row.label}</span>
-                <span className={styles.invValue}>{row.value || '—'}</span>
-              </div>
-            ))
-          )}
+        <div className={styles.inventoryContainer}>
+          <div className={styles.inventoryGrid}>
+            {!device.inventory ? (
+              <div className={styles.emptyState}>No inventory data collected yet.</div>
+            ) : (
+              [
+                { label: 'Vendor', value: device.inventory.vendor },
+                { label: 'Model', value: device.inventory.model },
+                { label: 'Serial Number', value: device.inventory.serial },
+                { label: 'CPU Model', value: device.inventory.cpu_model },
+                { label: 'RAM', value: device.inventory.ram_gb != null ? `${device.inventory.ram_gb} GB` : '—' },
+                { label: 'Disks', value: device.inventory.disk_count != null ? String(device.inventory.disk_count) : '—' },
+                { label: 'Firmware', value: device.inventory.firmware_version },
+                { label: 'Last Updated', value: device.inventory.updated_at },
+              ].map(row => (
+                <div key={row.label} className={styles.invRow}>
+                  <span className={styles.invLabel}>{row.label}</span>
+                  <span className={styles.invValue}>{row.value || '—'}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className={styles.subSectionTitle}>User Profiles ({device.user_profiles?.length || 0})</div>
+          <div className={styles.profilesGrid}>
+            {device.user_profiles?.length === 0 ? (
+              <div className={styles.emptyState}>No user profiles found.</div>
+            ) : (
+              device.user_profiles?.map(p => (
+                <div key={p.sid} className={styles.profileCard}>
+                  <div className={styles.profileUser}>👤 {p.username}</div>
+                  <div className={styles.profilePath}>{p.local_path}</div>
+                  <div className={styles.profileMeta}>
+                    <span>SID: {p.sid}</span>
+                    {p.loaded && <span className={styles.loadedBadge}>Active</span>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SOFTWARE TAB */}
+      {tab === 'software' && (
+        <div className={styles.softwareLayout}>
+          <div className={styles.softwareFilter}>
+            <input 
+              type="text" 
+              placeholder="Search software..." 
+              value={softSearch}
+              onChange={e => setSoftSearch(e.target.value)}
+              className={styles.softwareSearch}
+            />
+          </div>
+          <div className={styles.softwareTableWrapper}>
+            <table className={styles.softwareTable}>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Version</th>
+                  <th>Publisher</th>
+                  <th>Install Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(device.installed_software || [])
+                  .filter(s => s.name.toLowerCase().includes(softSearch.toLowerCase()) || s.publisher.toLowerCase().includes(softSearch.toLowerCase()))
+                  .map((s, idx) => (
+                    <tr key={idx}>
+                      <td>{s.name}</td>
+                      <td>{s.version}</td>
+                      <td>{s.publisher}</td>
+                      <td>{s.install_date}</td>
+                    </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

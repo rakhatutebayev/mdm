@@ -10,7 +10,7 @@ Routes:
     PATCH /api/v1/portal/agents/{id}/status     ← change admin_status
 
   Devices:
-    GET  /api/v1/portal/devices                 ← list devices (with computed health_status)
+    GET  /api/v1/portal/devices                 ← list devices (with computed health_status; console_latest_json_url)
     GET  /api/v1/portal/devices/{id}            ← device detail + last_values + inventory
     GET  /api/v1/portal/devices/{id}/history    ← history_* values for an item
     GET  /api/v1/portal/devices/{id}/alerts     ← active and recent alerts
@@ -32,6 +32,8 @@ Auth: JWT / session from existing portal auth (placeholder: customer_id from hea
 from __future__ import annotations
 
 import json
+import os
+import re
 import time
 import uuid
 from typing import Optional
@@ -53,6 +55,23 @@ router = APIRouter(prefix="/api/v1/portal", tags=["Portal Agent API"])
 
 _ONLINE_THRESHOLD_AGENT = 180    # 3 min
 _ONLINE_THRESHOLD_DEVICE = 300   # 5 min
+
+
+def _console_latest_json_url(agent: Agent | None, device_uid: str) -> str | None:
+    """
+    Прямая ссылка на GET /devices/{uid}/latest.json локальной консоли proxy-agent.
+    Порт по умолчанию 8443; переопределение: env NOCKO_AGENT_CONSOLE_PORT.
+    """
+    if agent is None:
+        return None
+    ip = (agent.ip or "").strip()
+    if not ip:
+        return None
+    uid = (device_uid or "").strip()
+    if not uid or not re.match(r"^[a-zA-Z0-9_.-]+$", uid):
+        return None
+    port = (os.environ.get("NOCKO_AGENT_CONSOLE_PORT") or "8443").strip()
+    return f"https://{ip}:{port}/devices/{uid}/latest.json"
 
 
 # ─── Simple tenant resolver (MVP: use X-Tenant-Id header) ──────────────────
@@ -207,11 +226,20 @@ async def list_devices(
     )
     devices = result.scalars().all()
     now = int(time.time())
+    agent_ids = {d.device_owner_agent_id for d in devices if d.device_owner_agent_id}
+    agents_map: dict[int, Agent] = {}
+    if agent_ids:
+        ar = await db.execute(select(Agent).where(Agent.id.in_(agent_ids)))
+        for a in ar.scalars().all():
+            agents_map[a.id] = a
     out = []
     for dev in devices:
         # Compute health_status from active alerts
         health = await _compute_health(dev.id, db)
         active_count = await _active_alert_count(dev.id, db)
+        owner = agents_map.get(dev.device_owner_agent_id) if dev.device_owner_agent_id else None
+        if owner is not None and owner.tenant_id != tenant_id:
+            owner = None
         out.append({
             "id": dev.id,
             "device_uid": dev.device_uid,
@@ -229,6 +257,7 @@ async def list_devices(
             "active_alerts": active_count,
             "profile_id": dev.profile_id,
             "owner_agent_id": dev.device_owner_agent_id,
+            "console_latest_json_url": _console_latest_json_url(owner, dev.device_uid),
         })
     return out
 
@@ -276,6 +305,12 @@ async def get_device(
     health = await _compute_health(device_id, db)
     active_count = len(active_alerts)
 
+    owner: Agent | None = None
+    if dev.device_owner_agent_id:
+        o = await db.get(Agent, dev.device_owner_agent_id)
+        if o is not None and o.tenant_id == tenant_id:
+            owner = o
+
     return {
         "id": dev.id,
         "device_uid": dev.device_uid,
@@ -293,6 +328,7 @@ async def get_device(
         "active_alerts": active_count,
         "profile_id": dev.profile_id,
         "owner_agent_id": dev.device_owner_agent_id,
+        "console_latest_json_url": _console_latest_json_url(owner, dev.device_uid),
         "inventory": inv_data,
         "last_values": last_values,
         "alerts": active_alerts,

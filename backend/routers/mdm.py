@@ -30,6 +30,8 @@ from models import (
     NetworkInfo,
     PhysicalDisk,
     PrinterInfo,
+    InstalledSoftware,
+    UserProfile,
 )
 from package_builder.release_catalog import find_artifact
 
@@ -117,6 +119,21 @@ class LogicalDiskPayload(BaseModel):
     used_gb: Optional[float] = None
 
 
+class SoftwarePayload(BaseModel):
+    name: str
+    version: str = ""
+    publisher: str = ""
+    install_date: str = ""
+
+
+class UserProfilePayload(BaseModel):
+    username: str
+    sid: str = ""
+    local_path: str = ""
+    loaded: bool = False
+    last_use_time: str = ""
+
+
 class EnrollPayload(BaseModel):
     """Payload the Windows PS1 agent sends on first run."""
     customer_id: str
@@ -140,6 +157,8 @@ class EnrollPayload(BaseModel):
     physical_disks: Optional[list[PhysicalDiskPayload]] = None
     logical_disks: Optional[list[LogicalDiskPayload]] = None
     printers: Optional[list[PrinterPayload]] = None
+    installed_software: Optional[list[SoftwarePayload]] = None
+    user_profiles: Optional[list[UserProfilePayload]] = None
 
 
 class CheckinPayload(BaseModel):
@@ -183,6 +202,8 @@ class InventoryPayload(BaseModel):
     physical_disks: Optional[list[PhysicalDiskPayload]] = None
     logical_disks: Optional[list[LogicalDiskPayload]] = None
     printers: Optional[list[PrinterPayload]] = None
+    installed_software: Optional[list[SoftwarePayload]] = None
+    user_profiles: Optional[list[UserProfilePayload]] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -399,6 +420,31 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
                 job_count=p.job_count,
                 connection_type=p.connection_type,
                 status=p.status,
+            ))
+
+    if body.installed_software is not None:
+        for existing in list(device.installed_software):
+            await db.delete(existing)
+        for s in body.installed_software:
+            db.add(InstalledSoftware(
+                device_id=device.id,
+                name=s.name,
+                version=s.version,
+                publisher=s.publisher,
+                install_date=s.install_date,
+            ))
+
+    if body.user_profiles is not None:
+        for existing in list(device.user_profiles):
+            await db.delete(existing)
+        for p in body.user_profiles:
+            db.add(UserProfile(
+                device_id=device.id,
+                username=p.username,
+                sid=p.sid,
+                local_path=p.local_path,
+                loaded=p.loaded,
+                last_use_time=p.last_use_time,
             ))
 
 

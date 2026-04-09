@@ -29,6 +29,11 @@
 .health_info { background: #1e3a8a40; color: #60a5fa; border: 1px solid #60a5fa40; }
 .alertPill { background: #450a0a; color: #ef4444; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 10px; }
 .lastSeen { font-size: 12px; color: #8b90a4; }
+.agentJsonLink {
+  font-size: 12px; font-weight: 600; color: #38bdf8; text-decoration: none;
+  padding: 6px 12px; border-radius: 8px; border: 1px solid #38bdf840; margin-top: 4px;
+}
+.agentJsonLink:hover { background: #38bdf818; }
 
 /* Tabs */
 .tabs { display: flex; gap: 4px; margin-bottom: 20px; background: #13151e; border-radius: 10px; padding: 4px; width: fit-content; }
@@ -103,3 +108,29 @@
 .assignBtn:hover { background: #4f6cf7; }
 .assignBtn:disabled { opacity: 0.5; cursor: default; }
 .assignMsg { margin-top: 12px; font-size: 13px; color: #22c55e; }
+
+/* Software tab */
+.softwareLayout { display: flex; flex-direction: column; gap: 16px; }
+.softwareFilter { margin-bottom: 12px; }
+.softwareSearch { 
+  width: 100%; max-width: 400px; padding: 10px 16px; 
+  background: #1a1c25; border: 1px solid #2d3048; border-radius: 8px; 
+  color: #f0f2f8; outline: none; font-size: 14px;
+}
+.softwareSearch:focus { border-color: #7b8cff; }
+
+.softwareTableWrapper { background: #1a1c25; border: 1px solid #2d3048; border-radius: 12px; overflow: hidden; }
+.softwareTable { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.softwareTable th { background: #161821; padding: 12px 16px; color: #8b90a4; font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.softwareTable td { padding: 12px 16px; border-bottom: 1px solid #1e2030; color: #c8cce0; }
+.softwareTable tr:last-child td { border-bottom: none; }
+.softwareTable tr:hover td { background: #1e2030; }
+
+/* In Inventory - User Profiles */
+.subSectionTitle { margin-top: 24px; margin-bottom: 12px; font-size: 16px; font-weight: 700; color: #f0f2f8; }
+.profilesGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.profileCard { background: #1a1c25; border: 1px solid #2d3048; border-radius: 12px; padding: 16px; }
+.profileUser { font-weight: 700; color: #7b8cff; margin-bottom: 4px; }
+.profilePath { font-size: 12px; color: #8b90a4; margin-bottom: 8px; word-break: break-all; }
+.profileMeta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #64748b; }
+.loadedBadge { background: #14532d; color: #22c55e; padding: 2px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; font-size: 10px; }

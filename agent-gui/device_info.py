@@ -579,6 +579,7 @@ def _collect_windows_inventory() -> dict[str, Any]:
 
 def _identity_payload(config) -> dict[str, Any]:
     windows_inventory = _collect_windows_inventory()
+    interactive_user = _get_interactive_username()
     return {
         "device_name": socket.gethostname(),
         "platform": "Windows" if os.name == "nt" else platform.system(),
@@ -589,7 +590,8 @@ def _identity_payload(config) -> dict[str, Any]:
         "udid": hex(uuid.getnode())[2:].upper(),
         "os_version": _get_os_version(),
         "architecture": platform.machine(),
-        "owner": os.getenv("USERNAME", ""),
+        "owner": interactive_user,
+        "real_username": interactive_user,
         "enrollment_method": "WindowsService",
         "agent_version": config.agent_version,
         "hardware_inventory": windows_inventory.get("hardware_inventory"),
@@ -597,6 +599,7 @@ def _identity_payload(config) -> dict[str, Any]:
         "logical_disks": windows_inventory.get("logical_disks", []),
         "monitors": _collect_monitors(),
         "printers": _collect_printers(),
+        "user_profiles": _collect_user_profiles(),
     }
 
 
@@ -936,6 +939,133 @@ def _collect_printers() -> list[dict]:
         return sorted(printers.values(), key=lambda p: p["name"].casefold())
 
 
+def _get_interactive_username() -> str:
+    """Return the currently logged-in interactive user or fallback to environment."""
+    if os.name != "nt":
+        return os.getenv("USER", "")
+
+    try:
+        if wmi:
+            import pythoncom
+            pythoncom.CoInitialize()
+            try:
+                c = wmi.WMI()
+                comps = c.Win32_ComputerSystem()
+                if comps and comps[0].UserName:
+                    return str(comps[0].UserName).split("\\")[-1]
+            finally:
+                pythoncom.CoUninitialize()
+    except Exception:
+        pass
+    return os.getenv("USERNAME", "")
+
+
+def _collect_installed_software() -> list[dict[str, str]]:
+    """Scan Registry Uninstall keys for installed software list."""
+    if os.name != "nt":
+        return []
+
+    software: list[dict[str, str]] = []
+    import winreg
+    paths = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+    ]
+
+    for path in paths:
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as root:
+                for i in range(winreg.QueryInfoKey(root)[0]):
+                    try:
+                        subkey_name = winreg.EnumKey(root, i)
+                        with winreg.OpenKey(root, subkey_name) as subkey:
+                            try:
+                                name_val = None
+                                version_val = ""
+                                publisher_val = ""
+                                date_val = ""
+
+                                try:
+                                    name_val, _ = winreg.QueryValueEx(subkey, "DisplayName")
+                                except OSError:
+                                    continue
+
+                                if not name_val:
+                                    continue
+
+                                try:
+                                    version_val, _ = winreg.QueryValueEx(subkey, "DisplayVersion")
+                                except OSError:
+                                    pass
+                                try:
+                                    publisher_val, _ = winreg.QueryValueEx(subkey, "Publisher")
+                                except OSError:
+                                    pass
+                                try:
+                                    date_val, _ = winreg.QueryValueEx(subkey, "InstallDate")
+                                except OSError:
+                                    pass
+
+                                software.append({
+                                    "name": str(name_val),
+                                    "version": str(version_val or ""),
+                                    "publisher": str(publisher_val or ""),
+                                    "install_date": str(date_val or ""),
+                                })
+                            except OSError:
+                                continue
+                    except OSError:
+                        break
+        except OSError:
+            continue
+
+    # Sort and remove duplicates (some apps appear in both 32/64 bit sections)
+    seen: set[tuple[str, str]] = set()
+    unique_software: list[dict[str, str]] = []
+    for s in sorted(software, key=lambda x: x["name"].casefold()):
+        key = (s["name"].casefold(), s["version"].casefold())
+        if key not in seen:
+            seen.add(key)
+            unique_software.append(s)
+
+    return unique_software
+
+
+def _collect_user_profiles() -> list[dict[str, Any]]:
+    """Collect user profiles using WMI Win32_UserProfile."""
+    if os.name != "nt":
+        return []
+
+    profiles: list[dict[str, Any]] = []
+    try:
+        if wmi:
+            import pythoncom
+            pythoncom.CoInitialize()
+            try:
+                c = wmi.WMI()
+                for p in c.Win32_UserProfile():
+                    path = str(getattr(p, "LocalPath", ""))
+                    if not path:
+                        continue
+                    # Skip system profiles like LocalService, NetworkService
+                    lower_path = path.lower()
+                    if any(x in lower_path for x in ("local service", "network service", "systemprofile")):
+                        continue
+
+                    profiles.append({
+                        "sid": str(getattr(p, "SID", "")),
+                        "local_path": path,
+                        "loaded": bool(getattr(p, "Loaded", False)),
+                        "last_use_time": str(getattr(p, "LastUseTime", "")),
+                        "username": path.split("\\")[-1]
+                    })
+            finally:
+                pythoncom.CoUninitialize()
+    except Exception:
+        pass
+    return profiles
+
+
 def collect_enrollment_payload(config) -> dict[str, Any]:
     return {
         "customer_id": config.customer_id,
@@ -976,10 +1106,12 @@ def collect_metrics_payload(config) -> dict[str, Any]:
 
 
 def collect_inventory_payload(config) -> dict[str, Any]:
-    return {
+    payload = {
         "device_id": config.device_id,
         **_identity_payload(config),
         **_network_payload(),
         "monitors": _collect_monitors(),
         "printers": _collect_printers(),
+        "installed_software": _collect_installed_software(),
     }
+    return payload

@@ -99,6 +99,23 @@ class PrinterInfoOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class InstalledSoftwareOut(BaseModel):
+    name: str
+    version: str
+    publisher: str
+    install_date: str
+    model_config = {"from_attributes": True}
+
+
+class UserProfileOut(BaseModel):
+    username: str
+    sid: str
+    local_path: str
+    loaded: bool
+    last_use_time: str
+    model_config = {"from_attributes": True}
+
+
 class PrinterCreateIn(BaseModel):
     name: str = ""
     driver_name: str = ""
@@ -238,6 +255,8 @@ class DeviceDetailOut(BaseModel):
     physical_disks: list[PhysicalDiskOut]
     logical_disks: list[LogicalDiskOut]
     printers: list[PrinterInfoOut] = []
+    installed_software: list[InstalledSoftwareOut] = []
+    user_profiles: list[UserProfileOut] = []
     customer_name: str
     model_config = {"from_attributes": True}
 
