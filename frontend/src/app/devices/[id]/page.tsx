@@ -1025,30 +1025,6 @@ export default function DeviceDetailPage() {
                 <div className={styles.uptimeValue}>{formatUptime(metrics?.uptime_seconds ?? null)}</div>
               </div>
             </div>
-            {metrics.logical_disks.length > 0 && (
-              <div className={styles.card} style={{ marginTop: 16 }}>
-                <div className={styles.cardHeader}>
-                  <span className={styles.cardIcon}>💾</span>
-                  <h2 className={styles.cardTitle}>Disk Telemetry</h2>
-                </div>
-                <dl className={styles.dl}>
-                  {metrics.logical_disks.flatMap((disk) => ([
-                    <div key={`${disk.name}-used`} className={styles.dlRow}>
-                      <dt className={styles.dt}>{disk.name} Used</dt>
-                      <dd className={styles.dd}>{formatStorage(disk.used_gb)}</dd>
-                    </div>,
-                    <div key={`${disk.name}-free`} className={styles.dlRow}>
-                      <dt className={styles.dt}>{disk.name} Free</dt>
-                      <dd className={styles.dd}>{formatStorage(disk.free_gb)}</dd>
-                    </div>,
-                    <div key={`${disk.name}-total`} className={styles.dlRow}>
-                      <dt className={styles.dt}>{disk.name} Total</dt>
-                      <dd className={styles.dd}>{formatStorage(disk.size_gb)}</dd>
-                    </div>,
-                  ]))}
-                </dl>
-              </div>
-            )}
           </>
         ) : (
           <div className={styles.noMetrics}>
