@@ -435,7 +435,7 @@ export default function DeviceDetailPage() {
         }
         const r = await fetch(`/api/mdm/mdm/windows/portal/commands/${command_id}`);
         const d = await r.json();
-        if (d.status === 'acked' || d.status === 'failed') {
+        if (d.status === 'acked' || d.status === 'completed' || d.status === 'failed') {
           setTermHistory(h => [...h, { cmd, output: d.result || '(no output)', status: d.status, ts }]);
           setTermRunning(false);
         } else {
