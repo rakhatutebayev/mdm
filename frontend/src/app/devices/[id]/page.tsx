@@ -1062,7 +1062,7 @@ export default function DeviceDetailPage() {
           <button
             key={t.id}
             className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ''}`}
-            onClick={() => setActiveTab(t.id)}
+            onClick={() => setActiveTab(t.id as typeof activeTab)}
           >
             <span>{t.icon}</span>
             {t.label}
