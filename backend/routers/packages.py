@@ -338,21 +338,18 @@ async def download_package(
     return await generate_package(body, db)
 
 
-@router.get("/install-linux.sh", tags=["bootstrap"])
+@download_router.get("/install-linux.sh", tags=["bootstrap"])
 async def bootstrap_install_linux_sh():
     """Return the bash-based Linux MDM agent installer."""
     import os
-    # Path inside the Docker container (see Dockerfile COPY in backend/Dockerfile)
     path = "/app/agent_bootstrap/install-linux.sh"
     if not os.path.exists(path):
-        # Fallback for development (assuming run from NOCKO MDM/backend)
         path = "../agent-gui/installer/install-linux.sh"
-    
     if not os.path.exists(path):
-         raise HTTPException(status_code=404, detail="Installer script not found")
-         
+        raise HTTPException(status_code=404, detail="Installer script not found")
     return FileResponse(path, media_type="text/x-shellscript")
-@router.get("/latest/linux-binary", tags=["bootstrap"])
+
+@download_router.get("/latest/linux-binary", tags=["bootstrap"])
 async def get_latest_linux_binary():
     """Return the raw Linux MDM agent binary for the latest release."""
     _, artifact = find_artifact("linux-binary", "amd64")
