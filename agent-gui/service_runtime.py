@@ -192,43 +192,58 @@ rm -rf "$TEMP_DIR"
         # Running as SYSTEM so no UAC or ShellExecute needed.
         ps_script = f"""
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+$logFile = [System.IO.Path]::Combine($env:TEMP, 'nocko-update.log')
 $tempExe = [System.IO.Path]::GetTempFileName() + '.exe'
 $configPath = '{_ps_single_quote(str(AgentConfig.config_path()))}'
 $uninstallRegPath = 'HKLM:\\{_ps_single_quote(UNINSTALL_REGISTRY_KEY)}'
 $commandId = '{_ps_single_quote(command_id)}'
 $ackUrl = '{_ps_single_quote(config.server_url.rstrip("/") + "/api/v1/mdm/windows/commands/ack")}'
+$downloadUrl = '{_ps_single_quote(download_url)}'
+$targetVersion = '{_ps_single_quote(str(target_version))}'
+
+function Write-Log([string]$msg) {{
+    $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    "$ts  $msg" | Out-File -FilePath $logFile -Append -Encoding UTF8
+}}
 
 function Send-Ack([string]$status, [string]$result) {{
-    if (-not $commandId -or -not $ackUrl) {{
-        return
-    }}
+    Write-Log "Send-Ack: status=$status result=$result"
+    if (-not $commandId -or -not $ackUrl) {{ return }}
     try {{
         $body = @{{
             command_id = $commandId
             status = $status
             result = $result
         }} | ConvertTo-Json -Compress
-        Invoke-RestMethod -Uri $ackUrl -Method Post -ContentType 'application/json' -Body $body | Out-Null
+        Invoke-RestMethod -Uri $ackUrl -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 30 | Out-Null
     }} catch {{
-        # Best effort only. If ack delivery fails, the command will be retried.
+        Write-Log "Send-Ack HTTP error: $($_.Exception.Message)"
     }}
 }}
 
 try {{
-    # Download new agent
-    $wc = New-Object System.Net.WebClient
-    $wc.Headers.Add('User-Agent', 'NOCKO-Agent/{_ps_single_quote(target_version)}-updater')
+    Write-Log "=== NOCKO Agent update to v$targetVersion ==="
+    Write-Log "Download URL: $downloadUrl"
+
+    # Download with explicit timeout (120s). Invoke-WebRequest follows GitHub redirects
+    # reliably in SYSTEM context; WebClient can hang on CDN redirects without a timeout.
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $wc.DownloadFile('{_ps_single_quote(download_url)}', $tempExe)
+    Write-Log "Downloading..."
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $tempExe -UseBasicParsing `
+        -Headers @{{'User-Agent'='NOCKO-Agent/{_ps_single_quote(target_version)}-updater'}} `
+        -TimeoutSec 120
+    $downloadedSize = (Get-Item $tempExe).Length
+    Write-Log "Downloaded $downloadedSize bytes."
 
     {checksum_block}
+    Write-Log "Checksum OK."
 
     # Stop current service gracefully
+    Write-Log "Stopping service NOCKOAgent..."
     Stop-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue
 
     # Wait until the EXE file lock is released (up to 16 seconds).
-    # Windows holds a file lock on the running EXE; Copy-Item will fail with
-    # PermissionError if we don't wait long enough after Stop-Service.
     $destExe = '{_ps_single_quote(str(installed_exe))}'
     $waited = 0
     while ($waited -lt 8) {{
@@ -238,6 +253,7 @@ try {{
             try {{
                 $fs = [IO.File]::Open($destExe, 'Open', 'ReadWrite', 'None')
                 $fs.Close()
+                Write-Log "File lock released after $($waited*2)s."
                 break
             }} catch {{ }}
         }} else {{
@@ -245,24 +261,27 @@ try {{
         }}
     }}
 
-    # Replace binary
+    Write-Log "Replacing binary at $destExe..."
     Copy-Item -Path $tempExe -Destination $destExe -Force
 
     if (Test-Path $configPath) {{
         $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
-        $config.agent_version = '{_ps_single_quote(str(target_version))}'
+        $config.agent_version = $targetVersion
         $config | ConvertTo-Json -Depth 8 | Set-Content -Path $configPath -Encoding UTF8
+        Write-Log "config.json updated."
     }}
 
     if (Test-Path $uninstallRegPath) {{
-        Set-ItemProperty -Path $uninstallRegPath -Name 'DisplayVersion' -Value '{_ps_single_quote(str(target_version))}'
+        Set-ItemProperty -Path $uninstallRegPath -Name 'DisplayVersion' -Value $targetVersion
     }}
 
-    # Start updated service
+    Write-Log "Starting service NOCKOAgent..."
     Start-Service -Name 'NOCKOAgent' -ErrorAction SilentlyContinue
+    Write-Log "Update complete."
     Send-Ack 'acked' 'Update installed successfully.'
 }} catch {{
     $message = $_.Exception.Message
+    Write-Log "ERROR: $message"
     Send-Ack 'failed' $message
     throw
 }} finally {{
