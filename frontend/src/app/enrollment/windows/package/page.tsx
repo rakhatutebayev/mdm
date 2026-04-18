@@ -97,6 +97,7 @@ export default function DeploymentPackagePage() {
 
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [debugLog, setDebugLog] = useState<string>('');
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -123,67 +124,75 @@ export default function DeploymentPackagePage() {
   const handleGenerate = async () => {
     setGenerating(true);
     setGenerateError(null);
-    try {
-      if (!customerId) {
-        throw new Error('Select a valid customer before generating a package.');
-      }
-      if (!selectedArtifact) {
-        throw new Error(
-          `No prebuilt ${selectedFormat.toUpperCase()} release is available for ${selectedArch}. ` +
-          'Publish the Windows agent from GitHub Actions first.',
-        );
-      }
+    setDebugLog('');
+    const log: string[] = [];
+    const addLog = (msg: string) => { log.push(msg); setDebugLog(log.join('\n')); };
 
-      // POST directly to the backend (bypasses Next.js proxy for large binary responses)
+    try {
+      addLog(`[1] customerId=${customerId} format=${selectedFormat} arch=${selectedArch}`);
+
+      if (!customerId) throw new Error('Выберите клиента перед генерацией пакета.');
+      if (!selectedArtifact) throw new Error(`Нет артефакта ${selectedFormat}/${selectedArch}`);
+
       const payload = {
-        customer_id:   customerId,
-        format:        selectedFormat,
-        arch:          selectedArch,
-        server_url:    form.serverUrl || undefined,
-        install_mode:  form.installMode.toLowerCase(),
-        agent_display_name: form.agentName,
-        install_dir: form.installPath,
-        log_dir: form.logPath,
-        register_scheduled_task: form.scheduleTask,
+        customer_id: customerId, format: selectedFormat, arch: selectedArch,
+        server_url: form.serverUrl || undefined, install_mode: form.installMode.toLowerCase(),
+        agent_display_name: form.agentName, install_dir: form.installPath,
+        log_dir: form.logPath, register_scheduled_task: form.scheduleTask,
         start_immediately: form.autoStart,
       };
 
-      // Get JWT to call backend directly (bypasses Next.js proxy which causes network errors)
-      const tokenRes = await fetch('/api/auth/token');
-      if (!tokenRes.ok) throw new Error('Not authenticated');
-      const { token } = await tokenRes.json();
+      addLog('[2] Получаю JWT токен...');
+      let token: string;
+      try {
+        const tokenRes = await fetch('/api/auth/token');
+        addLog(`[2] /api/auth/token → HTTP ${tokenRes.status}`);
+        if (!tokenRes.ok) throw new Error(`HTTP ${tokenRes.status}`);
+        ({ token } = await tokenRes.json());
+        addLog(`[2] Токен получен, длина=${token.length}`);
+      } catch (e) {
+        throw new Error(`Ошибка получения токена: ${e instanceof Error ? e.message : e}`);
+      }
 
       const backendUrl = `${window.location.origin}/api/v1/packages/generate`;
-      const res = await fetch(backendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        signal: AbortSignal.timeout(120_000),
-        body: JSON.stringify(payload),
-      });
+      addLog(`[3] POST → ${backendUrl}`);
+
+      let res: Response;
+      try {
+        res = await fetch(backendUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          signal: AbortSignal.timeout(120_000),
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {
+        const name = e instanceof DOMException ? e.name : (e instanceof Error ? e.constructor.name : 'unknown');
+        throw new Error(`fetch упал на шаге [3]: ${name} — ${e instanceof Error ? e.message : e}`);
+      }
+
+      addLog(`[4] Ответ сервера: HTTP ${res.status} ${res.statusText}`);
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Package generation failed');
+        throw new Error(`Сервер вернул ошибку: ${err.detail || res.statusText}`);
       }
-      // Trigger browser download
+
+      addLog('[5] Скачиваю blob...');
       const blob = await res.blob();
+      addLog(`[5] Blob получен: ${blob.size} байт, type=${blob.type}`);
+
       const cd   = res.headers.get('Content-Disposition') || '';
       const name = cd.match(/filename="([^"]+)"/)?.[1] ?? 'nocko-mdm-agent.exe';
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href = url; a.download = name; a.click();
       URL.revokeObjectURL(url);
+      addLog(`[6] Готово! Файл: ${name}`);
       setGenerated(true);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
-      const errorType = e instanceof Error ? e.constructor.name : typeof e;
-      const errorName = e instanceof DOMException ? e.name : '';
-      const debug = `[DEBUG] type=${errorType} name=${errorName || 'n/a'} message=${message}`;
-      console.error(debug, e);
-      setGenerateError(`${message}\n${debug}`);
+      console.error('[package generate error]', e);
+      setGenerateError(message);
     } finally {
       setGenerating(false);
     }
@@ -370,6 +379,11 @@ export default function DeploymentPackagePage() {
                 </>
               )}
             </button>
+            {debugLog && (
+              <pre style={{ marginTop: 8, padding: 8, background: '#1e1e2e', color: '#a6e3a1', fontSize: 12, borderRadius: 6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                {debugLog}
+              </pre>
+            )}
             {generateError && (
               <div style={{ marginTop: 8, color: '#ef4444', fontSize: 13 }}>
                 ⚠️ {generateError}
