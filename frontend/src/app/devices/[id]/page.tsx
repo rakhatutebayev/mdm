@@ -409,6 +409,7 @@ export default function DeviceDetailPage() {
   const [termRunning, setTermRunning] = useState(false);
   const [termHistory, setTermHistory] = useState<Array<{ cmd: string; output: string; status: string; ts: string }>>([]);
   const termOutputRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
 
   const runShellCommand = useCallback(async () => {
     const cmd = termInput.trim();
@@ -723,6 +724,17 @@ export default function DeviceDetailPage() {
                     >
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="#a78bfa"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                       Restart Agent
+                    </button>
+                    <div style={{ height: 1, background: '#2a2d3a', margin: '0 12px' }} />
+                    {/* Terminal */}
+                    <button
+                      onClick={() => { setActionsOpen(false); terminalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); terminalRef.current?.querySelector('input')?.focus(); }}
+                      style={{ width: '100%', background: 'none', border: 'none', color: '#cbd5e1', padding: '11px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, textAlign: 'left' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(74,124,255,0.12)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="#22c55e"><path d="M20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14zM6 15l1.41 1.41L11 12.83V19h2v-6.17l3.59 3.58L18 15l-6-6-6 6z" style={{display:'none'}}/><path d="M20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14zM6 11l1.41-1.41L9 11.17V8h2v3.17l1.59-1.59L14 11l-4 4-4-4z" style={{display:'none'}}/><path d="M7 15l1.41 1.41L11 13.83V19h2v-5.17l2.59 2.58L17 15l-5-5-5 5zm0-8h10v2H7z" style={{display:'none'}}/><path d="M20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14zM6.41 15.59L8 17.17l6-6-6-6-1.41 1.42L11.17 11z"/></svg>
+                      Terminal
                     </button>
                   </div>
                 )}
@@ -1152,7 +1164,7 @@ export default function DeviceDetailPage() {
       )}
 
       {/* ── Terminal ── */}
-      <div className={styles.card} style={{ marginTop: 16 }}>
+      <div ref={terminalRef} className={styles.card} style={{ marginTop: 16 }}>
         <div className={styles.cardHeader}>
           <span className={styles.cardIcon}>💻</span>
           <h2 className={styles.cardTitle}>Remote Terminal</h2>
