@@ -293,40 +293,39 @@
 /* ── Tabs ── */
 .tabs {
   display: flex;
-  gap: 0;
-  border-bottom: 1px solid #e2e4ec;
+  gap: 6px;
   margin: 14px 0 16px;
-  background: #fff;
-  border-radius: 10px 10px 0 0;
-  padding: 0 4px;
-  border: 1px solid #e2e4ec;
-  border-bottom: none;
-  overflow: hidden;
+  background: #f0f1f7;
+  border-radius: 10px;
+  padding: 4px;
 }
 
 .tab {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   font-size: 12px;
   font-weight: 600;
   color: #8b8fa8;
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 7px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s, box-shadow 0.15s;
   white-space: nowrap;
   letter-spacing: 0.1px;
-  margin-bottom: -1px;
 }
 
-.tab:hover { color: #4a7cff; }
+.tab:hover {
+  color: #4a7cff;
+  background: rgba(255,255,255,0.6);
+}
 
 .tabActive {
-  color: #4a7cff;
-  border-bottom-color: #4a7cff;
+  color: #1a1c2e;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.04);
 }
 
 .tabBadge {
@@ -336,6 +335,11 @@
   border-radius: 10px;
   padding: 1px 6px;
   font-weight: 700;
+}
+
+.tabActive .tabBadge {
+  background: #eef1ff;
+  color: #4a7cff;
 }
 
 /* ── Software & tables ── */
