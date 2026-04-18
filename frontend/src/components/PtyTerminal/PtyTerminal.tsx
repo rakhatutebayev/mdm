@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import styles from './PtyTerminal.module.css';
 
 interface PtyTerminalProps {
@@ -8,26 +8,27 @@ interface PtyTerminalProps {
   token: string;
 }
 
+interface ContextMenu {
+  x: number;
+  y: number;
+}
+
 export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import('@xterm/xterm').Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const fitRef = useRef<import('@xterm/addon-fit').FitAddon | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
 
   const connect = useCallback(() => {
     if (!containerRef.current) return;
 
-    // Lazy-load xterm (client-only)
     import('@xterm/xterm').then(({ Terminal }) => {
       import('@xterm/addon-fit').then(({ FitAddon }) => {
         import('@xterm/addon-web-links').then(({ WebLinksAddon }) => {
-          // Dispose previous instance
-          if (termRef.current) {
-            termRef.current.dispose();
-          }
-          if (wsRef.current) {
-            wsRef.current.close();
-          }
+          if (termRef.current) termRef.current.dispose();
+          if (wsRef.current) wsRef.current.close();
 
           const term = new Terminal({
             cursorBlink: true,
@@ -67,10 +68,8 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
           termRef.current = term;
           fitRef.current = fitAddon;
 
-          // Build WebSocket URL — connect directly via Nginx /ws/ proxy (not through Next.js)
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const host = window.location.host;
-          const wsUrl = `${proto}//${host}/ws/terminal/${deviceId}?t=${encodeURIComponent(token)}`;
+          const wsUrl = `${proto}//${window.location.host}/ws/terminal/${deviceId}?t=${encodeURIComponent(token)}`;
 
           term.writeln('\x1b[1;32mConnecting to remote terminal...\x1b[0m');
 
@@ -78,9 +77,7 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
           ws.binaryType = 'arraybuffer';
           wsRef.current = ws;
 
-          ws.onopen = () => {
-            term.writeln('\x1b[1;32mConnected.\x1b[0m\r\n');
-          };
+          ws.onopen = () => term.writeln('\x1b[1;32mConnected.\x1b[0m\r\n');
 
           ws.onmessage = (evt) => {
             if (evt.data instanceof ArrayBuffer) {
@@ -88,50 +85,68 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
             } else if (typeof evt.data === 'string') {
               try {
                 const msg = JSON.parse(evt.data);
-                if (msg.type === 'error') {
-                  term.writeln(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m`);
-                }
-              } catch {
-                term.write(evt.data);
-              }
+                if (msg.type === 'error') term.writeln(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m`);
+              } catch { term.write(evt.data); }
             }
           };
 
-          ws.onclose = (evt) => {
-            term.writeln(`\r\n\x1b[1;33mConnection closed (${evt.code}).\x1b[0m`);
-          };
+          ws.onclose = (evt) => term.writeln(`\r\n\x1b[1;33mConnection closed (${evt.code}).\x1b[0m`);
+          ws.onerror = () => term.writeln('\r\n\x1b[1;31mWebSocket error.\x1b[0m');
 
-          ws.onerror = () => {
-            term.writeln('\r\n\x1b[1;31mWebSocket error.\x1b[0m');
-          };
-
-          // Send keystrokes to agent via WebSocket
           term.onData((data) => {
-            if (ws.readyState === WebSocket.OPEN) {
-              const encoded = new TextEncoder().encode(data);
-              ws.send(encoded);
-            }
+            if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data));
           });
 
-          // Send terminal resize events
           term.onResize(({ cols, rows }) => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-            }
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'resize', cols, rows }));
           });
         });
       });
     });
   }, [deviceId, token]);
 
+  // Copy selected text from terminal
+  const handleCopy = useCallback(() => {
+    const term = termRef.current;
+    if (!term) return;
+    const selection = term.getSelection();
+    if (selection) navigator.clipboard.writeText(selection).catch(() => {});
+    setContextMenu(null);
+    term.focus();
+  }, []);
+
+  // Paste from clipboard into terminal
+  const handlePaste = useCallback(async () => {
+    setContextMenu(null);
+    const term = termRef.current;
+    const ws = wsRef.current;
+    if (!term || !ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) ws.send(new TextEncoder().encode(text));
+    } catch {
+      // clipboard permission denied — try execCommand fallback
+    }
+    term.focus();
+  }, []);
+
+  // Select all text visible in terminal
+  const handleSelectAll = useCallback(() => {
+    termRef.current?.selectAll();
+    setContextMenu(null);
+    termRef.current?.focus();
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    termRef.current?.clearSelection();
+    setContextMenu(null);
+    termRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     connect();
-
-    const handleResize = () => {
-      fitRef.current?.fit();
-    };
+    const handleResize = () => fitRef.current?.fit();
     window.addEventListener('resize', handleResize);
-
     return () => {
       window.removeEventListener('resize', handleResize);
       wsRef.current?.close();
@@ -139,19 +154,61 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
     };
   }, [connect]);
 
+  // Close context menu on outside click
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const rect = wrapper.getBoundingClientRect();
+    setContextMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
+  const hasSelection = termRef.current ? termRef.current.getSelection().length > 0 : false;
+
   return (
-    <div className={styles.wrapper}>
+    <div ref={wrapperRef} className={styles.wrapper} onContextMenu={handleContextMenu}>
       <div className={styles.header}>
         <span className={styles.title}>⚡ Remote Terminal</span>
-        <button
-          className={styles.reconnectBtn}
-          onClick={connect}
-          title="Reconnect"
-        >
+        <button className={styles.reconnectBtn} onClick={connect} title="Reconnect">
           ↺ Reconnect
         </button>
       </div>
       <div ref={containerRef} className={styles.terminal} />
+
+      {contextMenu && (
+        <div
+          className={styles.contextMenu}
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={e => e.stopPropagation()}
+        >
+          <button className={styles.menuItem} onClick={handleCopy} disabled={!hasSelection}>
+            <span className={styles.menuIcon}>⎘</span> Copy
+            <span className={styles.menuShortcut}>Ctrl+Shift+C</span>
+          </button>
+          <button className={styles.menuItem} onClick={handlePaste}>
+            <span className={styles.menuIcon}>📋</span> Paste
+            <span className={styles.menuShortcut}>Ctrl+Shift+V</span>
+          </button>
+          <div className={styles.menuDivider} />
+          <button className={styles.menuItem} onClick={handleSelectAll}>
+            <span className={styles.menuIcon}>▣</span> Select All
+          </button>
+          <button className={styles.menuItem} onClick={handleClearSelection}>
+            <span className={styles.menuIcon}>✕</span> Clear Selection
+          </button>
+        </div>
+      )}
     </div>
   );
 }
