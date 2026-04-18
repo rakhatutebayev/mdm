@@ -84,25 +84,28 @@ jobs:
           path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-x64-portable.exe
 
   build-agent-linux:
-    # manylinux2014 = CentOS 7 base, glibc 2.17 — максимальная совместимость.
-    # Python 3.11 уже предустановлен в образе — не нужно компилировать из исходников.
-    # Совместимо с: CentOS 7/8, RHEL 7/8, Ubuntu 18.04+, Debian 9+
+    # python:3.11-slim = Debian Buster (glibc 2.28).
+    # Совместимо с: CentOS 8+, RHEL 8+, Ubuntu 18.04+, Debian 10+
+    # git устанавливается явно перед checkout, т.к. slim-образ его не содержит.
     runs-on: ubuntu-22.04
     container:
-      image: quay.io/pypa/manylinux2014_x86_64
+      image: python:3.11-slim
     env:
       AGENT_DIR: agent-gui
       RELEASE_DIR: release-assets
-      PYTHON: /opt/python/cp311-cp311/bin/python3.11
-      PIP: /opt/python/cp311-cp311/bin/pip3.11
     steps:
+      - name: Install git and build tools
+        run: |
+          apt-get update -q
+          apt-get install -y -q git binutils
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Python dependencies
         run: |
-          $PIP install --upgrade pip
-          $PIP install -r agent-gui/requirements.txt pyinstaller
+          pip install --upgrade pip
+          pip install -r agent-gui/requirements.txt pyinstaller
 
       - name: Build Linux executable
         working-directory: agent-gui
@@ -110,7 +113,7 @@ jobs:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p ../${{ env.RELEASE_DIR }}
-          $PYTHON -m PyInstaller agent.spec --noconfirm
+          python -m PyInstaller agent.spec --noconfirm
           mv dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
           echo "=== Binary glibc requirement ==="
           objdump -p ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux | grep GLIBC || true
