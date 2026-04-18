@@ -84,6 +84,9 @@ jobs:
             fi
             nginx -t && nginx -s reload || true
 
+            echo "==> Updating ADMIN_PASSWORD in .env..."
+            sed -i 's/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=admin123/' /opt/nocko-mdm/.env || true
+
             echo "==> Refreshing seed data (tables auto-created on startup)..."
             sleep 5
             docker compose exec -T backend python seed.py || true

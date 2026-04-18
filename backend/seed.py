@@ -181,18 +181,21 @@ async def seed():
             print("⚠️   ADMIN_PASSWORD not set — skipping admin user seed.")
             return
         existing = await db.execute(select(User).where(User.email == admin_email))
-        if existing.scalar_one_or_none():
-            print(f"✅  Admin user '{admin_email}' already exists.")
-            return
-        db.add(User(
-            email=admin_email,
-            full_name="NOCKO Admin",
-            hashed_password=hash_password(admin_password),
-            role="admin",
-            is_active=True,
-        ))
-        await db.commit()
-        print(f"✅  Admin user created: {admin_email}")
+        user = existing.scalar_one_or_none()
+        if user:
+            user.hashed_password = hash_password(admin_password)
+            await db.commit()
+            print(f"✅  Admin password updated: {admin_email}")
+        else:
+            db.add(User(
+                email=admin_email,
+                full_name="NOCKO Admin",
+                hashed_password=hash_password(admin_password),
+                role="admin",
+                is_active=True,
+            ))
+            await db.commit()
+            print(f"✅  Admin user created: {admin_email}")
 
 
 if __name__ == "__main__":
