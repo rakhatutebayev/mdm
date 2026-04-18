@@ -148,10 +148,19 @@ export default function DeploymentPackagePage() {
         start_immediately: form.autoStart,
       };
 
-      const res = await fetch('/api/packages/generate', {
+      // Get JWT to call backend directly (bypasses Next.js proxy which causes network errors)
+      const tokenRes = await fetch('/api/auth/token');
+      if (!tokenRes.ok) throw new Error('Not authenticated');
+      const { token } = await tokenRes.json();
+
+      const backendUrl = `${window.location.origin}/api/v1/packages/generate`;
+      const res = await fetch(backendUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(90_000),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(120_000),
         body: JSON.stringify(payload),
       });
 
