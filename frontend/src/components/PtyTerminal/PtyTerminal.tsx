@@ -67,11 +67,10 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
           termRef.current = term;
           fitRef.current = fitAddon;
 
-          // Build WebSocket URL
+          // Build WebSocket URL — connect directly via Nginx /ws/ proxy (not through Next.js)
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const host = window.location.host;
-          // Connect to backend directly (API proxy)
-          const wsUrl = `${proto}//${host}/api/mdm/ws/terminal/${deviceId}?t=${encodeURIComponent(token)}`;
+          const wsUrl = `${proto}//${host}/ws/terminal/${deviceId}?t=${encodeURIComponent(token)}`;
 
           term.writeln('\x1b[1;32mConnecting to remote terminal...\x1b[0m');
 
