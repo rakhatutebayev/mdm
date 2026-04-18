@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { getCustomers } from '@/lib/api';
-import styles from '../../windows/page.module.css';
+import styles from '../windows/page.module.css';
 
 export default function LinuxEnrollPage() {
   const router = useRouter();
