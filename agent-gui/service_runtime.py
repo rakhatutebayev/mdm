@@ -113,6 +113,7 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
     Existing config.json is preserved — customer_id and enrollment_token remain.
     """
     import sys
+    import subprocess as _subprocess
 
     payload        = cmd.get("payload", {})
     command_id     = str(cmd.get("id", "") or "").strip()
@@ -169,7 +170,7 @@ rm -rf "$TEMP_DIR"
                 f.write(bash_script)
                 temp_script = f.name
             
-            proc = subprocess.Popen(["bash", temp_script])
+            proc = _subprocess.Popen(["bash", temp_script])
             logger.info("Update to v%s started via bash (pid=%s)", target_version, proc.pid)
             return "deferred", f"Update to v{target_version} started. Final status will be reported after restart."
         checksum_block = ""
@@ -268,12 +269,11 @@ try {{
     Remove-Item -Path $tempExe -Force -ErrorAction SilentlyContinue
 }}
 """
-        import subprocess
-        proc = subprocess.Popen(
+        proc = _subprocess.Popen(
             ["powershell", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
             creationflags=_WIN_DETACH,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=_subprocess.PIPE,
+            stderr=_subprocess.PIPE,
         )
         # Don't wait — the updater process will stop the service, replace the
         # binary, start it again, and send the final command ack itself.
