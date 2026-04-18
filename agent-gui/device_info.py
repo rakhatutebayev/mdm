@@ -173,31 +173,70 @@ def _collect_monitors() -> list[dict]:
 
 
 def _get_os_version() -> str:
-    """Return a clean OS version string. Correctly distinguishes Windows 10 vs 11."""
+    """Return a clean OS version string for Windows and Linux."""
     import platform as _platform
+
     if os.name != "nt":
+        # Linux: try to read /etc/os-release for pretty name
+        try:
+            with open("/etc/os-release") as f:
+                info = {}
+                for line in f:
+                    line = line.strip()
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        info[k] = v.strip('"')
+            pretty = info.get("PRETTY_NAME") or info.get("NAME", "")
+            if pretty:
+                return pretty
+        except Exception:
+            pass
         return _platform.platform()
 
     try:
         build = int(_platform.version().split(".")[-1])
-        win_version = "Windows 11" if build >= 22000 else "Windows 10"
 
-        # Try to get edition (Pro/Home/Enterprise) from registry
+        # Read ProductName and EditionID from registry — correctly returns
+        # "Windows Server 2019" / "Windows Server 2022" / "Windows 10" etc.
+        product_name = ""
         edition = ""
         try:
             import winreg
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                  r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
-            edition, _ = winreg.QueryValueEx(key, "EditionID")
+            try:
+                product_name, _ = winreg.QueryValueEx(key, "ProductName")
+            except Exception:
+                pass
+            try:
+                edition, _ = winreg.QueryValueEx(key, "EditionID")
+            except Exception:
+                pass
             winreg.CloseKey(key)
         except Exception:
             pass
+
+        if product_name:
+            # ProductName already says e.g. "Windows Server 2019 Standard"
+            # Just append build number
+            return f"{product_name} (Build {build})"
+
+        # Fallback: distinguish by build number
+        if build >= 22000:
+            win_version = "Windows 11"
+        elif build >= 20348:
+            win_version = "Windows Server 2022"
+        elif build >= 17763:
+            win_version = "Windows Server 2019"
+        elif build >= 14393:
+            win_version = "Windows Server 2016"
+        else:
+            win_version = "Windows 10"
 
         if edition:
             return f"{win_version} {edition} (Build {build})"
         return f"{win_version} (Build {build})"
     except Exception:
-        import platform as _platform
         return _platform.platform()
 
 
