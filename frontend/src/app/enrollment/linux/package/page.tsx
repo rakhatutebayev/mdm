@@ -18,6 +18,7 @@ export default function LinuxDeploymentPackagePage() {
   const [customerName, setCustomerName] = useState(isPlaceholderCustomer ? 'Select customer' : customerParam);
   const [serverUrl, setServerUrl] = useState('');
   const [enrollmentToken, setEnrollmentToken] = useState('');
+  const [agentVersion, setAgentVersion] = useState('—');
   const [copied, setCopied] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
 
@@ -59,6 +60,14 @@ export default function LinuxDeploymentPackagePage() {
   }, [customerId]);
 
   useEffect(() => { fetchToken(); }, [fetchToken]);
+
+  useEffect(() => {
+    if (!serverUrl) return;
+    fetch(`${serverUrl}/api/v1/packages/latest/linux-version`)
+      .then(r => r.text())
+      .then(v => setAgentVersion(v.trim() || '—'))
+      .catch(() => {});
+  }, [serverUrl]);
 
   const regenerateToken = async () => {
     if (!customerId) return;
@@ -208,6 +217,8 @@ export default function LinuxDeploymentPackagePage() {
             <dd className={styles.mono}>{enrollmentToken || '—'}</dd>
             <dt>Platform</dt>
             <dd>Linux (amd64)</dd>
+            <dt>Agent Version</dt>
+            <dd>{agentVersion}</dd>
             <dt>Install method</dt>
             <dd>curl | bash</dd>
             <dt>Service manager</dt>
