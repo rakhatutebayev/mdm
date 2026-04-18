@@ -71,7 +71,15 @@ jobs:
             done
 
             echo "==> Starting EMQX (MQTT broker)..."
-            docker compose -f docker-compose.mqtt.yml up -d --remove-orphans || true
+            docker compose -f /opt/nocko-mdm/docker-compose.yml -f /opt/nocko-mdm/docker-compose.mqtt.yml up -d --remove-orphans emqx emqx-setup || true
+            echo "==> Waiting for EMQX to be healthy..."
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8083 >/dev/null 2>&1 || curl -fsS http://127.0.0.1:18083 >/dev/null 2>&1; then
+                echo "EMQX is up"
+                break
+              fi
+              sleep 2
+            done
 
             echo "==> Configuring Nginx for MQTT over WebSocket (WSS /mqtt)..."
             NGINX_CONF=$(grep -rl "mdm.nocko.com" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1 || true)
