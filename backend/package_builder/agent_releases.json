@@ -1,7 +1,31 @@
 {
   "channel": "stable",
-  "generated_at": "2026-04-18T12:07:57Z",
+  "generated_at": "2026-04-18T12:54:48Z",
   "releases": [
+    {
+      "version": "1.8.3",
+      "tag": "agent-v1.8.3",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.8.3-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.8.3/nocko-agent-1.8.3-x64-portable.exe",
+          "sha256": "db555a556111e4405afb3a0f011b7a84d6f4c5c7c49caca68c8125f199494b44",
+          "size_bytes": 13744690,
+          "notes": "Published by GitHub Actions Windows release workflow"
+        },
+        {
+          "format": "linux-binary",
+          "arch": "amd64",
+          "filename": "nocko-agent-1.8.3-amd64-linux",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.8.3/nocko-agent-1.8.3-amd64-linux",
+          "sha256": "648a31f82a510a54f3ca871405006b9e2ce6d805515db8aa7acac9d8089f1037",
+          "size_bytes": 21806576,
+          "notes": "Linux MDM Agent Binary (GitHub Actions)"
+        }
+      ]
+    },
     {
       "version": "1.8.2",
       "tag": "agent-v1.8.2",
