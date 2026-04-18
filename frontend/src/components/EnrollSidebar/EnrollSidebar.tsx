@@ -26,6 +26,13 @@ const SECTIONS: SideSection[] = [
       { label: 'Deployment Package', href: '/enrollment/windows/package' },
     ],
   },
+  {
+    group: 'Linux',
+    items: [
+      { label: 'Enroll', href: '/enrollment/linux' },
+      { label: 'Deployment Package', href: '/enrollment/linux/package' },
+    ],
+  },
 ];
 
 export default function EnrollSidebar() {
