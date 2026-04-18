@@ -148,7 +148,7 @@ export default function DeploymentPackagePage() {
         start_immediately: form.autoStart,
       };
 
-      const res = await fetch('/api/mdm/packages/generate', {
+      const res = await fetch('/api/packages/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(90_000),
