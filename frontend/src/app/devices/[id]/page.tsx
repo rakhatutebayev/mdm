@@ -1034,9 +1034,42 @@ export default function DeviceDetailPage() {
         )}
       </div>
 
+      {/* ── Logical Disks Table ── */}
+      {device.logical_disks.length > 0 && (
+        <div className={styles.card} style={{ marginTop: 16 }}>
+          <div className={styles.cardHeader}>
+            <span className={styles.cardIcon}>🗂️</span>
+            <h2 className={styles.cardTitle}>Logical Disks</h2>
+          </div>
+          <div style={{ overflowX: 'auto', padding: '0 4px 12px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #2d2d44' }}>
+                  {['Device', 'Mount', 'FS', 'Size', 'Used', 'Free'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', color: '#888', fontWeight: 500, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {device.logical_disks.map((disk, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #1e1e2e' }}>
+                    <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, color: '#89b4fa', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={disk.name}>{disk.name}</td>
+                    <td style={{ padding: '8px 12px', color: '#cdd6f4' }}>{disk.volume_name || '—'}</td>
+                    <td style={{ padding: '8px 12px', color: '#a6e3a1' }}>{disk.file_system || '—'}</td>
+                    <td style={{ padding: '8px 12px', color: '#cdd6f4', whiteSpace: 'nowrap' }}>{formatStorage(disk.size_gb)}</td>
+                    <td style={{ padding: '8px 12px', color: '#f9e2af', whiteSpace: 'nowrap' }}>{formatStorage(disk.used_gb)}</td>
+                    <td style={{ padding: '8px 12px', color: '#a6e3a1', whiteSpace: 'nowrap' }}>{formatStorage(disk.free_gb)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Info Sections ── */}
       <div className={styles.sections}>
-        {sections.map(({ title, data }) => (
+        {sections.filter(s => s.title !== 'Logical Disks').map(({ title, data }) => (
           <div key={title} className={styles.card}>
             <div className={styles.cardHeader}>
               <span className={styles.cardIcon}>{SECTION_ICONS[title] ?? '📋'}</span>
