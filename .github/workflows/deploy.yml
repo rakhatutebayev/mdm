@@ -87,8 +87,10 @@ jobs:
             echo "==> Updating ADMIN_PASSWORD in .env..."
             sed -i 's/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=admin123/' /opt/nocko-mdm/.env || true
 
-            echo "==> Refreshing seed data (tables auto-created on startup)..."
+            echo "==> Refreshing seed data with updated env..."
             sleep 5
+            docker compose up -d --remove-orphans backend
+            sleep 10
             docker compose exec -T backend python seed.py || true
 
             echo "==> Done! Services:"
