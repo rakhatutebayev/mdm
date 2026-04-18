@@ -7,7 +7,7 @@ from urllib.error import URLError
 from urllib.request import urlopen
 import hashlib
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -19,6 +19,7 @@ from package_builder.bootstrap_exe import embed_bootstrap_config
 from package_builder import build_zip
 from package_builder.release_catalog import find_artifact, load_release_catalog
 from routers.settings import get_agent_package_settings, get_server_url
+from auth import decode_token
 
 router = APIRouter(prefix="/api/v1/packages", tags=["packages"])
 
@@ -302,6 +303,39 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         media_type=mime,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+@router.get("/download")
+async def download_package(
+    t: str = Query(..., description="JWT access token"),
+    customer_id: str = Query(...),
+    format: str = Query("exe"),
+    arch: str = Query("x64"),
+    install_mode: str = Query("silent"),
+    agent_display_name: str = Query("NOCKO MDM Agent"),
+    install_dir: str = Query(r"C:\Program Files\NOCKO MDM\Agent"),
+    log_dir: str = Query(r"C:\ProgramData\NOCKO MDM\logs"),
+    register_scheduled_task: bool = Query(True),
+    start_immediately: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+):
+    """Browser-friendly GET download — accepts JWT via ?t= query param so window.location works."""
+    payload = decode_token(t)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    body = PackageRequest(
+        customer_id=customer_id,
+        format=format,
+        arch=arch,
+        install_mode=install_mode,
+        agent_display_name=agent_display_name,
+        install_dir=install_dir,
+        log_dir=log_dir,
+        register_scheduled_task=register_scheduled_task,
+        start_immediately=start_immediately,
+    )
+    return await generate_package(body, db)
+
 
 @router.get("/install-linux.sh", tags=["bootstrap"])
 async def bootstrap_install_linux_sh():

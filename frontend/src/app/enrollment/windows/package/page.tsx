@@ -154,40 +154,24 @@ export default function DeploymentPackagePage() {
         throw new Error(`Ошибка получения токена: ${e instanceof Error ? e.message : e}`);
       }
 
-      const backendUrl = `${window.location.origin}/api/v1/packages/generate`;
-      addLog(`[3] POST → ${backendUrl}`);
+      // Build direct download URL — browser downloads natively via window.location (no fetch+blob)
+      const params = new URLSearchParams({
+        t: token,
+        customer_id: payload.customer_id,
+        format: payload.format,
+        arch: payload.arch,
+        install_mode: payload.install_mode,
+        agent_display_name: payload.agent_display_name,
+        install_dir: payload.install_dir,
+        log_dir: payload.log_dir,
+        register_scheduled_task: String(payload.register_scheduled_task),
+        start_immediately: String(payload.start_immediately),
+      });
 
-      let res: Response;
-      try {
-        res = await fetch(backendUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          signal: AbortSignal.timeout(120_000),
-          body: JSON.stringify(payload),
-        });
-      } catch (e) {
-        const name = e instanceof DOMException ? e.name : (e instanceof Error ? e.constructor.name : 'unknown');
-        throw new Error(`fetch упал на шаге [3]: ${name} — ${e instanceof Error ? e.message : e}`);
-      }
-
-      addLog(`[4] Ответ сервера: HTTP ${res.status} ${res.statusText}`);
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(`Сервер вернул ошибку: ${err.detail || res.statusText}`);
-      }
-
-      addLog('[5] Скачиваю blob...');
-      const blob = await res.blob();
-      addLog(`[5] Blob получен: ${blob.size} байт, type=${blob.type}`);
-
-      const cd   = res.headers.get('Content-Disposition') || '';
-      const name = cd.match(/filename="([^"]+)"/)?.[1] ?? 'nocko-mdm-agent.exe';
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href = url; a.download = name; a.click();
-      URL.revokeObjectURL(url);
-      addLog(`[6] Готово! Файл: ${name}`);
+      const downloadUrl = `${window.location.origin}/api/v1/packages/download?${params}`;
+      addLog(`[3] Запускаю скачивание через window.location...`);
+      window.location.href = downloadUrl;
+      addLog('[4] Готово — браузер начал загрузку файла');
       setGenerated(true);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
