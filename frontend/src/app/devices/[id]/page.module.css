@@ -1,35 +1,38 @@
+/* ── Base ── */
 .page {
-  padding: 24px 28px;
-  background: #f8f9fc;
+  padding: 20px 24px;
+  background: #0d0e14;
   min-height: calc(100vh - 56px);
+  color: #c9cdd6;
 }
 
-/* Back button */
+/* ── Back button ── */
 .backBtn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 12px;
-  color: #6b7080;
+  color: #4a5568;
   text-decoration: none;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   transition: color 0.12s;
 }
 .backBtn:hover { color: #4a7cff; }
 
-/* Header */
-.header { margin-bottom: 24px; }
+/* ── Header ── */
+.header { margin-bottom: 20px; }
 
 .titleRow {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .deviceIcon {
-  width: 46px;
-  height: 46px;
-  background: #eef1ff;
+  width: 42px;
+  height: 42px;
+  background: rgba(74,124,255,0.12);
+  border: 1px solid rgba(74,124,255,0.25);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -38,10 +41,11 @@
 }
 
 .pageTitle {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  color: #23252e;
-  margin: 0 0 5px;
+  color: #e8eaf0;
+  margin: 0 0 4px;
+  letter-spacing: -0.2px;
 }
 
 .metaRow {
@@ -50,36 +54,34 @@
   gap: 6px;
   flex-wrap: wrap;
 }
-.metaText { font-size: 13px; color: #6b7080; }
-.metaDot  { color: #c0c3d4; font-size: 14px; }
+.metaText { font-size: 12px; color: #4a5568; }
+.metaDot  { color: #2d3040; font-size: 14px; }
 
-/* Badge */
+/* ── Badge ── */
 .badge {
   display: inline-block;
-  padding: 2px 9px;
+  padding: 2px 8px;
   border-radius: 20px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
-.badgeGreen  { background: #dcfce7; color: #16a34a; }
-.badgeOrange { background: #fef3c7; color: #d97706; }
-.badgeRed    { background: #fee2e2; color: #dc2626; }
+.badgeGreen  { background: rgba(34,197,94,0.12);  color: #22c55e; border: 1px solid rgba(34,197,94,0.25); }
+.badgeOrange { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); }
+.badgeRed    { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
 
-/* Section grid */
+/* ── Section grid ── */
 .sections {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
 }
 
-.sections > :first-child {
-  grid-column: 1 / -1; /* Device Summary spans full width */
-}
-
-/* Card */
+/* ── Card ── */
 .card {
-  background: #fff;
-  border: 1px solid #e2e4ec;
+  background: #13141c;
+  border: 1px solid #1e2030;
   border-radius: 10px;
   overflow: hidden;
 }
@@ -87,20 +89,22 @@
 .cardHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  border-bottom: 1px solid #f0f1f7;
-  background: #fafbfd;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a1c28;
+  background: #0f1018;
 }
-.cardIcon { font-size: 15px; }
+.cardIcon  { font-size: 13px; }
 .cardTitle {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
-  color: #23252e;
+  color: #6b7280;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
 }
 
-/* Definition list */
+/* ── Definition list ── */
 .dl {
   display: grid;
   grid-template-columns: 1fr;
@@ -110,37 +114,39 @@
 
 .dlRow {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  padding: 9px 20px;
-  border-bottom: 1px solid #f5f6fa;
-  gap: 12px;
+  grid-template-columns: 130px 1fr;
+  padding: 6px 14px;
+  border-bottom: 1px solid #1a1c28;
+  gap: 8px;
   align-items: baseline;
 }
 .dlRow:last-child { border-bottom: none; }
 
 .dt {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
-  color: #8b90a4;
+  color: #4a5568;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dd {
-  font-size: 13px;
-  color: #23252e;
+  font-size: 12px;
+  color: #c9cdd6;
   margin: 0;
   word-break: break-all;
 }
 .mono {
-  font-family: monospace;
-  font-size: 11.5px;
-  color: #555870;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #89b4fa;
 }
 
-/* Not found */
+/* ── Not found ── */
 .notFound {
   padding: 60px 28px;
   text-align: center;
-  color: #6b7080;
+  color: #4a5568;
 }
 .backLink {
   display: inline-block;
@@ -153,62 +159,62 @@
 
 /* ── Telemetry card ── */
 .telemetryCard {
-  background: #fff;
-  border: 1px solid #e2e4ec;
+  background: #13141c;
+  border: 1px solid #1e2030;
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .telemetryHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 20px;
-  border-bottom: 1px solid #f0f1f7;
-  background: #fafbfd;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a1c28;
+  background: #0f1018;
 }
 
 .telemetryTs {
   margin-left: auto;
-  font-size: 11px;
-  color: #8b90a4;
+  font-size: 10px;
+  color: #2d3040;
 }
 
 /* ── Gauges row ── */
 .gauges {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0;
-  padding: 20px 24px;
+  padding: 16px 20px;
   flex-wrap: wrap;
 }
 
-/* ── Individual arc gauge ── */
+/* ── Gauge ── */
 .gauge {
   flex: 1;
-  min-width: 120px;
+  min-width: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 0 12px;
-  border-right: 1px solid #f0f1f7;
+  gap: 3px;
+  padding: 0 10px;
+  border-right: 1px solid #1a1c28;
 }
 .gauge:last-child { border-right: none; }
 
 .gaugeLabel {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  color: #8b90a4;
+  color: #4a5568;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
 }
 
 .gaugeArc {
   position: relative;
-  width: 110px;
-  height: 68px;
+  width: 96px;
+  height: 60px;
 }
 
 .gaugeSvg {
@@ -218,7 +224,7 @@
 
 .gaugeCenter {
   position: absolute;
-  bottom: 2px;
+  bottom: 0px;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
@@ -226,106 +232,114 @@
 }
 
 .gaugeValue {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.5px;
 }
 
 .gaugeUnit {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .gaugeSub {
-  font-size: 11px;
-  color: #8b90a4;
+  font-size: 10px;
+  color: #4a5568;
   text-align: center;
 }
 
-/* ── Uptime card (4th item) ── */
+/* ── Uptime card ── */
 .uptimeCard {
   flex: 1;
-  min-width: 120px;
+  min-width: 110px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0 12px;
-  height: 105px;
+  gap: 3px;
+  padding: 0 10px;
+  height: 92px;
 }
 
-.uptimeIcon { font-size: 28px; line-height: 1; }
+.uptimeIcon  { font-size: 22px; line-height: 1; }
 .uptimeLabel {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  color: #8b90a4;
+  color: #4a5568;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
 }
 .uptimeValue {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   color: #4a7cff;
 }
 
-/* ── No metrics empty state ── */
+/* ── No metrics ── */
 .noMetrics {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 32px 24px;
-  color: #8b90a4;
-  font-size: 13px;
+  gap: 8px;
+  padding: 24px;
+  color: #4a5568;
+  font-size: 12px;
   text-align: center;
 }
-.noMetrics span { font-size: 32px; }
+.noMetrics span { font-size: 28px; }
 .noMetrics p { margin: 0; line-height: 1.5; }
 
-/* ── Software & Profiles ── */
+/* ── Software & tables ── */
 .searchInput {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e2e4ec;
+  padding: 7px 12px;
+  border: 1px solid #1e2030;
   border-radius: 6px;
-  background: #f8f9fc;
-  font-size: 13px;
+  background: #0d0e14;
+  color: #c9cdd6;
+  font-size: 12px;
   outline: none;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   box-sizing: border-box;
 }
+.searchInput::placeholder { color: #2d3040; }
+.searchInput:focus { border-color: #4a7cff; }
 
 .tableContainer {
   overflow-x: auto;
-  margin: -14px -20px -20px;
+  margin: -10px -14px -14px;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
-  color: #23252e;
+  font-size: 12px;
+  color: #c9cdd6;
 }
 
 .table th {
-  background: #fafbfd;
-  color: #8b90a4;
+  background: #0f1018;
+  color: #4a5568;
   font-weight: 600;
-  padding: 10px 20px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 14px;
   text-align: left;
-  border-bottom: 1px solid #e2e4ec;
+  border-bottom: 1px solid #1e2030;
   position: sticky;
   top: 0;
 }
 
 .table td {
-  padding: 10px 20px;
-  border-bottom: 1px solid #f0f1f7;
+  padding: 7px 14px;
+  border-bottom: 1px solid #1a1c28;
   word-break: break-word;
 }
 
+.table tbody tr:last-child td { border-bottom: none; }
+
 .table tbody tr:hover {
-  background: #f8f9fc;
+  background: rgba(74,124,255,0.04);
 }

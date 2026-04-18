@@ -986,6 +986,21 @@ export default function DeviceDetailPage() {
         </div>
       )}
 
+      {/* ── Hero strip ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        {[
+          { label: 'IP', value: device.ip_address || '—', color: '#89b4fa' },
+          { label: 'Serial', value: device.serial_number || '—', color: '#cba6f7' },
+          { label: 'Platform', value: device.platform || 'Windows', color: '#a6e3a1' },
+          { label: 'Last Seen', value: device.last_seen ? new Date(device.last_seen).toLocaleString() : '—', color: '#f9e2af' },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ background: '#13141c', border: '1px solid #1e2030', borderRadius: 8, padding: '7px 14px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 10, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{label}</span>
+            <span style={{ fontSize: 12, color, fontFamily: label === 'IP' || label === 'Serial' ? 'monospace' : 'inherit', fontWeight: 500 }}>{value}</span>
+          </div>
+        ))}
+      </div>
+
       {/* ── Telemetry Gauges ── */}
       <div className={styles.telemetryCard}>
         <div className={styles.telemetryHeader}>
