@@ -72,12 +72,13 @@ async def browser_ws(
     t: Optional[str] = Query(None),
 ):
     """Browser connects here to open a terminal session."""
-    # Auth via JWT query param
+    await websocket.accept()
+
+    # Auth via JWT query param — must accept first, then close if invalid
     if not t or not decode_token(t):
+        await websocket.send_text('{"type":"error","message":"Unauthorized"}')
         await websocket.close(code=4001)
         return
-
-    await websocket.accept()
     _browser_connections[device_id] = websocket
     logger.info("Browser terminal connected: %s", device_id)
 
