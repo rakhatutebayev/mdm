@@ -170,15 +170,11 @@ export default function DeploymentPackagePage() {
       setGenerated(true);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);
-      const isTimeout = e instanceof DOMException && e.name === 'TimeoutError';
-      const isFetchFail = message === 'Failed to fetch';
-      setGenerateError(
-        isTimeout
-          ? 'Package generation timed out. The server may be downloading the base EXE from GitHub — please try again.'
-          : isFetchFail
-            ? 'Could not reach the server. Ensure the backend is running and try again.'
-            : message,
-      );
+      const errorType = e instanceof Error ? e.constructor.name : typeof e;
+      const errorName = e instanceof DOMException ? e.name : '';
+      const debug = `[DEBUG] type=${errorType} name=${errorName || 'n/a'} message=${message}`;
+      console.error(debug, e);
+      setGenerateError(`${message}\n${debug}`);
     } finally {
       setGenerating(false);
     }
