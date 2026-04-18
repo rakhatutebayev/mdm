@@ -93,6 +93,27 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
           ws.onclose = (evt) => term.writeln(`\r\n\x1b[1;33mConnection closed (${evt.code}).\x1b[0m`);
           ws.onerror = () => term.writeln('\r\n\x1b[1;31mWebSocket error.\x1b[0m');
 
+          // Ctrl+C → copy if text selected, otherwise send SIGINT
+          // Ctrl+V → paste from clipboard
+          term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+            if (e.ctrlKey && e.key === 'c' && !e.shiftKey) {
+              const sel = term.getSelection();
+              if (sel) {
+                navigator.clipboard.writeText(sel).catch(() => {});
+                return false; // prevent sending to PTY
+              }
+            }
+            if (e.ctrlKey && e.key === 'v' && !e.shiftKey && e.type === 'keydown') {
+              navigator.clipboard.readText().then(text => {
+                if (text && ws.readyState === WebSocket.OPEN) {
+                  ws.send(new TextEncoder().encode(text));
+                }
+              }).catch(() => {});
+              return false; // prevent default
+            }
+            return true;
+          });
+
           term.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(data));
           });
@@ -194,11 +215,11 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
         >
           <button className={styles.menuItem} onClick={handleCopy} disabled={!hasSelection}>
             <span className={styles.menuIcon}>⎘</span> Copy
-            <span className={styles.menuShortcut}>Ctrl+Shift+C</span>
+            <span className={styles.menuShortcut}>Ctrl+C</span>
           </button>
           <button className={styles.menuItem} onClick={handlePaste}>
             <span className={styles.menuIcon}>📋</span> Paste
-            <span className={styles.menuShortcut}>Ctrl+Shift+V</span>
+            <span className={styles.menuShortcut}>Ctrl+V</span>
           </button>
           <div className={styles.menuDivider} />
           <button className={styles.menuItem} onClick={handleSelectAll}>
