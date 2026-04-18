@@ -84,40 +84,38 @@ jobs:
           path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-x64-portable.exe
 
   build-agent-linux:
-    # manylinux2014_x86_64 = CentOS 7 base, glibc 2.17 — максимальная совместимость.
-    # Python 3.11 предустановлен. git ставим через yum ДО checkout.
-    # Совместимо с: CentOS 7/8, RHEL 7/8, Ubuntu 18.04+, Debian 9+
+    # Checkout happens on ubuntu-22.04 host, build runs inside manylinux2014
+    # container via `docker run` with workspace mounted as volume.
+    # This avoids Node.js/actions incompatibility inside the container
+    # while still producing a glibc-2.17-compatible binary (CentOS 7+).
     runs-on: ubuntu-22.04
-    container:
-      image: quay.io/pypa/manylinux2014_x86_64
     env:
-      AGENT_DIR: agent-gui
       RELEASE_DIR: release-assets
-      PYTHON: /opt/python/cp311-cp311/bin/python3.11
-      PIP: /opt/python/cp311-cp311/bin/pip3.11
     steps:
-      - name: Install git (required by actions/checkout)
-        run: |
-          yum install -y git
-
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Python dependencies
-        run: |
-          $PIP install --upgrade pip
-          $PIP install -r agent-gui/requirements.txt pyinstaller
-
-      - name: Build Linux executable
-        working-directory: agent-gui
+      - name: Build inside manylinux2014 container
         env:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
-          mkdir -p ../${{ env.RELEASE_DIR }}
-          $PYTHON -m PyInstaller agent.spec --noconfirm
-          mv dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
-          echo "=== Binary glibc requirement ==="
-          objdump -p ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux | grep GLIBC || true
+          mkdir -p ${{ env.RELEASE_DIR }}
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -e NOCKO_AGENT_VERSION="${{ inputs.version }}" \
+            -w /workspace/agent-gui \
+            quay.io/pypa/manylinux2014_x86_64 \
+            bash -c "
+              set -e
+              PYTHON=/opt/python/cp311-cp311/bin/python3.11
+              PIP=/opt/python/cp311-cp311/bin/pip3.11
+              \$PIP install --upgrade pip -q
+              \$PIP install -r requirements.txt pyinstaller -q
+              \$PYTHON -m PyInstaller agent.spec --noconfirm
+              mv dist/NOCKO-Agent /workspace/${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
+              echo '=== glibc requirement ==='
+              objdump -p /workspace/${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux | grep GLIBC || true
+            "
 
       - name: Upload Linux Asset
         uses: actions/upload-artifact@v4
