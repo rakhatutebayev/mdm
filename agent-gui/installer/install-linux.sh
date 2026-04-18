@@ -28,12 +28,16 @@ fi
 
 echo "Installing NOCKO MDM Agent for Linux..."
 
-# Install dependencies if missing (dmidecode, lshw, etc.)
+# Install dependencies if missing (best-effort, non-fatal)
 if command -v apt-get >/dev/null; then
-    apt-get update -y -q
-    apt-get install -y -q dmidecode lshw hwinfo curl iproute2 jq
+    apt-get update -y -q 2>/dev/null || true
+    for pkg in dmidecode lshw curl iproute2 jq hwinfo; do
+        apt-get install -y -q "$pkg" 2>/dev/null || true
+    done
 elif command -v yum >/dev/null; then
-    yum install -y -q dmidecode lshw hwinfo curl iproute jq
+    for pkg in dmidecode lshw curl iproute jq; do
+        yum install -y -q "$pkg" 2>/dev/null || true
+    done
 fi
 
 # Download agent binary
