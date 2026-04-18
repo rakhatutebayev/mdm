@@ -34,6 +34,9 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
             cursorBlink: true,
             fontSize: 13,
             fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace',
+            scrollOnUserInput: true,
+            rightClickSelectsWord: true,
+            macOptionIsMeta: true,
             theme: {
               background: '#0f0f17',
               foreground: '#d4d4d4',
