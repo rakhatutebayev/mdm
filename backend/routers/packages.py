@@ -48,15 +48,22 @@ def _download_or_cache(url: str, sha256_expected: str | None, fmt: str) -> bytes
             # sha256 mismatch → stale cache, re-download
             cache_file.unlink(missing_ok=True)
 
-    # Download from remote
-    try:
-        with urlopen(url, timeout=60) as remote:
-            data = remote.read()
-    except URLError as e:
+    # Download from remote with retries (GitHub CDN can return 504 on first attempt)
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urlopen(url, timeout=180) as remote:
+                data = remote.read()
+            last_err = None
+            break
+        except URLError as e:
+            last_err = e
+            continue
+    if last_err is not None:
         raise HTTPException(
             status_code=502,
-            detail=f"Could not download prebuilt {fmt.upper()} artifact: {e.reason}",
-        ) from e
+            detail=f"Could not download prebuilt {fmt.upper()} artifact: {last_err.reason}",
+        ) from last_err
 
     if sha256_expected:
         actual = hashlib.sha256(data).hexdigest()
