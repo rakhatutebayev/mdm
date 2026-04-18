@@ -1082,41 +1082,54 @@ export default function DeviceDetailPage() {
         </div>
       )}
 
-      {/* ── Printers Table ── */}
+      {/* ── Printers ── */}
       {device.printers && device.printers.length > 0 && (
         <div className={styles.card} style={{ marginTop: 12 }}>
           <div className={styles.cardHeader}>
             <span className={styles.cardIcon}>🖨️</span>
             <h2 className={styles.cardTitle}>Printers ({device.printers.length})</h2>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  {['Name', 'Driver', 'Port', 'IP', 'Type', 'Status'].map(h => <th key={h}>{h}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {device.printers.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ color: '#c9cdd6', fontWeight: 500 }}>
-                      {p.is_default && <span style={{ color: '#f9e2af', marginRight: 5 }}>★</span>}
-                      {p.name}
-                    </td>
-                    <td style={{ color: '#89b4fa' }}>{p.driver_name || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#a6e3a1' }}>{p.port_name || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#cba6f7' }}>{p.ip_address || '—'}</td>
-                    <td>{p.is_network ? <span style={{ color: '#89b4fa' }}>Network</span> : <span style={{ color: '#585b70' }}>Local</span>}</td>
-                    <td>
-                      <span style={{ color: p.work_offline ? '#ef4444' : '#22c55e', fontSize: 11 }}>
-                        {p.work_offline ? 'Offline' : (p.status || 'Idle')}
-                      </span>
-                      {p.job_count ? <span style={{ color: '#f9e2af', marginLeft: 6, fontSize: 11 }}>{p.job_count} jobs</span> : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ padding: '4px 0' }}>
+            {device.printers.map((p, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '9px 14px',
+                borderBottom: i < device.printers.length - 1 ? '1px solid #1a1c28' : 'none',
+              }}>
+                {/* Icon */}
+                <div style={{ width: 30, height: 30, borderRadius: 7, background: p.is_network ? 'rgba(137,180,250,0.1)' : 'rgba(88,91,112,0.15)', border: `1px solid ${p.is_network ? 'rgba(137,180,250,0.2)' : 'rgba(88,91,112,0.2)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 14 }}>
+                  🖨️
+                </div>
+                {/* Name + driver */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {p.is_default && (
+                      <span style={{ fontSize: 10, color: '#f9e2af', background: 'rgba(249,226,175,0.1)', border: '1px solid rgba(249,226,175,0.2)', borderRadius: 4, padding: '1px 6px', fontWeight: 700, letterSpacing: '0.3px', textTransform: 'uppercase' }}>Default</span>
+                    )}
+                    <span style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }} title={p.name}>{p.name}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#4a5568', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.driver_name || ''}>
+                    {p.driver_name || '—'}
+                  </div>
+                </div>
+                {/* Chips: IP, Port, Type, Status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {p.ip_address && (
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#cba6f7', background: 'rgba(203,166,247,0.08)', border: '1px solid rgba(203,166,247,0.18)', borderRadius: 5, padding: '2px 7px' }}>{p.ip_address}</span>
+                  )}
+                  {p.port_name && (
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#6b7280', background: 'rgba(107,114,128,0.08)', border: '1px solid rgba(107,114,128,0.15)', borderRadius: 5, padding: '2px 7px', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.port_name}>{p.port_name}</span>
+                  )}
+                  <span style={{ fontSize: 10, color: p.is_network ? '#89b4fa' : '#585b70', background: p.is_network ? 'rgba(137,180,250,0.08)' : 'rgba(88,91,112,0.1)', border: `1px solid ${p.is_network ? 'rgba(137,180,250,0.2)' : 'rgba(88,91,112,0.2)'}`, borderRadius: 5, padding: '2px 7px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    {p.is_network ? 'Network' : 'Local'}
+                  </span>
+                  <span style={{ fontSize: 10, color: p.work_offline ? '#ef4444' : '#22c55e', background: p.work_offline ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)', border: `1px solid ${p.work_offline ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}`, borderRadius: 5, padding: '2px 7px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                    {p.work_offline ? 'Offline' : (p.status || 'Idle')}
+                  </span>
+                  {p.job_count ? <span style={{ fontSize: 10, color: '#f9e2af', background: 'rgba(249,226,175,0.08)', border: '1px solid rgba(249,226,175,0.2)', borderRadius: 5, padding: '2px 7px' }}>{p.job_count} jobs</span> : null}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
