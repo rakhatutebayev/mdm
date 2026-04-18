@@ -338,6 +338,22 @@ async def download_package(
     return await generate_package(body, db)
 
 
+@download_router.get("/mqtt-config", tags=["bootstrap"])
+async def get_mqtt_config():
+    """Return MQTT connection settings for agent bootstrap (public)."""
+    import os
+    return {
+        "mqtt_enabled": True,
+        "mqtt_host": None,  # agent derives from server_url hostname
+        "mqtt_port": 443,
+        "mqtt_transport": "websockets",
+        "mqtt_path": "/mqtt",
+        "mqtt_tls": True,
+        "mqtt_username": os.getenv("MQTT_USERNAME", ""),
+        "mqtt_password": os.getenv("MQTT_PASSWORD", ""),
+    }
+
+
 @download_router.get("/latest/linux-version", tags=["bootstrap"])
 async def get_latest_linux_version():
     """Return the latest Linux agent version string (public)."""

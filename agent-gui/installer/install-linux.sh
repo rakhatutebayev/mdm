@@ -57,9 +57,14 @@ curl -fsSL --retry 3 "$DOWNLOAD_URL" > "$TMP_BINARY" || { echo "Failed to downlo
 mv "$TMP_BINARY" "$BIN_DIR/nocko-agent"
 chmod +x "$BIN_DIR/nocko-agent"
 
-# Fetch version from server before writing config
+# Fetch version and MQTT config from server
 AGENT_VERSION=$(curl -fsSL "${SERVER_URL}/api/v1/packages/latest/linux-version" 2>/dev/null || true)
 [ -z "$AGENT_VERSION" ] && AGENT_VERSION="unknown"
+
+MQTT_CONFIG=$(curl -fsSL "${SERVER_URL}/api/v1/packages/mqtt-config" 2>/dev/null || true)
+MQTT_USERNAME=$(echo "$MQTT_CONFIG" | grep -o '"mqtt_username":"[^"]*"' | cut -d'"' -f4 || true)
+MQTT_PASSWORD=$(echo "$MQTT_CONFIG" | grep -o '"mqtt_password":"[^"]*"' | cut -d'"' -f4 || true)
+SERVER_HOST=$(echo "$SERVER_URL" | sed 's|https://||;s|http://||;s|/.*||')
 
 # Generate config.json
 cat > "$CFG_DIR/config.json" <<EOF
@@ -70,7 +75,15 @@ cat > "$CFG_DIR/config.json" <<EOF
   "agent_version": "$AGENT_VERSION",
   "install_dir": "/opt/nocko-agent",
   "log_dir": "$LOG_DIR",
-  "start_immediately": true
+  "start_immediately": true,
+  "mqtt_enabled": true,
+  "mqtt_host": "$SERVER_HOST",
+  "mqtt_port": 443,
+  "mqtt_transport": "websockets",
+  "mqtt_path": "/mqtt",
+  "mqtt_tls": true,
+  "mqtt_username": "$MQTT_USERNAME",
+  "mqtt_password": "$MQTT_PASSWORD"
 }
 EOF
 
