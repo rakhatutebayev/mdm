@@ -93,6 +93,20 @@ jobs:
             sleep 10
             docker compose exec -T backend python seed.py || true
 
+            echo "==> Pre-warming EXE cache (download from GitHub into Docker volume)..."
+            docker compose exec -T backend python -c "
+import asyncio, sys
+sys.path.insert(0, '/app')
+from package_builder.release_catalog import find_artifact
+from routers.packages import _download_or_cache
+_, artifact = find_artifact('exe', 'x64')
+if artifact:
+    data = _download_or_cache(str(artifact['url']), artifact.get('sha256'), 'exe')
+    print(f'Cache warm: {len(data)} bytes')
+else:
+    print('No exe artifact found')
+" || echo "WARN: cache warm failed (non-fatal)"
+
             echo "==> Done! Services:"
             docker compose ps
             echo "==> Server time: $(date)"

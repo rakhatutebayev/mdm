@@ -37,6 +37,19 @@ PACKAGES_BLOCK = """
         proxy_send_timeout 120s;
         proxy_buffering    off;
     }
+
+    # Backend package API — long timeout for GitHub EXE download
+    location /api/v1/packages/ {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
+        proxy_buffering    off;
+    }
 """
 
 
@@ -55,7 +68,7 @@ def main() -> int:
 
     for marker, block, label in [
         ("location /mqtt", MQTT_BLOCK, "/mqtt WebSocket proxy"),
-        ("location /api/packages/generate", PACKAGES_BLOCK, "/api/packages/generate timeout block"),
+        ("location /api/packages/generate", PACKAGES_BLOCK, "/api/packages/generate + /api/v1/packages/ timeout blocks"),
     ]:
         if marker in content:
             print(f"[nginx-mqtt] {label} already configured — skipping.")
