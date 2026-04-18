@@ -338,6 +338,15 @@ async def download_package(
     return await generate_package(body, db)
 
 
+@download_router.get("/latest/linux-version", tags=["bootstrap"])
+async def get_latest_linux_version():
+    """Return the latest Linux agent version string (public)."""
+    release, _ = find_artifact("linux-binary", "amd64")
+    version = str(release.get("version", "unknown")) if release else "unknown"
+    from fastapi.responses import PlainTextResponse
+    return PlainTextResponse(version)
+
+
 @download_router.get("/install-linux.sh", tags=["bootstrap"])
 async def bootstrap_install_linux_sh():
     """Return the bash-based Linux MDM agent installer."""
