@@ -86,4 +86,18 @@ systemctl daemon-reload
 systemctl enable nocko-agent.service
 systemctl restart nocko-agent.service
 
-echo "NOCKO MDM Agent installed and started successfully!"
+# Detect installed version
+AGENT_VERSION=$("$BIN_DIR/nocko-agent" --version 2>/dev/null | head -1 || true)
+if [ -z "$AGENT_VERSION" ]; then
+    AGENT_VERSION=$(curl -fsSL "${SERVER_URL}/api/v1/packages/catalog?customer_id=${CUSTOMER:-default}" 2>/dev/null | grep -o '"release_version":"[^"]*"' | cut -d'"' -f4 || true)
+fi
+if [ -z "$AGENT_VERSION" ]; then
+    AGENT_VERSION="unknown"
+fi
+
+echo ""
+echo "✅ NOCKO MDM Agent installed and started successfully!"
+echo "   Version : $AGENT_VERSION"
+echo "   Server  : $SERVER_URL"
+echo "   Token   : $TOKEN"
+echo "   Service : systemctl status nocko-agent"
