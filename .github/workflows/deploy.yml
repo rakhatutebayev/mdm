@@ -42,7 +42,7 @@ jobs:
             docker compose build backend frontend
 
             echo "==> Switching application services to the new images..."
-            docker compose up -d --remove-orphans backend frontend
+            docker compose up -d --remove-orphans
 
             echo "==> Waiting for backend health..."
             for i in $(seq 1 60); do
