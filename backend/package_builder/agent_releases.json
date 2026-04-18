@@ -1,6 +1,6 @@
 {
   "channel": "stable",
-  "generated_at": "2026-04-18T16:22:05Z",
+  "generated_at": "2026-04-18T16:22:04Z",
   "releases": [
     {
       "version": "1.9.0",
@@ -13,7 +13,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.0/nocko-agent-1.9.0-x64-portable.exe",
           "sha256": "8824f4090c923995b5abe7fb93463b260a1785f934d4a6667abcd14b990eab34",
           "size_bytes": 13822110,
-          "notes": "Published by GitHub Actions Windows release workflow"
+          "notes": "PTY WebSocket terminal support"
         },
         {
           "format": "linux-binary",
@@ -22,7 +22,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.0/nocko-agent-1.9.0-amd64-linux",
           "sha256": "c7383e280cc3fe61ce2c3ca28508766080a4db72ad4a2c283434b645b0490425",
           "size_bytes": 21884680,
-          "notes": "Linux MDM Agent Binary (GitHub Actions)"
+          "notes": "PTY WebSocket terminal support"
         }
       ]
     },
