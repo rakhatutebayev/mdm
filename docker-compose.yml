@@ -33,6 +33,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - agent_cache:/tmp/nocko_agent_cache
     ports:
       - "8000:8000"
     command: >
@@ -63,3 +65,4 @@ services:
 
 volumes:
   pgdata:
+  agent_cache:

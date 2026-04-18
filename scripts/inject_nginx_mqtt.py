@@ -24,6 +24,21 @@ MQTT_BLOCK = """
     }
 """
 
+PACKAGES_BLOCK = """
+    # Package generation — may download ~14 MB from GitHub on first request
+    location /api/packages/generate {
+        proxy_pass         http://127.0.0.1:3002;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_buffering    off;
+    }
+"""
+
 
 def main() -> int:
     if len(sys.argv) < 2:
@@ -36,20 +51,26 @@ def main() -> int:
         return 1
 
     content = path.read_text(encoding="utf-8")
+    changed = False
 
-    if "location /mqtt" in content:
-        print(f"[nginx-mqtt] Already configured in {path} — skipping.")
-        return 0
+    for marker, block, label in [
+        ("location /mqtt", MQTT_BLOCK, "/mqtt WebSocket proxy"),
+        ("location /api/packages/generate", PACKAGES_BLOCK, "/api/packages/generate timeout block"),
+    ]:
+        if marker in content:
+            print(f"[nginx-mqtt] {label} already configured — skipping.")
+            continue
+        idx = content.rfind("}")
+        if idx == -1:
+            print("[nginx-mqtt] No closing brace found — cannot inject.", file=sys.stderr)
+            return 1
+        content = content[:idx] + block + content[idx:]
+        changed = True
+        print(f"[nginx-mqtt] Injected {label} into {path}")
 
-    # Insert before the last closing brace (end of last server block)
-    idx = content.rfind("}")
-    if idx == -1:
-        print("[nginx-mqtt] No closing brace found — cannot inject.", file=sys.stderr)
-        return 1
+    if changed:
+        path.write_text(content, encoding="utf-8")
 
-    new_content = content[:idx] + MQTT_BLOCK + content[idx:]
-    path.write_text(new_content, encoding="utf-8")
-    print(f"[nginx-mqtt] Injected /mqtt WebSocket proxy into {path}")
     return 0
 
 
