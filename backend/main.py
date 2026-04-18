@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from database import engine, Base, AsyncSessionLocal
 from routers import customers, devices, enrollment, discovery
-from routers.packages import router as packages_router
+from routers.packages import router as packages_router, download_router as packages_download_router
 from routers.dashboard import router as dashboard_router
 from routers.mdm import router as mdm_router
 from routers.settings import router as settings_router
@@ -119,6 +119,7 @@ app.include_router(agent_portal_router,   dependencies=_portal_dep)
 # Agent-facing routes — authenticated by enrollment token / agent token (no JWT)
 app.include_router(mdm_router)
 app.include_router(agent_router)
+app.include_router(packages_download_router)  # Public: JWT validated via ?t= query param
 
 
 

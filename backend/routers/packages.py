@@ -22,6 +22,7 @@ from routers.settings import get_agent_package_settings, get_server_url
 from auth import decode_token
 
 router = APIRouter(prefix="/api/v1/packages", tags=["packages"])
+download_router = APIRouter(prefix="/api/v1/packages", tags=["packages"])
 
 # ── Artifact cache ───────────────────────────────────────────────────────────
 _CACHE_DIR = Path("/tmp/nocko_agent_cache")
@@ -304,7 +305,7 @@ async def generate_package(body: PackageRequest, db: AsyncSession = Depends(get_
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-@router.get("/download")
+@download_router.get("/download")
 async def download_package(
     t: str = Query(..., description="JWT access token"),
     customer_id: str = Query(...),
