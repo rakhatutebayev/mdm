@@ -142,6 +142,49 @@
   color: #89b4fa;
 }
 
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #1e2030;
+  padding-bottom: 0;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5568;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  margin-bottom: -1px;
+}
+
+.tab:hover { color: #94a3b8; }
+
+.tabActive {
+  color: #4a7cff;
+  border-bottom-color: #4a7cff;
+}
+
+.tabBadge {
+  font-size: 10px;
+  background: rgba(74,124,255,0.12);
+  color: #4a7cff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-weight: 700;
+}
+
 /* ── Not found ── */
 .notFound {
   padding: 60px 28px;
