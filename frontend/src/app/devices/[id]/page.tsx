@@ -1082,9 +1082,48 @@ export default function DeviceDetailPage() {
         </div>
       )}
 
+      {/* ── Printers Table ── */}
+      {device.printers && device.printers.length > 0 && (
+        <div className={styles.card} style={{ marginTop: 12 }}>
+          <div className={styles.cardHeader}>
+            <span className={styles.cardIcon}>🖨️</span>
+            <h2 className={styles.cardTitle}>Printers ({device.printers.length})</h2>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  {['Name', 'Driver', 'Port', 'IP', 'Type', 'Status'].map(h => <th key={h}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {device.printers.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ color: '#c9cdd6', fontWeight: 500 }}>
+                      {p.is_default && <span style={{ color: '#f9e2af', marginRight: 5 }}>★</span>}
+                      {p.name}
+                    </td>
+                    <td style={{ color: '#89b4fa' }}>{p.driver_name || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#a6e3a1' }}>{p.port_name || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#cba6f7' }}>{p.ip_address || '—'}</td>
+                    <td>{p.is_network ? <span style={{ color: '#89b4fa' }}>Network</span> : <span style={{ color: '#585b70' }}>Local</span>}</td>
+                    <td>
+                      <span style={{ color: p.work_offline ? '#ef4444' : '#22c55e', fontSize: 11 }}>
+                        {p.work_offline ? 'Offline' : (p.status || 'Idle')}
+                      </span>
+                      {p.job_count ? <span style={{ color: '#f9e2af', marginLeft: 6, fontSize: 11 }}>{p.job_count} jobs</span> : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Info Sections ── */}
       <div className={styles.sections}>
-        {sections.filter(s => s.title !== 'Logical Disks').map(({ title, data }) => (
+        {sections.filter(s => s.title !== 'Logical Disks' && s.title !== 'Printers').map(({ title, data }) => (
           <div key={title} className={styles.card}>
             <div className={styles.cardHeader}>
               <span className={styles.cardIcon}>{SECTION_ICONS[title] ?? '📋'}</span>
