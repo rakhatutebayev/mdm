@@ -51,13 +51,22 @@ def load_release_catalog() -> dict[str, Any]:
 
 
 def get_latest_release() -> dict[str, Any] | None:
-    """Return the first release entry from the manifest.
-
-    Convention: CI writes the newest release first.
-    """
+    """Return the release with the highest semantic version from the manifest."""
     catalog = load_release_catalog()
     releases = catalog["releases"]
-    return releases[0] if releases else None
+    if not releases:
+        return None
+
+    def _ver_key(r: dict) -> list[int]:
+        parts: list[int] = []
+        for chunk in str(r.get("version", "")).split("."):
+            try:
+                parts.append(int(chunk))
+            except ValueError:
+                parts.append(0)
+        return parts
+
+    return max(releases, key=_ver_key)
 
 
 def find_artifact(fmt: str, arch: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:

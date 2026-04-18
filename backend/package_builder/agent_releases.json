@@ -3,6 +3,21 @@
   "generated_at": "2026-04-09T15:47:09Z",
   "releases": [
     {
+      "version": "1.8.0",
+      "tag": "agent-v1.8.0",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.8.0-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.8.0/nocko-agent-1.8.0-x64-portable.exe",
+          "sha256": "bf0fe9039e3f017b21d6ffa3e82c1ad9ac1e96412b362f1bbdbfc5fcc1482471",
+          "size_bytes": 13737007,
+          "notes": "Published by GitHub Actions Windows release workflow"
+        }
+      ]
+    },
+    {
       "version": "1.7.6",
       "tag": "agent-v1.7.6",
       "artifacts": [
@@ -33,21 +48,6 @@
       ]
     },
     {
-      "version": "1.8.0",
-      "tag": "agent-v1.8.0",
-      "artifacts": [
-        {
-          "format": "exe",
-          "arch": "x64",
-          "filename": "nocko-agent-1.8.0-x64-portable.exe",
-          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.8.0/nocko-agent-1.8.0-x64-portable.exe",
-          "sha256": "bf0fe9039e3f017b21d6ffa3e82c1ad9ac1e96412b362f1bbdbfc5fcc1482471",
-          "size_bytes": 13737007,
-          "notes": "Published by GitHub Actions Windows release workflow"
-        }
-      ]
-    },
-    {
       "version": "1.7.4",
       "tag": "agent-v1.7.4",
       "artifacts": [
@@ -67,7 +67,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.7.4/nocko-proxy-agent-1.7.4-linux-amd64.tar.gz",
           "sha256": "09c5e356267f9dd0fea760da28f80092f03838c16c5233c718ee547cb5c24035",
           "size_bytes": 36456,
-          "notes": "Linux proxy-agent tarball \u2014 upload via workflow proxy-agent-linux.yml if missing on release"
+          "notes": "Linux proxy-agent tarball — upload via workflow proxy-agent-linux.yml if missing on release"
         }
       ]
     },
@@ -361,7 +361,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.4/nocko-agent-1.0.4-x64-portable.exe",
           "sha256": "",
           "size_bytes": 13640677,
-          "notes": "Remote rename command dispatch \u2014 correct build (v1.0.3 was built from old code)"
+          "notes": "Remote rename command dispatch — correct build (v1.0.3 was built from old code)"
         }
       ]
     },
@@ -376,7 +376,7 @@
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.0.3/nocko-agent-1.0.3-x64-portable.exe",
           "sha256": "",
           "size_bytes": 13638645,
-          "notes": "NOTE: Built from old code \u2014 command dispatcher NOT included"
+          "notes": "NOTE: Built from old code — command dispatcher NOT included"
         }
       ]
     },

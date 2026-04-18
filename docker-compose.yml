@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: mdm
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mdmpassword}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: nocko_mdm
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -20,8 +20,11 @@ services:
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://mdm:${POSTGRES_PASSWORD:-mdmpassword}@postgres:5432/nocko_mdm
+      DATABASE_URL: postgresql+asyncpg://mdm:${POSTGRES_PASSWORD}@postgres:5432/nocko_mdm
       MDM_SERVER_URL: ${MDM_SERVER_URL:-https://mdm.nocko.com}
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@nocko.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       MQTT_HOST: ${MQTT_HOST:-localhost}
       MQTT_PORT: ${MQTT_PORT:-1883}
       # URL returned to proxy agents (outside Docker): WSS /mqtt on 443 unless overridden
@@ -46,6 +49,7 @@ services:
     environment:
       API_URL: http://backend:8000
       NEXT_PUBLIC_API_URL: ""
+      SECURE_COOKIES: "${SECURE_COOKIES:-false}"
     depends_on:
       backend:
         condition: service_healthy

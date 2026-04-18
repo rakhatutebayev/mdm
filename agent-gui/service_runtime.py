@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import random
 import subprocess
 import threading
 import time
+
+# Fully detached background process — survives Windows SCM service teardown.
+# CREATE_NO_WINDOW hides the console; DETACHED_PROCESS breaks the parent/child
+# relationship so SCM stopping the service does NOT kill this child process.
+_WIN_DETACH = (
+    getattr(subprocess, "DETACHED_PROCESS", 0x8) |
+    getattr(subprocess, "CREATE_NO_WINDOW", 0x8000000)
+) if os.name == "nt" else 0
 
 from config import AgentConfig, UNINSTALL_REGISTRY_KEY
 from modules.mdm import MdmAgentClient
@@ -33,6 +43,11 @@ def _handle_rename_computer(
 
     if not new_name:
         return "failed", "new_name is empty"
+
+    # Validate strictly before passing to PowerShell/hostnamectl.
+    # Only letters, digits, hyphens; max 15 chars (NetBIOS limit).
+    if not re.match(r'^[A-Za-z0-9\-]{1,15}$', new_name) or new_name.startswith('-') or new_name.endswith('-'):
+        return "failed", f"Invalid computer name '{new_name}': use 1-15 letters/digits/hyphens, no leading/trailing hyphen"
 
     try:
         if os.name == "nt":
@@ -209,10 +224,28 @@ try {{
 
     # Stop current service gracefully
     Stop-Service -Name 'NOCKOAgent' -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 3
+
+    # Wait until the EXE file lock is released (up to 16 seconds).
+    # Windows holds a file lock on the running EXE; Copy-Item will fail with
+    # PermissionError if we don't wait long enough after Stop-Service.
+    $destExe = '{_ps_single_quote(str(installed_exe))}'
+    $waited = 0
+    while ($waited -lt 8) {{
+        Start-Sleep -Seconds 2
+        $waited++
+        if (Test-Path $destExe) {{
+            try {{
+                $fs = [IO.File]::Open($destExe, 'Open', 'ReadWrite', 'None')
+                $fs.Close()
+                break
+            }} catch {{ }}
+        }} else {{
+            break
+        }}
+    }}
 
     # Replace binary
-    Copy-Item -Path $tempExe -Destination '{_ps_single_quote(str(installed_exe))}' -Force
+    Copy-Item -Path $tempExe -Destination $destExe -Force
 
     if (Test-Path $configPath) {{
         $config = Get-Content -Raw -Path $configPath | ConvertFrom-Json
@@ -238,7 +271,7 @@ try {{
         import subprocess
         proc = subprocess.Popen(
             ["powershell", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            creationflags=_WIN_DETACH,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
@@ -283,7 +316,7 @@ def _handle_restart_agent(
             )
             subprocess.Popen(
                 ["powershell", "-NonInteractive", "-Command", ps_cmd],
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                creationflags=_WIN_DETACH,
             )
         else:
             subprocess.Popen(["sh", "-c", "sleep 5 && systemctl restart nocko-agent"])

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import ssl
 import time
@@ -44,10 +45,11 @@ class VSphereClient:
         self.password = password
         self._session: aiohttp.ClientSession | None = None
         self._token: str = ""
-        # Disable SSL verification for self-signed ESXi certs
+        _tls_verify = os.getenv("VMWARE_TLS_VERIFY", "true").lower() not in ("0", "false", "no")
         self._ssl = ssl.create_default_context()
-        self._ssl.check_hostname = False
-        self._ssl.verify_mode = ssl.CERT_NONE
+        if not _tls_verify:
+            self._ssl.check_hostname = False
+            self._ssl.verify_mode = ssl.CERT_NONE
 
     async def __aenter__(self):
         connector = aiohttp.TCPConnector(ssl=self._ssl)

@@ -8,7 +8,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
-AGENT_VERSION = (os.getenv("NOCKO_AGENT_VERSION", "") or "").strip() or "1.7.6"
+# Version is injected at build time via NOCKO_AGENT_VERSION env var (see agent-release.yml).
+# "unknown" here means the EXE was built locally without setting the variable — never happens
+# in CI. If you see "unknown" in production, the build workflow is misconfigured.
+AGENT_VERSION = (os.getenv("NOCKO_AGENT_VERSION", "") or "").strip() or "unknown"
 WINDOWS_SERVICE_NAME = "NOCKOAgent"
 EMBEDDED_CONFIG_MAGIC = b"NOCKO_CFG_V1"
 UNINSTALL_REGISTRY_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\NOCKOAgent"
@@ -52,6 +55,8 @@ class AgentConfig:
     mqtt_tls:       bool = True        # True when using wss:// (port 443)
     mqtt_tls_verify: bool = True
     mqtt_tls_allow_insecure_fallback: bool = False
+    mqtt_username:  str  = ""         # MQTT broker username (empty = no auth)
+    mqtt_password:  str  = ""         # MQTT broker password
 
     @classmethod
     def base_dir(cls) -> Path:
@@ -85,13 +90,13 @@ class AgentConfig:
         defaults = asdict(cls())
         allowed = set(defaults.keys())
         merged = {**defaults, **{k: v for k, v in raw.items() if k in allowed}}
-        # Existing installations previously skipped certificate verification.
-        # Keep them online by allowing an insecure fallback unless the config
-        # was already migrated to explicit TLS policy fields.
+        # Secure by default: never skip TLS verification unless the config
+        # explicitly opts in. Old configs that lack these keys get False,
+        # which is the safe choice and prevents silent MITM exposure.
         if "tls_allow_insecure_fallback" not in raw:
-            merged["tls_allow_insecure_fallback"] = True
+            merged["tls_allow_insecure_fallback"] = False
         if "mqtt_tls_allow_insecure_fallback" not in raw:
-            merged["mqtt_tls_allow_insecure_fallback"] = True
+            merged["mqtt_tls_allow_insecure_fallback"] = False
         merged["agent_version"] = resolve_agent_version(
             persisted_version=str(raw.get("agent_version", "") or ""),
         )

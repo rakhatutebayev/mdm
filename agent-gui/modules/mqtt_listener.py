@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 log = logging.getLogger("mqtt_listener")
 
 # ── Deduplication ─────────────────────────────────────────────────────────────
-# Keep the last 200 executed command IDs so we never run one twice
-_seen_ids: deque[str] = deque(maxlen=200)
+# Keep the last 1000 executed command IDs so we never run one twice
+_seen_ids: deque[str] = deque(maxlen=1000)
 _seen_lock = threading.Lock()
 
 
@@ -105,6 +105,8 @@ class MqttListener:
         use_tls   = getattr(self._config, "mqtt_tls",       self._use_tls())
         verify_tls = bool(getattr(self._config, "mqtt_tls_verify", True))
         allow_insecure_fallback = bool(getattr(self._config, "mqtt_tls_allow_insecure_fallback", False))
+        mqtt_username = getattr(self._config, "mqtt_username", "") or ""
+        mqtt_password = getattr(self._config, "mqtt_password", "") or ""
         device_id = self._config.device_id
         topic = f"mdm/devices/{device_id}/commands"
         backoff = 5
@@ -139,6 +141,8 @@ class MqttListener:
                 client.ws_set_options(path=ws_path)
             if use_tls:
                 self._configure_tls(client, insecure=insecure_tls_active)
+            if mqtt_username:
+                client.username_pw_set(mqtt_username, mqtt_password)
             client.on_connect = on_connect
             client.on_message = on_message
             client.reconnect_delay_set(min_delay=1, max_delay=30)

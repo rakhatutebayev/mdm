@@ -23,6 +23,8 @@ _MQTT_HOST      = os.getenv("MQTT_HOST",      "localhost")
 _MQTT_PORT      = int(os.getenv("MQTT_PORT",  "8083"))
 _MQTT_TRANSPORT = os.getenv("MQTT_TRANSPORT", "websockets")  # 'websockets' or 'tcp'
 _MQTT_PATH      = os.getenv("MQTT_PATH",      "/mqtt")       # WebSocket endpoint path
+_MQTT_USERNAME  = os.getenv("MQTT_USERNAME",  "")            # MQTT broker username
+_MQTT_PASSWORD  = os.getenv("MQTT_PASSWORD",  "")            # MQTT broker password
 _MQTT_AVAILABLE = False  # set True once aiomqtt import succeeds
 
 _client: Any = None
@@ -204,6 +206,8 @@ class MqttPublisher:
                     identifier="nocko-mdm-backend",
                     keepalive=60,
                     websocket_path=_MQTT_PATH if _MQTT_TRANSPORT == "websockets" else None,
+                    username=_MQTT_USERNAME or None,
+                    password=_MQTT_PASSWORD or None,
                 ) as client:
                     _client = client
                     backoff = 2

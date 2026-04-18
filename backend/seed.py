@@ -1,7 +1,8 @@
 """Seed initial data matching the previously mocked frontend data."""
 import asyncio
+import os
 from database import AsyncSessionLocal, engine, Base
-from models import Customer, Device, NetworkInfo, MonitorInfo, EnrollmentToken
+from models import Customer, Device, NetworkInfo, MonitorInfo, EnrollmentToken, User
 import secrets
 
 
@@ -138,42 +139,60 @@ DEVICES_DATA = [
 
 
 async def seed():
+    from sqlalchemy import select
+    from auth import hash_password
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # ── Seed demo data (customers, devices) ───────────────────────────────────
     async with AsyncSessionLocal() as db:
-        # Check if already seeded
-        from sqlalchemy import select, text
         result = await db.execute(select(Customer).limit(1))
         if result.scalar_one_or_none():
             print("✅  Database already seeded, skipping.")
-            return
-
-        # Create customers
-        customer_map: dict[str, Customer] = {}
-        for cdata in CUSTOMERS_DATA:
-            c = Customer(name=cdata["name"], slug=cdata["slug"])
-            db.add(c)
-            customer_map[cdata["slug"]] = c
-        await db.flush()
-
-        # Create tokens
-        for c in customer_map.values():
-            db.add(EnrollmentToken(customer_id=c.id, token=tok()))
-
-        # Create devices
-        for entry in DEVICES_DATA:
-            customer = customer_map[entry["slug"]]
-            device = Device(customer_id=customer.id, **entry["device"])
-            db.add(device)
+        else:
+            customer_map: dict[str, Customer] = {}
+            for cdata in CUSTOMERS_DATA:
+                c = Customer(name=cdata["name"], slug=cdata["slug"])
+                db.add(c)
+                customer_map[cdata["slug"]] = c
             await db.flush()
 
-            db.add(NetworkInfo(device_id=device.id, **entry["network"]))
-            for mon in entry["monitors"]:
-                db.add(MonitorInfo(device_id=device.id, **mon))
+            for c in customer_map.values():
+                db.add(EnrollmentToken(customer_id=c.id, token=tok()))
 
+            for entry in DEVICES_DATA:
+                customer = customer_map[entry["slug"]]
+                device = Device(customer_id=customer.id, **entry["device"])
+                db.add(device)
+                await db.flush()
+                db.add(NetworkInfo(device_id=device.id, **entry["network"]))
+                for mon in entry["monitors"]:
+                    db.add(MonitorInfo(device_id=device.id, **mon))
+
+            await db.commit()
+            print("✅  Database seeded successfully.")
+
+    # ── Seed admin user (idempotent) ──────────────────────────────────────────
+    async with AsyncSessionLocal() as db:
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@nocko.com")
+        admin_password = os.getenv("ADMIN_PASSWORD", "")
+        if not admin_password:
+            print("⚠️   ADMIN_PASSWORD not set — skipping admin user seed.")
+            return
+        existing = await db.execute(select(User).where(User.email == admin_email))
+        if existing.scalar_one_or_none():
+            print(f"✅  Admin user '{admin_email}' already exists.")
+            return
+        db.add(User(
+            email=admin_email,
+            full_name="NOCKO Admin",
+            hashed_password=hash_password(admin_password),
+            role="admin",
+            is_active=True,
+        ))
         await db.commit()
-        print("✅  Database seeded successfully.")
+        print(f"✅  Admin user created: {admin_email}")
 
 
 if __name__ == "__main__":

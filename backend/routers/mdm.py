@@ -7,10 +7,12 @@ Handles endpoints called by the Windows MDM agent:
 """
 from __future__ import annotations
 
-from datetime import datetime
+import time
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 import asyncio
@@ -37,6 +39,21 @@ from package_builder.release_catalog import find_artifact
 
 router = APIRouter(prefix="/api/v1/mdm/windows", tags=["mdm-agent"])
 KNOWN_AGENT_VERSION_FALLBACK = "1.2.0"
+
+# ── Enroll rate limiter (in-memory, per source IP) ────────────────────────────
+_ENROLL_MAX = 10
+_ENROLL_WINDOW = 300  # 5 minutes
+_enroll_hits: dict[str, list[float]] = defaultdict(list)
+
+
+def _enroll_rate_limit(ip: str) -> None:
+    now = time.monotonic()
+    cutoff = now - _ENROLL_WINDOW
+    hits = _enroll_hits[ip]
+    _enroll_hits[ip] = [t for t in hits if t > cutoff]
+    if len(_enroll_hits[ip]) >= _ENROLL_MAX:
+        raise HTTPException(status_code=429, detail="Too many enrollment attempts — try again later.")
+    _enroll_hits[ip].append(now)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -455,8 +472,9 @@ async def _apply_inventory(device: Device, body: EnrollPayload | InventoryPayloa
 # ── Enroll ────────────────────────────────────────────────────────────────────
 
 @router.post("/enroll", status_code=201)
-async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db)):
+async def enroll_device(request: Request, body: EnrollPayload, db: AsyncSession = Depends(get_db)):
     """Register a new Windows device. Called by the PS1 install script."""
+    _enroll_rate_limit(request.client.host if request.client else "unknown")
 
     customer = await _resolve_customer(body.customer_id, db)
 
@@ -589,10 +607,13 @@ async def enroll_device(body: EnrollPayload, db: AsyncSession = Depends(get_db))
             ))
 
     await db.commit()
+    import os as _os
     return {
         "device_id": device.id,
         "status": "Enrolled",
         "message": f"Device '{body.device_name}' enrolled successfully",
+        "mqtt_username": _os.getenv("MQTT_USERNAME", ""),
+        "mqtt_password": _os.getenv("MQTT_PASSWORD", ""),
     }
 
 
@@ -765,16 +786,34 @@ async def get_metrics(device_id: str, db: AsyncSession = Depends(get_db)):
 
 import json as _json
 
+_COMMAND_RESEND_TIMEOUT_MINUTES = 10
+
+
 @router.get("/commands")
 async def get_commands(device_id: str, db: AsyncSession = Depends(get_db)):
-    """Return pending MDM commands for this device and mark them as sent."""
+    """Return pending MDM commands for this device and mark them as sent.
+
+    Also re-delivers commands stuck in "sent" for longer than the resend timeout —
+    this handles the case where the agent crashed before sending the ack.
+    """
+    from sqlalchemy import or_, and_
     result = await db.execute(select(Device).where(Device.id == device_id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Device not found")
 
+    resend_cutoff = datetime.utcnow() - timedelta(minutes=_COMMAND_RESEND_TIMEOUT_MINUTES)
     cmds_result = await db.execute(
         select(DeviceCommand)
-        .where(DeviceCommand.device_id == device_id, DeviceCommand.status == "pending")
+        .where(
+            DeviceCommand.device_id == device_id,
+            or_(
+                DeviceCommand.status == "pending",
+                and_(
+                    DeviceCommand.status == "sent",
+                    DeviceCommand.created_at < resend_cutoff,
+                ),
+            ),
+        )
         .order_by(DeviceCommand.created_at)
     )
     cmds = cmds_result.scalars().all()

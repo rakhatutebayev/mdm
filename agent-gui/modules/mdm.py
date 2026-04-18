@@ -25,7 +25,8 @@ class MdmAgentClient:
         self.session.headers.update({"User-Agent": f"NOCKO-Agent/{config.agent_version}"})
 
     def _enable_insecure_tls_fallback(self, reason: Exception) -> None:
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        import warnings
+        warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
         self.session.verify = False
         self._tls_verify = False
         self.logger.warning(
@@ -65,6 +66,11 @@ class MdmAgentClient:
         response.raise_for_status()
         data = response.json()
         self.config.device_id = data["device_id"]
+        self.config.enrollment_token = ""
+        if data.get("mqtt_username"):
+            self.config.mqtt_username = data["mqtt_username"]
+        if data.get("mqtt_password"):
+            self.config.mqtt_password = data["mqtt_password"]
         self.config.save()
         self.logger.info("Enrollment complete. device_id=%s", self.config.device_id)
         return self.config.device_id

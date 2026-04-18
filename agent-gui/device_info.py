@@ -1245,32 +1245,82 @@ def _collect_user_profiles() -> list[dict[str, Any]]:
     return profiles
 
 
+def _anydesk_id_from_file(path: str) -> str | None:
+    """Extract AnyDesk ID from a single conf file. Returns None if not found."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+        match = re.search(r"ad\.anydesk\.id\s*=\s*(\d+)", content)
+        if match:
+            return match.group(1)
+    except Exception:
+        pass
+    return None
+
+
 def _collect_anydesk_id() -> str | None:
-    """Read AnyDesk ID from system or service configuration files."""
-    paths = []
+    """Read AnyDesk ID from system/service/user config files.
+
+    Checks in order:
+      1. System-wide install: C:\\ProgramData\\AnyDesk\\  (service runs here)
+      2. Per-user installs:   C:\\Users\\*\\AppData\\Roaming\\AnyDesk\\
+         (common when AnyDesk installed without admin — agent runs as SYSTEM
+          so it can still read other users' AppData directories)
+    """
     if os.name == "nt":
-        paths = [
+        # 1. System-wide paths (AnyDesk installed as Windows service)
+        system_paths = [
             r"C:\ProgramData\AnyDesk\system.conf",
             r"C:\ProgramData\AnyDesk\service.conf",
+            r"C:\ProgramData\AnyDesk\user.conf",
         ]
+        for path in system_paths:
+            ad_id = _anydesk_id_from_file(path)
+            if ad_id:
+                return ad_id
+
+        # 2. Per-user installs — scan all user profiles
+        try:
+            users_root = os.path.join(os.environ.get("SystemDrive", "C:"), "Users")
+            if os.path.isdir(users_root):
+                for username in os.listdir(users_root):
+                    roaming = os.path.join(users_root, username, "AppData", "Roaming", "AnyDesk")
+                    if not os.path.isdir(roaming):
+                        continue
+                    for conf_name in ("system.conf", "service.conf", "user.conf"):
+                        ad_id = _anydesk_id_from_file(os.path.join(roaming, conf_name))
+                        if ad_id:
+                            return ad_id
+        except Exception:
+            pass
+
     elif os.name == "posix":
-        paths = [
+        posix_paths = [
             "/etc/anydesk/system.conf",
             "/etc/anydesk/service.conf",
             "/root/.anydesk/system.conf",
+            "/root/.anydesk/user.conf",
         ]
+        for path in posix_paths:
+            ad_id = _anydesk_id_from_file(path)
+            if ad_id:
+                return ad_id
 
-    for path in paths:
+        # Scan home directories for per-user installations
         try:
-            if os.path.exists(path):
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                    # Look for ad.anydesk.id=123456789
-                    match = re.search(r"ad\.anydesk\.id=(\d+)", content)
-                    if match:
-                        return match.group(1)
+            home_root = "/home"
+            if os.path.isdir(home_root):
+                for username in os.listdir(home_root):
+                    anydesk_dir = os.path.join(home_root, username, ".anydesk")
+                    if not os.path.isdir(anydesk_dir):
+                        continue
+                    for conf_name in ("system.conf", "user.conf"):
+                        ad_id = _anydesk_id_from_file(os.path.join(anydesk_dir, conf_name))
+                        if ad_id:
+                            return ad_id
         except Exception:
-            continue
+            pass
+
     return None
 
 

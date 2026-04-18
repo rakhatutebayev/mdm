@@ -22,11 +22,16 @@ async function proxy(req: NextRequest, context: Context) {
   const search = req.nextUrl.search;
   const url    = `${BACKEND}/api/v1${path}${search}`;
 
-  // Forward the original Content-Type from the client request
   const reqContentType = req.headers.get("Content-Type") ?? "application/json";
   const headers: Record<string, string> = {
     "Content-Type": reqContentType,
   };
+
+  // Forward JWT from httpOnly cookie as Bearer token to backend
+  const token = req.cookies.get("nocko_token")?.value;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   let body: Buffer | string | undefined;
   if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "DELETE") {

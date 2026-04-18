@@ -39,9 +39,15 @@ class MQTTIngestConsumer:
         self._sf = session_factory
         self._client: Optional[mqtt.Client] = None
         self._connected = False
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def start(self) -> None:
         """Start MQTT consumer in paho background thread."""
+        # Capture the running event loop so paho callbacks can schedule
+        # coroutines onto it via run_coroutine_threadsafe (paho runs in its own
+        # thread and asyncio.create_task() is NOT safe to call from there).
+        self._loop = asyncio.get_event_loop()
+
         broker = os.getenv("MQTT_BROKER_HOST", "localhost")
         port = int(os.getenv("MQTT_BROKER_PORT", 1883))
 
@@ -98,8 +104,13 @@ class MQTTIngestConsumer:
         if "payload_type" not in payload:
             payload["payload_type"] = topic_suffix
 
-        # We cannot await here (paho callback thread) — schedule as asyncio task
-        asyncio.create_task(self._dispatch(payload))
+        # paho callbacks run in a background thread — use run_coroutine_threadsafe
+        # to schedule onto the FastAPI event loop. asyncio.create_task() is NOT
+        # safe here and silently drops the message (no running loop in this thread).
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(self._dispatch(payload), self._loop)
+        else:
+            log.warning("MQTT message dropped — event loop not available")
 
     async def _dispatch(self, payload: dict) -> None:
         """Run ingest logic in async DB session."""

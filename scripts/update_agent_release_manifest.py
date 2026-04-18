@@ -88,11 +88,23 @@ def main() -> int:
             }
         )
 
+    def _ver_key(r: dict) -> list[int]:
+        parts: list[int] = []
+        for chunk in str(r.get("version", "")).split("."):
+            try:
+                parts.append(int(chunk))
+            except ValueError:
+                parts.append(0)
+        return parts
+
     releases = [
         item for item in data.get("releases", [])
         if isinstance(item, dict) and item.get("version") != args.version
     ]
-    releases.insert(0, release)
+    releases.append(release)
+    # Always keep newest-first so the file is human-readable and
+    # get_latest_release() works even without the max() sort.
+    releases.sort(key=_ver_key, reverse=True)
 
     data["channel"] = "stable"
     data["generated_at"] = args.generated_at
