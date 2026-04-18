@@ -84,45 +84,25 @@ jobs:
           path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-x64-portable.exe
 
   build-agent-linux:
-    # Build inside CentOS 7 container → links against glibc 2.17.
-    # This makes the binary compatible with CentOS 7/8, RHEL 7/8, and any
-    # modern Linux distro (Ubuntu 18.04+, Debian 9+, etc.).
+    # manylinux2014 = CentOS 7 base, glibc 2.17 — максимальная совместимость.
+    # Python 3.11 уже предустановлен в образе — не нужно компилировать из исходников.
+    # Совместимо с: CentOS 7/8, RHEL 7/8, Ubuntu 18.04+, Debian 9+
     runs-on: ubuntu-22.04
     container:
-      image: centos:7
+      image: quay.io/pypa/manylinux2014_x86_64
     env:
       AGENT_DIR: agent-gui
       RELEASE_DIR: release-assets
+      PYTHON: /opt/python/cp311-cp311/bin/python3.11
+      PIP: /opt/python/cp311-cp311/bin/pip3.11
     steps:
-      - name: Install build tools (CentOS 7)
-        run: |
-          # Use vault mirror — CentOS 7 EOL mirrors are not always available
-          sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo
-          sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
-          yum install -y gcc gcc-c++ make git wget curl \
-            zlib-devel bzip2-devel openssl-devel libffi-devel \
-            readline-devel sqlite-devel xz-devel
-
-      - name: Install Python 3.11 from source
-        run: |
-          cd /tmp
-          # Python 3.11.x — last version with glibc-2.17 compatible build
-          wget -q https://www.python.org/ftp/python/3.11.9/Python-3.11.9.tgz
-          tar xzf Python-3.11.9.tgz
-          cd Python-3.11.9
-          ./configure --enable-optimizations --with-ensurepip=install --prefix=/usr/local/python311
-          make -j$(nproc) altinstall
-          ln -sf /usr/local/python311/bin/python3.11 /usr/local/bin/python3
-          ln -sf /usr/local/python311/bin/pip3.11    /usr/local/bin/pip3
-          python3 --version
-
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Python dependencies
         run: |
-          pip3 install --upgrade pip
-          pip3 install -r agent-gui/requirements.txt pyinstaller
+          $PIP install --upgrade pip
+          $PIP install -r agent-gui/requirements.txt pyinstaller
 
       - name: Build Linux executable
         working-directory: agent-gui
@@ -130,8 +110,7 @@ jobs:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p ../${{ env.RELEASE_DIR }}
-          python3 -m PyInstaller agent.spec --noconfirm
-          # The name in the spec is 'NOCKO-Agent'
+          $PYTHON -m PyInstaller agent.spec --noconfirm
           mv dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
           echo "=== Binary glibc requirement ==="
           objdump -p ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux | grep GLIBC || true
