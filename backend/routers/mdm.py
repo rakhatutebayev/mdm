@@ -984,6 +984,37 @@ async def portal_restart_agent(body: RestartAgentPayload, db: AsyncSession = Dep
     return {"status": "queued", "command_id": cmd.id}
 
 
+class ShellExecPayload(BaseModel):
+    device_id: str
+    command: str
+    timeout: int = 30
+
+
+@router.post("/portal/commands/shell-exec")
+async def portal_shell_exec(body: ShellExecPayload, db: AsyncSession = Depends(get_db)):
+    """Portal: run an arbitrary shell command on the device and return output."""
+    device_id = body.device_id.strip()
+    command = body.command.strip()
+    if not command:
+        raise HTTPException(status_code=400, detail="command is empty")
+
+    cmd = DeviceCommand(
+        device_id=device_id,
+        command_type="shell_exec",
+        payload=_json.dumps({"command": command, "timeout": body.timeout}),
+        status="pending",
+    )
+    db.add(cmd)
+    await db.commit()
+    await db.refresh(cmd)
+
+    asyncio.create_task(_mqtt_publish(
+        device_id,
+        {"id": cmd.id, "type": "shell_exec", "payload": {"command": command, "timeout": body.timeout}},
+    ))
+    return {"status": "queued", "command_id": cmd.id}
+
+
 @router.get("/portal/latest-version")
 async def portal_latest_version():
     """Return the latest agent version from the release catalog (for UI display)."""

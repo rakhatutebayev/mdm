@@ -327,10 +327,40 @@ def _handle_restart_agent(
         return "failed", str(exc)
 
 
+def _handle_shell_exec(
+    cmd: dict, config: AgentConfig, logger: logging.Logger,
+    client: "MdmAgentClient | None" = None,
+) -> tuple[str, str]:
+    """Execute a shell command and return stdout+stderr as the result."""
+    payload = cmd.get("payload", {})
+    command: str = payload.get("command", "").strip()
+    timeout: int = int(payload.get("timeout", 30))
+
+    if not command:
+        return "failed", "command is empty"
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        output = (result.stdout or "") + (result.stderr or "")
+        status = "completed" if result.returncode == 0 else "failed"
+        return status, output.strip() or f"(exit code {result.returncode})"
+    except subprocess.TimeoutExpired:
+        return "failed", f"Command timed out after {timeout}s"
+    except Exception as exc:
+        return "failed", str(exc)
+
+
 _COMMAND_HANDLERS = {
     "rename_computer": _handle_rename_computer,
     "update_agent":    _handle_update_agent,
     "restart_agent":   _handle_restart_agent,
+    "shell_exec":      _handle_shell_exec,
 }
 
 
