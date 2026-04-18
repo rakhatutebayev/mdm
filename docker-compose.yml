@@ -14,6 +14,51 @@ services:
       timeout: 5s
       retries: 10
 
+  emqx:
+    image: emqx/emqx:5.8.6
+    restart: unless-stopped
+    environment:
+      EMQX_NAME: nocko_mdm
+      EMQX_ALLOW_ANONYMOUS: "false"
+      EMQX_AUTHENTICATION__1__MECHANISM: password_based
+      EMQX_AUTHENTICATION__1__BACKEND: built_in_database
+      EMQX_AUTHENTICATION__1__USER_ID_TYPE: username
+      EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__NAME: sha256
+      EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__SALT_POSITION: suffix
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: "${EMQX_DASHBOARD_PASSWORD:-changeme}"
+    ports:
+      - "127.0.0.1:8083:8083"
+      - "127.0.0.1:18083:18083"
+    volumes:
+      - emqxdata:/opt/emqx/data
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  emqx-setup:
+    image: curlimages/curl:8.7.1
+    restart: "no"
+    depends_on:
+      emqx:
+        condition: service_healthy
+    environment:
+      EMQX_DASHBOARD_PASSWORD: "${EMQX_DASHBOARD_PASSWORD:-changeme}"
+      MQTT_USERNAME: "${MQTT_USERNAME}"
+      MQTT_PASSWORD: "${MQTT_PASSWORD}"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Creating MQTT user '${MQTT_USERNAME}'..."
+        curl -sf -X POST http://emqx:18083/api/v5/authentication/password_based:built_in_database/users \
+          -H "Content-Type: application/json" \
+          -u "admin:${EMQX_DASHBOARD_PASSWORD}" \
+          -d "{\"user_id\": \"${MQTT_USERNAME}\", \"password\": \"${MQTT_PASSWORD}\", \"is_superuser\": true}" \
+          && echo "MQTT user created." \
+          || echo "User may already exist — skipping."
+
   backend:
     build:
       context: .
@@ -25,13 +70,17 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@nocko.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      MQTT_HOST: ${MQTT_HOST:-localhost}
-      MQTT_PORT: ${MQTT_PORT:-1883}
-      # URL returned to proxy agents (outside Docker): WSS /mqtt on 443 unless overridden
+      MQTT_HOST: emqx
+      MQTT_PORT: "8083"
+      MQTT_TRANSPORT: websockets
+      MQTT_PATH: /mqtt
+      MQTT_USERNAME: "${MQTT_USERNAME}"
+      MQTT_PASSWORD: "${MQTT_PASSWORD}"
       MQTT_PUBLIC_TRANSPORT: ${MQTT_PUBLIC_TRANSPORT:-websockets}
-      MQTT_PATH: ${MQTT_PATH:-/mqtt}
     depends_on:
       postgres:
+        condition: service_healthy
+      emqx:
         condition: service_healthy
     volumes:
       - agent_cache:/tmp/nocko_agent_cache
@@ -66,3 +115,4 @@ services:
 volumes:
   pgdata:
   agent_cache:
+  emqxdata:
