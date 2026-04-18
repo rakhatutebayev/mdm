@@ -24,6 +24,20 @@ MQTT_BLOCK = """
     }
 """
 
+TERMINAL_WS_BLOCK = """
+    # PTY terminal WebSocket relay — agent and browser connect here
+    location /ws/ {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+"""
+
 PACKAGES_BLOCK = """
     # Package generation — may download ~14 MB from GitHub on first request
     location /api/packages/generate {
@@ -68,6 +82,7 @@ def main() -> int:
 
     for marker, block, label in [
         ("location /mqtt", MQTT_BLOCK, "/mqtt WebSocket proxy"),
+        ("location /ws/", TERMINAL_WS_BLOCK, "/ws/ PTY terminal WebSocket proxy"),
         ("location /api/packages/generate", PACKAGES_BLOCK, "/api/packages/generate + /api/v1/packages/ timeout blocks"),
     ]:
         if marker in content:

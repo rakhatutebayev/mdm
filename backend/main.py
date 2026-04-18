@@ -14,6 +14,7 @@ from routers.settings import router as settings_router
 from routers.agent_router import router as agent_router
 from routers.agent_portal import router as agent_portal_router
 from routers.auth import router as auth_router
+from routers.terminal import router as terminal_router
 from mqtt_publisher import MqttPublisher
 from mqtt_consumer import get_consumer
 from auth import get_current_user
@@ -120,6 +121,7 @@ app.include_router(agent_portal_router,   dependencies=_portal_dep)
 app.include_router(mdm_router)
 app.include_router(agent_router)
 app.include_router(packages_download_router)  # Public: JWT validated via ?t= query param
+app.include_router(terminal_router)           # WebSocket PTY relay (auth via ?t= query param)
 
 
 

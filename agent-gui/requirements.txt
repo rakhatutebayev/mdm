@@ -5,3 +5,4 @@ psutil>=5.9
 requests>=2.31
 pillow>=10.0
 paho-mqtt>=1.6
+websocket-client>=1.7

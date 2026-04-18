@@ -412,6 +412,19 @@ def run_agent_loop(
 
     client.enroll_if_needed()
 
+    # ── Start PTY WebSocket terminal ──────────────────────────────────────────
+    _pty_client = None
+    try:
+        from modules.pty_terminal import PtyWebSocketClient
+        _device_id = getattr(client, "device_id", None) or getattr(config, "device_id", None)
+        if _device_id:
+            _pty_client = PtyWebSocketClient(config.server_url, _device_id)
+            _pty_client.start()
+        else:
+            logger.warning("PTY terminal: device_id not available yet, will retry after enroll")
+    except Exception as _e:
+        logger.warning("PTY terminal unavailable: %s", _e)
+
     # ── Start MQTT listener (instant command delivery) ────────────────────────
     mqtt_listener: MqttListener | None = None
     if getattr(config, "mqtt_enabled", True):

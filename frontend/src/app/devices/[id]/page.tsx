@@ -2,9 +2,12 @@
 export const dynamic = 'force-dynamic';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { getDevice, type DeviceDetail } from '@/lib/api';
 import styles from './page.module.css';
+import dynamicImport from 'next/dynamic';
+
+const PtyTerminal = dynamicImport(() => import('@/components/PtyTerminal/PtyTerminal'), { ssr: false });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface MetricsSnapshot {
@@ -405,55 +408,14 @@ export default function DeviceDetailPage() {
   useEffect(() => () => { stopPolling(); stopUpdatePolling(); stopRestartPolling(); }, [stopPolling, stopUpdatePolling, stopRestartPolling]);
 
   // ── Terminal state ────────────────────────────────────────────────────────
-  const [termInput, setTermInput] = useState('');
-  const [termRunning, setTermRunning] = useState(false);
-  const [termHistory, setTermHistory] = useState<Array<{ cmd: string; output: string; status: string; ts: string }>>([]);
-  const termOutputRef = useRef<HTMLDivElement>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
 
-  const runShellCommand = useCallback(async () => {
-    const cmd = termInput.trim();
-    if (!cmd || termRunning || !device) return;
-    setTermRunning(true);
-    setTermInput('');
-    const ts = new Date().toLocaleTimeString();
-    try {
-      const res = await fetch('/api/mdm/mdm/windows/portal/commands/shell-exec', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: device.id, command: cmd, timeout: 30 }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { command_id } = await res.json();
-      // Poll for result
-      const started = Date.now();
-      const poll = async (): Promise<void> => {
-        if (Date.now() - started > 120_000) {
-          setTermHistory(h => [...h, { cmd, output: 'Timed out waiting for response (agent may be offline or polling interval is slow)', status: 'failed', ts }]);
-          setTermRunning(false);
-          return;
-        }
-        const r = await fetch(`/api/mdm/mdm/windows/portal/commands/${command_id}`);
-        const d = await r.json();
-        if (d.status === 'acked' || d.status === 'completed' || d.status === 'failed') {
-          setTermHistory(h => [...h, { cmd, output: d.result || '(no output)', status: d.status, ts }]);
-          setTermRunning(false);
-        } else {
-          setTimeout(poll, 1500);
-        }
-      };
-      setTimeout(poll, 1500);
-    } catch (e) {
-      setTermHistory(h => [...h, { cmd, output: String(e), status: 'failed', ts }]);
-      setTermRunning(false);
-    }
-  }, [termInput, termRunning, device]);
-
   useEffect(() => {
-    if (termOutputRef.current) {
-      termOutputRef.current.scrollTop = termOutputRef.current.scrollHeight;
-    }
-  }, [termHistory, termRunning]);
+    fetch('/api/auth/token').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.token) setAuthToken(d.token);
+    }).catch(() => {});
+  }, []);
 
   if (error || !device) {
     return (
@@ -1164,83 +1126,20 @@ export default function DeviceDetailPage() {
       )}
 
       {/* ── Terminal ── */}
-      <div ref={terminalRef} className={styles.card} style={{ marginTop: 16 }}>
-        <div className={styles.cardHeader}>
-          <span className={styles.cardIcon}>💻</span>
-          <h2 className={styles.cardTitle}>Remote Terminal</h2>
-        </div>
-        <div style={{ padding: '0 20px 16px' }}>
-          <div
-            ref={termOutputRef}
-            style={{
-              background: '#0f0f17', borderRadius: 6, padding: '12px 14px',
-              fontFamily: 'monospace', fontSize: 13, color: '#cdd6f4',
-              minHeight: 160, maxHeight: 400, overflowY: 'auto',
-              marginBottom: 10, border: '1px solid #2d2d44',
-            }}
-          >
-            {termHistory.length === 0 && !termRunning && (
-              <span style={{ color: '#585b70' }}>Type a command below and press Enter or click Run…</span>
-            )}
-            {termHistory.map((entry, i) => (
-              <div key={i} style={{ marginBottom: 10 }}>
-                <div style={{ color: '#89b4fa' }}>
-                  <span style={{ color: '#585b70', marginRight: 8 }}>[{entry.ts}]</span>
-                  $ {entry.cmd}
-                </div>
-                <pre style={{
-                  margin: '4px 0 0 0', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                  color: entry.status === 'failed' ? '#f38ba8' : '#a6e3a1',
-                }}>
-                  {entry.output}
-                </pre>
-              </div>
-            ))}
-            {termRunning && (
-              <div style={{ color: '#f9e2af' }}>⏳ Running…</div>
-            )}
+      <div ref={terminalRef} style={{ marginTop: 16 }}>
+        {authToken && device?.id ? (
+          <PtyTerminal deviceId={device.id} token={authToken} />
+        ) : (
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <span className={styles.cardIcon}>💻</span>
+              <h2 className={styles.cardTitle}>Remote Terminal</h2>
+            </div>
+            <div style={{ padding: '16px 20px', color: '#585b70', fontSize: 13 }}>
+              Loading terminal…
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontFamily: 'monospace', fontSize: 14, color: '#89b4fa', lineHeight: '34px', flexShrink: 0 }}>$</span>
-            <input
-              type="text"
-              value={termInput}
-              onChange={e => setTermInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') void runShellCommand(); }}
-              placeholder="paste or type a command…"
-              disabled={termRunning}
-              style={{
-                flex: 1, height: 34, padding: '0 10px',
-                fontFamily: 'monospace', fontSize: 13,
-                background: '#1e1e2e', color: '#cdd6f4',
-                border: '1px solid #2d2d44', borderRadius: 5, outline: 'none',
-              }}
-            />
-            <button
-              onClick={() => void runShellCommand()}
-              disabled={termRunning || !termInput.trim()}
-              style={{
-                padding: '0 18px', height: 34, background: '#4a7cff', color: '#fff',
-                border: 'none', borderRadius: 5, fontWeight: 600, fontSize: 13,
-                cursor: termRunning || !termInput.trim() ? 'not-allowed' : 'pointer',
-                opacity: termRunning || !termInput.trim() ? 0.5 : 1,
-              }}
-            >
-              {termRunning ? '…' : 'Run'}
-            </button>
-            {termHistory.length > 0 && (
-              <button
-                onClick={() => setTermHistory([])}
-                style={{
-                  padding: '0 12px', height: 34, background: '#2d2d44', color: '#cdd6f4',
-                  border: '1px solid #3d3d5a', borderRadius: 5, fontSize: 12, cursor: 'pointer',
-                }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

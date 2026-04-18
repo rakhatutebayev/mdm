@@ -11,6 +11,16 @@ hidden_imports = [
     "paho.mqtt.client",
     "paho.mqtt.properties",
     "paho.mqtt.packettypes",
+    "websocket",
+    "websocket._core",
+    "websocket._exceptions",
+    "websocket._handshake",
+    "websocket._http",
+    "websocket._logging",
+    "websocket._socket",
+    "websocket._ssl_compat",
+    "websocket._utils",
+    "select",
 ]
 
 if sys.platform == "win32":
