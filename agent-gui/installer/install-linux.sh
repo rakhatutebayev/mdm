@@ -57,12 +57,17 @@ curl -fsSL --retry 3 "$DOWNLOAD_URL" > "$TMP_BINARY" || { echo "Failed to downlo
 mv "$TMP_BINARY" "$BIN_DIR/nocko-agent"
 chmod +x "$BIN_DIR/nocko-agent"
 
+# Fetch version from server before writing config
+AGENT_VERSION=$(curl -fsSL "${SERVER_URL}/api/v1/packages/latest/linux-version" 2>/dev/null || true)
+[ -z "$AGENT_VERSION" ] && AGENT_VERSION="unknown"
+
 # Generate config.json
 cat > "$CFG_DIR/config.json" <<EOF
 {
   "server_url": "$SERVER_URL",
   "enrollment_token": "$TOKEN",
   "customer_id": "$CUSTOMER",
+  "agent_version": "$AGENT_VERSION",
   "install_dir": "/opt/nocko-agent",
   "log_dir": "$LOG_DIR",
   "start_immediately": true
@@ -89,10 +94,6 @@ EOF
 systemctl daemon-reload
 systemctl enable nocko-agent.service
 systemctl restart nocko-agent.service
-
-# Detect installed version
-AGENT_VERSION=$(curl -fsSL "${SERVER_URL}/api/v1/packages/latest/linux-version" 2>/dev/null || true)
-[ -z "$AGENT_VERSION" ] && AGENT_VERSION="unknown"
 
 echo ""
 echo "✅ NOCKO MDM Agent installed and started successfully!"
