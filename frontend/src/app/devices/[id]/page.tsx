@@ -428,8 +428,8 @@ export default function DeviceDetailPage() {
       // Poll for result
       const started = Date.now();
       const poll = async (): Promise<void> => {
-        if (Date.now() - started > 60_000) {
-          setTermHistory(h => [...h, { cmd, output: 'Timed out waiting for response', status: 'failed', ts }]);
+        if (Date.now() - started > 120_000) {
+          setTermHistory(h => [...h, { cmd, output: 'Timed out waiting for response (agent may be offline or polling interval is slow)', status: 'failed', ts }]);
           setTermRunning(false);
           return;
         }
