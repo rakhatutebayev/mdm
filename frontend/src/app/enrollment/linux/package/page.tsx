@@ -71,7 +71,7 @@ export default function LinuxDeploymentPackagePage() {
   };
 
   const installCmd = enrollmentToken && serverUrl
-    ? `curl -fsSL ${serverUrl}/api/v1/packages/install-linux.sh | sudo bash -s -- --server-url ${serverUrl} --token ${enrollmentToken}`
+    ? `curl -fsSL ${serverUrl}/api/v1/packages/install-linux.sh | sudo bash -s -- --url ${serverUrl} --token ${enrollmentToken}${customerId ? ` --customer ${customerId}` : ''}`
     : '';
 
   const handleCopy = () => {

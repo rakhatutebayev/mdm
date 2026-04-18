@@ -13,7 +13,7 @@ CUSTOMER=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --url) SERVER_URL="$2"; shift ;;
+        --url|--server-url) SERVER_URL="$2"; shift ;;
         --token) TOKEN="$2"; shift ;;
         --customer) CUSTOMER="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -21,8 +21,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-if [ -z "$SERVER_URL" ] || [ -z "$TOKEN" ] || [ -z "$CUSTOMER" ]; then
-    echo "Usage: $0 --url <url> --token <token> --customer <customer_id>"
+if [ -z "$SERVER_URL" ] || [ -z "$TOKEN" ]; then
+    echo "Usage: $0 --url <url> --token <token> [--customer <customer_id>]"
     exit 1
 fi
 
