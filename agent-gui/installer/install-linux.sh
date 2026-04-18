@@ -48,9 +48,13 @@ LOG_DIR="/var/log/nocko-agent"
 mkdir -p "$BIN_DIR" "$CFG_DIR" "$LOG_DIR"
 
 DOWNLOAD_URL="${SERVER_URL}/api/v1/packages/latest/linux-binary"
+TMP_BINARY="/tmp/nocko-agent-download"
 
 echo "Downloading agent binary from $DOWNLOAD_URL..."
-curl -sSL "$DOWNLOAD_URL" -o "$BIN_DIR/nocko-agent" || { echo "Failed to download agent."; exit 1; }
+# Download to /tmp first to avoid pipe stdin conflict when running via curl|bash
+curl -fsSL --retry 3 "$DOWNLOAD_URL" > "$TMP_BINARY" || { echo "Failed to download agent binary."; exit 1; }
+[ -s "$TMP_BINARY" ] || { echo "Downloaded file is empty."; exit 1; }
+mv "$TMP_BINARY" "$BIN_DIR/nocko-agent"
 chmod +x "$BIN_DIR/nocko-agent"
 
 # Generate config.json
