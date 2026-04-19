@@ -444,7 +444,10 @@ def run_agent_loop(
         from modules.pty_terminal import PtyWebSocketClient
         _device_id = getattr(client, "device_id", None) or getattr(config, "device_id", None)
         if _device_id:
-            _pty_client = PtyWebSocketClient(config.server_url, _device_id)
+            _pty_client = PtyWebSocketClient(
+                config.server_url, _device_id,
+                tls_verify=bool(getattr(config, "tls_verify", True)),
+            )
             _pty_client.start()
         else:
             logger.warning("PTY terminal: device_id not available yet, will retry after enroll")

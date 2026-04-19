@@ -154,10 +154,11 @@ class PtySession:
 class PtyWebSocketClient:
     """Connects to backend /ws/agent/{device_id} and handles PTY sessions."""
 
-    def __init__(self, server_url: str, device_id: str, reconnect_interval: int = 5):
+    def __init__(self, server_url: str, device_id: str, reconnect_interval: int = 5, tls_verify: bool = True):
         self._server_url = server_url.rstrip("/")
         self._device_id = device_id
         self._reconnect_interval = reconnect_interval
+        self._tls_verify = tls_verify
         self._session: PtySession | None = None
         self._running = False
         self._thread: threading.Thread | None = None
@@ -198,7 +199,20 @@ class PtyWebSocketClient:
         url = self._ws_url()
         logger.info("Connecting PTY WS to %s", url)
 
-        ws = _ws_module.WebSocket()
+        import ssl as _ssl
+        ssl_opt: dict = {}
+        if not self._tls_verify:
+            ssl_opt = {"cert_reqs": _ssl.CERT_NONE, "check_hostname": False}
+        elif self._server_url.startswith("wss://"):
+            # Use system CA bundle — on CentOS 7 this may be outdated,
+            # try certifi as fallback
+            try:
+                import certifi
+                ssl_opt = {"ca_certs": certifi.where()}
+            except ImportError:
+                pass
+
+        ws = _ws_module.WebSocket(sslopt=ssl_opt)
         ws.connect(url, timeout=30)
         logger.info("PTY WS connected")
 
