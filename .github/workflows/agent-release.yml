@@ -123,19 +123,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get install -y -q patchelf
           pip install --upgrade pip
-          pip install -r agent-gui/requirements.txt pyinstaller staticx
+          pip install -r agent-gui/requirements.txt pyinstaller
 
-      - name: Build rpm binary (static, CentOS 7+ compatible)
+      - name: Build rpm binary (CentOS 8+, RHEL 8+, AlmaLinux, Rocky)
         working-directory: agent-gui
         env:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p ../${{ env.RELEASE_DIR }}
           python -m PyInstaller agent.spec --noconfirm
-          # Wrap with staticx: bundles all .so deps → portable across all Linux distros
-          staticx dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm
+          cp dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm
 
       - name: Show glibc requirement
         run: objdump -p ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm | grep GLIBC || true
