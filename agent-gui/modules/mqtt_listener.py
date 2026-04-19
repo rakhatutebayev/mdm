@@ -75,7 +75,14 @@ class MqttListener:
         import ssl as _ssl
 
         cert_reqs = _ssl.CERT_NONE if insecure else _ssl.CERT_REQUIRED
-        client.tls_set(cert_reqs=cert_reqs)
+        ca_certs = None
+        if not insecure:
+            try:
+                import certifi
+                ca_certs = certifi.where()
+            except ImportError:
+                pass
+        client.tls_set(ca_certs=ca_certs, cert_reqs=cert_reqs)
         client.tls_insecure_set(insecure)
 
     @staticmethod

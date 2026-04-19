@@ -203,9 +203,8 @@ class PtyWebSocketClient:
         ssl_opt: dict = {}
         if not self._tls_verify:
             ssl_opt = {"cert_reqs": _ssl.CERT_NONE, "check_hostname": False}
-        elif self._server_url.startswith("wss://"):
-            # Use system CA bundle — on CentOS 7 this may be outdated,
-            # try certifi as fallback
+        elif self._server_url.startswith("https://") or self._server_url.startswith("wss://"):
+            # CentOS 7 has an outdated CA bundle — use certifi as fallback
             try:
                 import certifi
                 ssl_opt = {"ca_certs": certifi.where()}
