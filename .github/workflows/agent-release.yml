@@ -113,18 +113,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build rpm binary via manylinux2014
+      - name: Build rpm binary (CentOS 7 compatible, glibc 2.17)
         env:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p ${{ env.RELEASE_DIR }}
+          # Use centos7 base + compile Python with --enable-shared for PyInstaller
           docker run --rm \
             -v "$PWD:/workspace" \
             -e NOCKO_AGENT_VERSION="${NOCKO_AGENT_VERSION}" \
-            quay.io/pypa/manylinux2014_x86_64 \
+            centos:7 \
             /bin/bash -c "
               set -e
-              PYTHON=/opt/python/cp311-cp311/bin/python
+              # CentOS 7 EOL — use vault mirrors
+              sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo
+              sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
+
+              yum install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel xz-devel make wget 2>/dev/null
+
+              # Build Python 3.11 with --enable-shared
+              cd /tmp
+              wget -q https://www.python.org/ftp/python/3.11.9/Python-3.11.9.tgz
+              tar xf Python-3.11.9.tgz
+              cd Python-3.11.9
+              ./configure --enable-shared --prefix=/usr/local --with-ssl-default-suites=openssl LDFLAGS='-Wl,-rpath,/usr/local/lib' 2>/dev/null
+              make -j\$(nproc) 2>/dev/null
+              make install 2>/dev/null
+              PYTHON=/usr/local/bin/python3.11
+
               \$PYTHON -m pip install --upgrade pip --quiet
               \$PYTHON -m pip install -r /workspace/agent-gui/requirements.txt pyinstaller --quiet
               cd /workspace/agent-gui
