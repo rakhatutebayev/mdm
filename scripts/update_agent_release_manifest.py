@@ -24,11 +24,14 @@ def parse_asset(value: str) -> dict[str, str]:
         )
 
     fmt, arch, path = parts
-    if fmt not in {"exe", "linux-tarball", "linux-binary"}:
-        raise argparse.ArgumentTypeError("Asset format must be 'exe', 'linux-tarball', or 'linux-binary'")
+    LINUX_FORMATS = {"linux-tarball", "linux-binary", "linux-deb", "linux-rpm"}
+    if fmt not in {"exe"} | LINUX_FORMATS:
+        raise argparse.ArgumentTypeError(
+            f"Asset format must be one of: exe, linux-deb, linux-rpm, linux-binary, linux-tarball"
+        )
     if fmt == "exe" and arch not in {"x64", "x86"}:
         raise argparse.ArgumentTypeError("For exe, arch must be 'x64' or 'x86'")
-    if fmt in {"linux-tarball", "linux-binary"} and arch != "amd64":
+    if fmt in LINUX_FORMATS and arch != "amd64":
         raise argparse.ArgumentTypeError(f"For {fmt}, arch must be 'amd64'")
 
     return {"format": fmt, "arch": arch, "path": path}
@@ -78,13 +81,13 @@ def main() -> int:
                 "url": f"https://github.com/{args.repo}/releases/download/{args.tag}/{filename}",
                 "sha256": sha256_of(path),
                 "size_bytes": path.stat().st_size,
-                "notes": (
-                    "Published by GitHub Actions Windows release workflow"
-                    if asset["format"] == "exe"
-                    else "Linux MDM Agent Binary (GitHub Actions)"
-                    if asset["format"] == "linux-binary"
-                    else "Linux proxy-agent tarball (GitHub Actions)"
-                ),
+                "notes": {
+                    "exe": "Published by GitHub Actions Windows release workflow",
+                    "linux-deb": "Linux agent binary for Debian/Ubuntu family (glibc 2.31+)",
+                    "linux-rpm": "Linux agent binary for RedHat/CentOS family (glibc 2.17+, CentOS 7+)",
+                    "linux-binary": "Linux MDM Agent Binary (GitHub Actions)",
+                    "linux-tarball": "Linux proxy-agent tarball (GitHub Actions)",
+                }.get(asset["format"], "GitHub Actions artifact"),
             }
         )
 

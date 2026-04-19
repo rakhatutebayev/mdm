@@ -82,6 +82,73 @@ def find_artifact(fmt: str, arch: str) -> tuple[dict[str, Any] | None, dict[str,
     return release, None
 
 
+# Maps distro slug → artifact format stored in agent_releases.json
+_DISTRO_FORMAT_MAP: dict[str, str] = {
+    # Debian/Ubuntu family
+    "deb":        "linux-deb",
+    "debian":     "linux-deb",
+    "ubuntu":     "linux-deb",
+    # RedHat/CentOS/Rocky/AlmaLinux family
+    "rpm":        "linux-rpm",
+    "centos":     "linux-rpm",
+    "centos7":    "linux-rpm",
+    "centos8":    "linux-rpm",
+    "centos9":    "linux-rpm",
+    "rhel":       "linux-rpm",
+    "rhel7":      "linux-rpm",
+    "rhel8":      "linux-rpm",
+    "rhel9":      "linux-rpm",
+    "almalinux":  "linux-rpm",
+    "rocky":      "linux-rpm",
+    "fedora":     "linux-rpm",
+    # Generic / legacy
+    "linux":      "linux-binary",
+    "generic":    "linux-binary",
+}
+
+
+def distro_to_format(distro: str) -> str:
+    """Convert a distro slug to the artifact format key.
+
+    Falls back to 'linux-deb' (widest glibc compatibility among new formats)
+    when the distro is unknown, then 'linux-binary' for legacy manifests.
+    """
+    return _DISTRO_FORMAT_MAP.get(distro.lower().strip(), "linux-deb")
+
+
+def find_linux_artifact(distro: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Find the best Linux artifact for the requested distro.
+
+    Resolution order:
+    1. Exact format from _DISTRO_FORMAT_MAP (e.g. linux-rpm for centos7)
+    2. 'linux-binary' legacy fallback (pre-matrix releases)
+    3. Any artifact whose format starts with 'linux-'
+    """
+    release = get_latest_release()
+    if not release:
+        return None, None
+
+    fmt = distro_to_format(distro)
+    artifacts = release.get("artifacts", [])
+
+    # Primary match
+    for artifact in artifacts:
+        if artifact.get("format") == fmt and artifact.get("arch") == "amd64":
+            return release, artifact
+
+    # Legacy fallback: old releases only had 'linux-binary'
+    for artifact in artifacts:
+        if artifact.get("format") == "linux-binary" and artifact.get("arch") == "amd64":
+            return release, artifact
+
+    # Last resort: any linux artifact
+    for artifact in artifacts:
+        if str(artifact.get("format", "")).startswith("linux-"):
+            return release, artifact
+
+    return release, None
+
+
 def find_linux_proxy_bundle() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Latest release artifact: Linux proxy-agent tarball (format linux-tarball, arch amd64)."""
     release = get_latest_release()

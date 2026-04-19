@@ -122,7 +122,13 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
     expected_sha256 = str(payload.get("sha256", "") or "").strip().lower()
 
     if not download_url:
-        return "failed", "download_url is missing in payload"
+        # No explicit URL — derive from server_url + linux_distro stored in config
+        if os.name == "posix":
+            distro = (getattr(config, "linux_distro", "") or "generic").strip()
+            download_url = f"{config.server_url.rstrip('/')}/api/v1/packages/latest/linux-binary?distro={distro}"
+            logger.info("update_agent: no download_url in payload, using distro-aware URL: %s", download_url)
+        else:
+            return "failed", "download_url is missing in payload"
     if not expected_sha256:
         return "failed", "sha256 is missing in payload"
 
@@ -132,6 +138,7 @@ def _handle_update_agent(cmd: dict, config: AgentConfig, logger: logging.Logger)
 
     try:
         if os.name == "posix":
+            distro = (getattr(config, "linux_distro", "") or "generic").strip()
             # Linux update path
             bash_script = f"""#!/bin/bash
 set -e

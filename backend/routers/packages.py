@@ -17,7 +17,7 @@ from database import get_db
 from models import Customer, EnrollmentToken
 from package_builder.bootstrap_exe import embed_bootstrap_config
 from package_builder import build_zip
-from package_builder.release_catalog import find_artifact, load_release_catalog
+from package_builder.release_catalog import find_artifact, find_linux_artifact, load_release_catalog
 from routers.settings import get_agent_package_settings, get_server_url
 from auth import decode_token
 
@@ -362,9 +362,9 @@ async def get_mqtt_config():
 
 
 @download_router.get("/latest/linux-version", tags=["bootstrap"])
-async def get_latest_linux_version():
+async def get_latest_linux_version(distro: str = "generic"):
     """Return the latest Linux agent version string (public)."""
-    release, _ = find_artifact("linux-binary", "amd64")
+    release, _ = find_linux_artifact(distro)
     version = str(release.get("version", "unknown")) if release else "unknown"
     from fastapi.responses import PlainTextResponse
     return PlainTextResponse(version)
@@ -381,19 +381,27 @@ async def bootstrap_install_linux_sh():
         raise HTTPException(status_code=404, detail="Installer script not found")
     return FileResponse(path, media_type="text/x-shellscript")
 
+
 @download_router.get("/latest/linux-binary", tags=["bootstrap"])
-async def get_latest_linux_binary():
-    """Return the raw Linux MDM agent binary for the latest release."""
-    _, artifact = find_artifact("linux-binary", "amd64")
+async def get_latest_linux_binary(distro: str = "generic"):
+    """Return the Linux MDM agent binary for the requested distro family.
+
+    ?distro=deb      → Debian/Ubuntu build (glibc 2.31+)
+    ?distro=rpm      → RedHat/CentOS build  (glibc 2.17+, CentOS 7+)
+    ?distro=centos7  → same as rpm
+    ?distro=ubuntu   → same as deb
+    (no param)       → legacy linux-binary or best available
+    """
+    release, artifact = find_linux_artifact(distro)
     if not artifact:
-        raise HTTPException(status_code=404, detail="No Linux binary artifact found in release catalog")
-    
+        raise HTTPException(status_code=404, detail=f"No Linux binary found for distro='{distro}'")
+
     url = str(artifact["url"])
     sha256 = artifact.get("sha256")
-    
-    # Download or get from cache
-    data = _download_or_cache(url=url, sha256_expected=sha256, fmt="linux-binary")
-    
+    fmt = str(artifact.get("format", "linux-binary"))
+
+    data = _download_or_cache(url=url, sha256_expected=sha256, fmt=fmt)
+
     return Response(
         content=data,
         media_type="application/octet-stream",

@@ -24,22 +24,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Validate agent sources exist
-        shell: pwsh
-        run: |
-          $required = @(
-            "${env:AGENT_DIR}\main.py",
-            "${env:AGENT_DIR}\agent.spec",
-            "${env:AGENT_DIR}\make_icons.py"
-          )
-          $missing = @($required | Where-Object { -not (Test-Path $_) })
-          if ($missing.Count -gt 0) {
-            Write-Error "Agent source files are missing from the repository:`n$($missing -join "`n")"
-            exit 1
-          }
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -73,10 +57,6 @@ jobs:
           }
           Copy-Item $builtExe "..\${env:RELEASE_DIR}\nocko-agent-${{ inputs.version }}-x64-portable.exe"
 
-      - name: List release assets
-        shell: pwsh
-        run: Get-ChildItem "${env:RELEASE_DIR}"
-
       - name: Upload Windows Asset
         uses: actions/upload-artifact@v4
         with:
@@ -84,44 +64,72 @@ jobs:
           path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-x64-portable.exe
 
   build-agent-linux:
-    # ubuntu-20.04 runner → glibc 2.31.
-    # Совместимо с: CentOS 8+, RHEL 8+, Debian 10+, Ubuntu 18.04+.
-    # CentOS 7 (glibc 2.17) — EOL 2024, требует отдельного решения.
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Debian/Ubuntu family — glibc 2.31 (ubuntu-20.04 base)
+          # Covers: Ubuntu 18.04+, Debian 10+, Linux Mint 20+
+          - family: deb
+            label: ubuntu2004
+            image: ubuntu:20.04
+            glibc_min: "2.31"
+
+          # RedHat/CentOS family — glibc 2.17 (CentOS 7 base via manylinux2014)
+          # Covers: CentOS 7/8/9, RHEL 7/8/9, AlmaLinux, Rocky Linux, Fedora
+          - family: rpm
+            label: centos7
+            image: quay.io/pypa/manylinux2014_x86_64
+            glibc_min: "2.17"
+
     env:
       RELEASE_DIR: release-assets
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: agent-gui/requirements.txt
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r agent-gui/requirements.txt pyinstaller
-
-      - name: Build Linux executable
-        working-directory: agent-gui
+      - name: Build Linux binary (${{ matrix.family }})
         env:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
+          FAMILY: ${{ matrix.family }}
+          LABEL: ${{ matrix.label }}
+          IMAGE: ${{ matrix.image }}
         run: |
-          mkdir -p ../${{ env.RELEASE_DIR }}
-          python -m PyInstaller agent.spec --noconfirm
-          mv dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
-          echo "=== glibc requirement ==="
-          objdump -p ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux | grep GLIBC || true
+          mkdir -p ${{ env.RELEASE_DIR }}
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -e NOCKO_AGENT_VERSION="${NOCKO_AGENT_VERSION}" \
+            "${IMAGE}" \
+            /bin/bash -c "
+              set -e
+              # Install Python 3.11 depending on base image
+              if command -v apt-get >/dev/null 2>&1; then
+                apt-get update -q && apt-get install -y -q python3.11 python3.11-venv python3-pip || true
+                PYTHON=python3.11
+              elif command -v yum >/dev/null 2>&1; then
+                # manylinux2014 already has Python in /opt/python
+                PYTHON=/opt/python/cp311-cp311/bin/python
+              fi
+              \$PYTHON -m pip install --upgrade pip --quiet
+              \$PYTHON -m pip install -r /workspace/agent-gui/requirements.txt pyinstaller --quiet
+              cd /workspace/agent-gui
+              \$PYTHON -m PyInstaller agent.spec --noconfirm --distpath /workspace/${{ env.RELEASE_DIR }}/tmp_dist
+              mv /workspace/${{ env.RELEASE_DIR }}/tmp_dist/NOCKO-Agent \
+                 /workspace/${{ env.RELEASE_DIR }}/nocko-agent-${NOCKO_AGENT_VERSION}-amd64-linux-${FAMILY}
+              chmod +x /workspace/${{ env.RELEASE_DIR }}/nocko-agent-${NOCKO_AGENT_VERSION}-amd64-linux-${FAMILY}
+            "
 
-      - name: Upload Linux Asset
+      - name: Show glibc requirement
+        run: |
+          objdump -p ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-${{ matrix.family }} \
+            | grep GLIBC || true
+
+      - name: Upload Linux Asset (${{ matrix.family }})
         uses: actions/upload-artifact@v4
         with:
-          name: linux-asset
-          path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux
+          name: linux-asset-${{ matrix.family }}
+          path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-${{ matrix.family }}
 
   publish-release:
     needs: [build-agent-windows, build-agent-linux]
@@ -130,17 +138,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Windows Asset
+      - name: Download all assets
         uses: actions/download-artifact@v4
         with:
-          name: windows-asset
           path: release-assets
-      
-      - name: Download Linux Asset
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-asset
-          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: find release-assets -type f | sort
 
       - name: Publish GitHub release
         if: ${{ inputs.publish_release == 'true' }}
@@ -153,11 +158,13 @@ jobs:
             echo "No release assets were produced."
             exit 1
           fi
-          
+
           if gh release view "$tag" > /dev/null 2>&1; then
             gh release upload "$tag" release-assets/* --clobber
           else
-            gh release create "$tag" release-assets/* --title "Agent ${{ inputs.version }}" --notes "Agent release ${{ inputs.version }}"
+            gh release create "$tag" release-assets/* \
+              --title "Agent ${{ inputs.version }}" \
+              --notes "Agent release ${{ inputs.version }}"
           fi
 
       - name: Update agent release manifest
@@ -166,23 +173,25 @@ jobs:
         run: |
           generatedAt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           tag="agent-v${{ inputs.version }}"
-          
+          ver="${{ inputs.version }}"
+
           args=(
             "scripts/update_agent_release_manifest.py"
             "--manifest" "backend/package_builder/agent_releases.json"
             "--repo" "$REPO"
             "--tag" "$tag"
-            "--version" "${{ inputs.version }}"
+            "--version" "$ver"
             "--generated-at" "$generatedAt"
           )
 
-          if [ -f "release-assets/nocko-agent-${{ inputs.version }}-x64-portable.exe" ]; then
-            args+=("--asset" "exe:x64:release-assets/nocko-agent-${{ inputs.version }}-x64-portable.exe")
-          fi
-          
-          if [ -f "release-assets/nocko-agent-${{ inputs.version }}-amd64-linux" ]; then
-            args+=("--asset" "linux-binary:amd64:release-assets/nocko-agent-${{ inputs.version }}-amd64-linux")
-          fi
+          [ -f "release-assets/nocko-agent-${ver}-x64-portable.exe" ] && \
+            args+=("--asset" "exe:x64:release-assets/nocko-agent-${ver}-x64-portable.exe")
+
+          [ -f "release-assets/nocko-agent-${ver}-amd64-linux-deb" ] && \
+            args+=("--asset" "linux-deb:amd64:release-assets/nocko-agent-${ver}-amd64-linux-deb")
+
+          [ -f "release-assets/nocko-agent-${ver}-amd64-linux-rpm" ] && \
+            args+=("--asset" "linux-rpm:amd64:release-assets/nocko-agent-${ver}-amd64-linux-rpm")
 
           python "${args[@]}"
 
@@ -204,4 +213,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh workflow run deploy.yml --repo ${{ github.repository }} --ref main
-          echo "Portal deploy triggered for v${{ inputs.version }}"

@@ -57,6 +57,7 @@ class AgentConfig:
     mqtt_tls_allow_insecure_fallback: bool = False
     mqtt_username:  str  = ""         # MQTT broker username (empty = no auth)
     mqtt_password:  str  = ""         # MQTT broker password
+    linux_distro:   str  = ""         # detected at install time: deb, rpm, centos7, etc.
 
     @classmethod
     def base_dir(cls) -> Path:

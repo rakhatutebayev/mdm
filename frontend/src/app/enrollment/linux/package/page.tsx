@@ -9,6 +9,32 @@ import {
 } from '@/lib/api';
 import styles from '../../windows/package/page.module.css';
 
+// ── Distro catalog ────────────────────────────────────────────────────────────
+// Each entry: { slug (sent to backend), label, family, icon }
+const DISTROS = [
+  // RedHat family
+  { slug: 'centos7',    label: 'CentOS 7',               family: 'rpm', icon: '🐧' },
+  { slug: 'centos8',    label: 'CentOS 8 / Stream 8',    family: 'rpm', icon: '🐧' },
+  { slug: 'centos9',    label: 'CentOS Stream 9',         family: 'rpm', icon: '🐧' },
+  { slug: 'rhel7',      label: 'RHEL 7',                  family: 'rpm', icon: '🎩' },
+  { slug: 'rhel8',      label: 'RHEL 8',                  family: 'rpm', icon: '🎩' },
+  { slug: 'rhel9',      label: 'RHEL 9',                  family: 'rpm', icon: '🎩' },
+  { slug: 'almalinux',  label: 'AlmaLinux 8 / 9',         family: 'rpm', icon: '🐧' },
+  { slug: 'rocky',      label: 'Rocky Linux 8 / 9',       family: 'rpm', icon: '🐧' },
+  { slug: 'fedora',     label: 'Fedora 38 / 39 / 40',     family: 'rpm', icon: '🐧' },
+  // Debian family
+  { slug: 'ubuntu',     label: 'Ubuntu 20.04 / 22.04',    family: 'deb', icon: '🟠' },
+  { slug: 'ubuntu',     label: 'Ubuntu 24.04',            family: 'deb', icon: '🟠' },
+  { slug: 'debian',     label: 'Debian 11 / 12',          family: 'deb', icon: '🌀' },
+] as const;
+
+type DistroSlug = typeof DISTROS[number]['slug'];
+
+const FAMILY_LABELS: Record<string, string> = {
+  rpm: 'RedHat / CentOS family  (glibc 2.17+)',
+  deb: 'Debian / Ubuntu family  (glibc 2.31+)',
+};
+
 export default function LinuxDeploymentPackagePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -21,6 +47,7 @@ export default function LinuxDeploymentPackagePage() {
   const [agentVersion, setAgentVersion] = useState('—');
   const [copied, setCopied] = useState(false);
   const [copiedToken, setCopiedToken] = useState(false);
+  const [selectedDistro, setSelectedDistro] = useState<DistroSlug>('centos7');
 
   useEffect(() => {
     getCustomers()
@@ -44,9 +71,7 @@ export default function LinuxDeploymentPackagePage() {
   }, [customerId, customerParam, isPlaceholderCustomer, router]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setServerUrl(window.location.origin);
-    }
+    if (typeof window !== 'undefined') setServerUrl(window.location.origin);
   }, []);
 
   const fetchToken = useCallback(async () => {
@@ -54,20 +79,18 @@ export default function LinuxDeploymentPackagePage() {
     try {
       const data = await getEnrollmentToken(customerId);
       setEnrollmentToken(data.token);
-    } catch {
-      // backend unavailable
-    }
+    } catch { /* backend unavailable */ }
   }, [customerId]);
 
   useEffect(() => { fetchToken(); }, [fetchToken]);
 
   useEffect(() => {
     if (!serverUrl) return;
-    fetch(`${serverUrl}/api/v1/packages/latest/linux-version`)
+    fetch(`${serverUrl}/api/v1/packages/latest/linux-version?distro=${selectedDistro}`)
       .then(r => r.text())
       .then(v => setAgentVersion(v.trim() || '—'))
       .catch(() => {});
-  }, [serverUrl]);
+  }, [serverUrl, selectedDistro]);
 
   const regenerateToken = async () => {
     if (!customerId) return;
@@ -80,7 +103,7 @@ export default function LinuxDeploymentPackagePage() {
   };
 
   const installCmd = enrollmentToken && serverUrl
-    ? `curl -fsSL ${serverUrl}/api/v1/packages/install-linux.sh | sudo bash -s -- --url ${serverUrl} --token ${enrollmentToken}${customerId ? ` --customer ${customerId}` : ''}`
+    ? `curl -fsSL ${serverUrl}/api/v1/packages/install-linux.sh | sudo bash -s -- --url ${serverUrl} --token ${enrollmentToken}${customerId ? ` --customer ${customerId}` : ''} --distro ${selectedDistro}`
     : '';
 
   const handleCopy = () => {
@@ -97,6 +120,8 @@ export default function LinuxDeploymentPackagePage() {
       setTimeout(() => setCopiedToken(false), 2000);
     });
   };
+
+  const currentDistroInfo = DISTROS.find(d => d.slug === selectedDistro) ?? DISTROS[0];
 
   return (
     <div className={styles.page}>
@@ -131,23 +156,58 @@ export default function LinuxDeploymentPackagePage() {
             <div className={styles.formRow}>
               <label className={styles.label}>Enrollment Token</label>
               <div className={styles.tokenRow}>
-                <input
-                  className={styles.input}
-                  type="text"
-                  value={enrollmentToken}
-                  readOnly
-                />
+                <input className={styles.input} type="text" value={enrollmentToken} readOnly />
                 <button className={styles.iconActionBtn} onClick={handleCopyToken} title="Copy token">
-                  {copiedToken ? (
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="#16a34a"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                  )}
+                  {copiedToken
+                    ? <svg viewBox="0 0 24 24" width="15" height="15" fill="#16a34a"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+                    : <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                  }
                 </button>
                 <button className={styles.iconActionBtn} onClick={regenerateToken} title="Regenerate token">
                   <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M17.65 6.35A7.96 7.96 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Distro selector */}
+          <div className={styles.section}>
+            <h2 className={styles.sectionTitle}>
+              <span className={styles.sectionIcon}>🐧</span> Linux Distribution
+            </h2>
+
+            <div className={styles.formRow}>
+              <label className={styles.label}>Select your distro</label>
+              <select
+                className={styles.input}
+                value={selectedDistro}
+                onChange={(e: { target: HTMLSelectElement }) => setSelectedDistro(e.target.value as DistroSlug)}
+              >
+                <optgroup label="RedHat / CentOS family">
+                  {DISTROS.filter(d => d.family === 'rpm').map((d, i) => (
+                    <option key={`rpm-${i}`} value={d.slug}>{d.icon} {d.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Debian / Ubuntu family">
+                  {DISTROS.filter(d => d.family === 'deb').map((d, i) => (
+                    <option key={`deb-${i}`} value={d.slug}>{d.icon} {d.label}</option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            <div style={{
+              marginTop: 8, padding: '8px 12px',
+              background: '#f0f4ff', borderRadius: 6,
+              border: '1px solid #c7d2fe',
+              fontSize: 12, color: '#4a5580',
+              display: 'flex', gap: 8, alignItems: 'center',
+            }}>
+              <span>ℹ️</span>
+              <span>
+                <strong>{currentDistroInfo.label}</strong> — {FAMILY_LABELS[currentDistroInfo.family]}.
+                The installer will download the correct binary automatically.
+              </span>
             </div>
           </div>
 
@@ -157,7 +217,7 @@ export default function LinuxDeploymentPackagePage() {
               <span className={styles.sectionIcon}>💻</span> Install Command
             </h2>
             <div className={styles.formRow}>
-              <label className={styles.label}>Run this command on the target Linux machine (requires sudo)</label>
+              <label className={styles.label}>Run on the target machine (requires root)</label>
               <div style={{ position: 'relative' }}>
                 <textarea
                   readOnly
@@ -167,8 +227,8 @@ export default function LinuxDeploymentPackagePage() {
                     width: '100%', boxSizing: 'border-box',
                     padding: '10px 44px 10px 12px',
                     fontFamily: 'monospace', fontSize: 12,
-                    background: '#1e1e2e', color: '#a6e3a1',
-                    border: '1px solid #2d2d44', borderRadius: 6,
+                    background: '#f8f9fc', color: '#1a1c2e',
+                    border: '1px solid #e2e4ec', borderRadius: 6,
                     resize: 'none', lineHeight: 1.6,
                   }}
                 />
@@ -178,28 +238,19 @@ export default function LinuxDeploymentPackagePage() {
                   title="Copy command"
                   style={{
                     position: 'absolute', top: 8, right: 8,
-                    background: '#2d2d44', border: '1px solid #3d3d5a',
+                    background: '#eef1ff', border: '1px solid #c7d2fe',
                     borderRadius: 4, padding: '4px 8px', cursor: 'pointer',
-                    color: copied ? '#a6e3a1' : '#cdd6f4', fontSize: 11,
+                    color: copied ? '#059669' : '#4a7cff', fontSize: 11,
                     display: 'flex', alignItems: 'center', gap: 4,
                   }}
                 >
                   {copied ? (
-                    <>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="#a6e3a1"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
-                      Copied
-                    </>
+                    <><svg viewBox="0 0 24 24" width="12" height="12" fill="#059669"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>Copied</>
                   ) : (
-                    <>
-                      <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                      Copy
-                    </>
+                    <><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Copy</>
                   )}
                 </button>
               </div>
-            </div>
-            <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8' }}>
-              The script downloads the NOCKO MDM agent binary, writes the config, and registers a systemd service automatically.
             </div>
           </div>
         </div>
@@ -215,8 +266,10 @@ export default function LinuxDeploymentPackagePage() {
             <dd>{serverUrl || '—'}</dd>
             <dt>Token</dt>
             <dd className={styles.mono}>{enrollmentToken || '—'}</dd>
-            <dt>Platform</dt>
-            <dd>Linux (amd64)</dd>
+            <dt>Distribution</dt>
+            <dd>{currentDistroInfo.icon} {currentDistroInfo.label}</dd>
+            <dt>Family</dt>
+            <dd>{FAMILY_LABELS[currentDistroInfo.family]}</dd>
             <dt>Agent Version</dt>
             <dd>{agentVersion}</dd>
             <dt>Install method</dt>
@@ -228,21 +281,10 @@ export default function LinuxDeploymentPackagePage() {
           <div className={styles.infoBox}>
             <strong>How to deploy:</strong>
             <ol className={styles.stepList}>
-              <li>Copy the install command from this page.</li>
-              <li>Open a terminal on the target Linux machine.</li>
-              <li>Paste and run the command with <code>sudo</code>.</li>
-              <li>The device will auto-enroll and appear under Enrollment → Devices.</li>
-            </ol>
-          </div>
-
-          <div className={styles.infoBox} style={{ marginTop: 12 }}>
-            <strong>Supported distros:</strong>
-            <ol className={styles.stepList}>
-              <li>Ubuntu 20.04 / 22.04 / 24.04</li>
-              <li>Debian 11 / 12</li>
-              <li>CentOS 7 / 8 / Stream</li>
-              <li>RHEL 8 / 9</li>
-              <li>Any systemd-based amd64 distro</li>
+              <li>Select your Linux distribution above.</li>
+              <li>Copy the install command.</li>
+              <li>Paste and run on the target machine as root.</li>
+              <li>The device auto-enrolls and appears under Enrollment → Devices.</li>
             </ol>
           </div>
         </div>
