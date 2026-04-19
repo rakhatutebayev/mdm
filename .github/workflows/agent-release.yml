@@ -103,52 +103,39 @@ jobs:
           name: linux-asset-deb
           path: ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-deb
 
-  # RedHat/CentOS family — собираем в manylinux2014 контейнере (glibc 2.17)
-  # Покрывает: CentOS 7/8/9, RHEL 7/8/9, AlmaLinux, Rocky Linux, Fedora
+  # RedHat/CentOS family — собираем на ubuntu-20.04 + staticx для полной статической линковки.
+  # staticx упаковывает все .so зависимости внутрь бинарника → работает на CentOS 7+ (glibc 2.17+),
+  # RHEL, AlmaLinux, Rocky Linux, Fedora и любом другом Linux.
   build-agent-linux-rpm:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       RELEASE_DIR: release-assets
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build rpm binary (CentOS 7 compatible, glibc 2.17)
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: agent-gui/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y -q patchelf
+          pip install --upgrade pip
+          pip install -r agent-gui/requirements.txt pyinstaller staticx
+
+      - name: Build rpm binary (static, CentOS 7+ compatible)
+        working-directory: agent-gui
         env:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
-          mkdir -p ${{ env.RELEASE_DIR }}
-          # Use centos7 base + compile Python with --enable-shared for PyInstaller
-          docker run --rm \
-            -v "$PWD:/workspace" \
-            -e NOCKO_AGENT_VERSION="${NOCKO_AGENT_VERSION}" \
-            centos:7 \
-            /bin/bash -c "
-              set -e
-              # CentOS 7 EOL — use vault mirrors
-              sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*.repo
-              sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*.repo
-
-              yum install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel xz-devel make wget 2>/dev/null
-
-              # Build Python 3.11 with --enable-shared
-              cd /tmp
-              wget -q https://www.python.org/ftp/python/3.11.9/Python-3.11.9.tgz
-              tar xf Python-3.11.9.tgz
-              cd Python-3.11.9
-              ./configure --enable-shared --prefix=/usr/local --with-ssl-default-suites=openssl LDFLAGS='-Wl,-rpath,/usr/local/lib' 2>/dev/null
-              make -j\$(nproc) 2>/dev/null
-              make install 2>/dev/null
-              PYTHON=/usr/local/bin/python3.11
-
-              \$PYTHON -m pip install --upgrade pip --quiet
-              \$PYTHON -m pip install -r /workspace/agent-gui/requirements.txt pyinstaller --quiet
-              cd /workspace/agent-gui
-              \$PYTHON -m PyInstaller agent.spec --noconfirm --distpath /workspace/${{ env.RELEASE_DIR }}/tmp_dist
-              mv /workspace/${{ env.RELEASE_DIR }}/tmp_dist/NOCKO-Agent \
-                 /workspace/${{ env.RELEASE_DIR }}/nocko-agent-${NOCKO_AGENT_VERSION}-amd64-linux-rpm
-              chmod +x /workspace/${{ env.RELEASE_DIR }}/nocko-agent-${NOCKO_AGENT_VERSION}-amd64-linux-rpm
-            "
+          mkdir -p ../${{ env.RELEASE_DIR }}
+          python -m PyInstaller agent.spec --noconfirm
+          # Wrap with staticx: bundles all .so deps → portable across all Linux distros
+          staticx dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm
 
       - name: Show glibc requirement
         run: objdump -p ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm | grep GLIBC || true
