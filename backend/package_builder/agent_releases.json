@@ -11,7 +11,7 @@
           "arch": "x64",
           "filename": "nocko-agent-1.9.5-x64-portable.exe",
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.5/nocko-agent-1.9.5-x64-portable.exe",
-          "sha256": "c51f69d12e4264f3c58a10f56dd1ac23a0f37044bfeef95a4caea368ef5f6015",
+          "sha256": "70347f4f3d65a5795439195ff931c69224ab82673aae7b309bbdf66a58c709e1",
           "size_bytes": 13823486,
           "notes": "Published by GitHub Actions Windows release workflow"
         },
@@ -20,8 +20,8 @@
           "arch": "amd64",
           "filename": "nocko-agent-1.9.5-amd64-linux-deb",
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.5/nocko-agent-1.9.5-amd64-linux-deb",
-          "sha256": "960acd09c4007620a94898e63c8a0577bd1aec02e2d18f1db09e889f3afb9d5f",
-          "size_bytes": 21677192,
+          "sha256": "3185c65ba3c6db2487a41134405bfe0f37fbc587b57e25a4428b0f9e5a8f307e",
+          "size_bytes": 21678096,
           "notes": "Linux agent binary for Debian/Ubuntu family (glibc 2.31+)"
         },
         {
@@ -29,8 +29,8 @@
           "arch": "amd64",
           "filename": "nocko-agent-1.9.5-amd64-linux-rpm",
           "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.5/nocko-agent-1.9.5-amd64-linux-rpm",
-          "sha256": "f9ada3f7fb10a78497216c7e9f9b52b631604984ad3c5386a68292f6454a8d24",
-          "size_bytes": 18346632,
+          "sha256": "0abe8051811e8afd0e0317024d9b3e60f0cb04e7d04c2dc23eea68d1bc725b08",
+          "size_bytes": 18346408,
           "notes": "Linux agent binary for RedHat/CentOS family (glibc 2.17+, CentOS 7+)"
         }
       ]
