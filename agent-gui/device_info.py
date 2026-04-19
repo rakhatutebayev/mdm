@@ -6,6 +6,7 @@ import socket
 import time
 import uuid
 import re
+from pathlib import Path
 from typing import Any
 
 import psutil
@@ -773,6 +774,36 @@ def _network_payload() -> dict[str, Any]:
     gateway      = ""
     conn_type    = "Ethernet"
     wifi_ssid    = ""
+
+    if os.name == "posix":
+        try:
+            import subprocess
+            # Default gateway
+            r = subprocess.run(["ip", "route", "show", "default"], capture_output=True, text=True, timeout=5)
+            for line in r.stdout.splitlines():
+                parts = line.split()
+                if "via" in parts:
+                    gateway = parts[parts.index("via") + 1]
+                    break
+            # DNS servers from resolv.conf
+            try:
+                rc = Path("/etc/resolv.conf").read_text()
+                dns_list = [l.split()[1] for l in rc.splitlines() if l.startswith("nameserver")]
+                if dns_list:
+                    dns_server = ", ".join(dns_list[:2])
+            except Exception:
+                pass
+            # Wi-Fi SSID via iwgetid
+            try:
+                r2 = subprocess.run(["iwgetid", "-r"], capture_output=True, text=True, timeout=5)
+                ssid = r2.stdout.strip()
+                if ssid:
+                    wifi_ssid = ssid
+                    conn_type = "Wi-Fi"
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     if os.name == "nt" and wmi is not None:
         try:
