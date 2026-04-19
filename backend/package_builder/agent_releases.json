@@ -1,7 +1,40 @@
 {
   "channel": "stable",
-  "generated_at": "2026-04-18T18:58:57Z",
+  "generated_at": "2026-04-19T13:44:27Z",
   "releases": [
+    {
+      "version": "1.9.3",
+      "tag": "agent-v1.9.3",
+      "artifacts": [
+        {
+          "format": "exe",
+          "arch": "x64",
+          "filename": "nocko-agent-1.9.3-x64-portable.exe",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.3/nocko-agent-1.9.3-x64-portable.exe",
+          "sha256": "c416bd56fba9cc4426fc2de5addfda7902c022e373f74c053e1cbd2ca32a9199",
+          "size_bytes": 13823316,
+          "notes": "Published by GitHub Actions Windows release workflow"
+        },
+        {
+          "format": "linux-deb",
+          "arch": "amd64",
+          "filename": "nocko-agent-1.9.3-amd64-linux-deb",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.3/nocko-agent-1.9.3-amd64-linux-deb",
+          "sha256": "a42f520c6080a25ec16b1efa90547f49578f3b841e71cb6af767b7edf8961672",
+          "size_bytes": 21677872,
+          "notes": "Linux agent binary for Debian/Ubuntu family (glibc 2.31+)"
+        },
+        {
+          "format": "linux-rpm",
+          "arch": "amd64",
+          "filename": "nocko-agent-1.9.3-amd64-linux-rpm",
+          "url": "https://github.com/rakhatutebayev/mdm/releases/download/agent-v1.9.3/nocko-agent-1.9.3-amd64-linux-rpm",
+          "sha256": "b1eac7131d104e8f6e5c16c8865c36432fcfd5cc2e2823f677ceb5f418a252cb",
+          "size_bytes": 21677488,
+          "notes": "Linux agent binary for RedHat/CentOS family (glibc 2.17+, CentOS 7+)"
+        }
+      ]
+    },
     {
       "version": "1.9.2",
       "tag": "agent-v1.9.2",
