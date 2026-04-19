@@ -121,19 +121,51 @@ jobs:
           cache: "pip"
           cache-dependency-path: agent-gui/requirements.txt
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r agent-gui/requirements.txt pyinstaller
-
-      - name: Build rpm binary (CentOS 8+, RHEL 8+, AlmaLinux, Rocky)
-        working-directory: agent-gui
+      - name: Build rpm binary (glibc 2.17, CentOS 7+)
         env:
           NOCKO_AGENT_VERSION: ${{ inputs.version }}
         run: |
-          mkdir -p ../${{ env.RELEASE_DIR }}
-          python -m PyInstaller agent.spec --noconfirm
-          cp dist/NOCKO-Agent ../${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm
+          mkdir -p ${{ env.RELEASE_DIR }}
+          # manylinux2014 = CentOS 7 base (glibc 2.17).
+          # Python in this image is built WITHOUT --enable-shared, so we must compile
+          # our own Python 3.11 with --enable-shared.
+          # Python 3.11 also requires OpenSSL >= 1.1.1, so we build that first.
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -e NOCKO_AGENT_VERSION="${NOCKO_AGENT_VERSION}" \
+            quay.io/pypa/manylinux2014_x86_64 \
+            /bin/bash -c '
+              set -e
+              cd /tmp
+
+              echo "=== Building OpenSSL 1.1.1w ==="
+              curl -sSL https://www.openssl.org/source/openssl-1.1.1w.tar.gz | tar xz
+              cd openssl-1.1.1w
+              ./config --prefix=/usr/local/openssl --openssldir=/usr/local/openssl shared zlib 2>/dev/null
+              make -j$(nproc) 2>/dev/null && make install_sw 2>/dev/null
+              export LD_LIBRARY_PATH=/usr/local/openssl/lib:$LD_LIBRARY_PATH
+
+              echo "=== Building Python 3.11.9 with --enable-shared ==="
+              cd /tmp
+              curl -sSL https://www.python.org/ftp/python/3.11.9/Python-3.11.9.tgz | tar xz
+              cd Python-3.11.9
+              ./configure --enable-shared --prefix=/usr/local \
+                --with-openssl=/usr/local/openssl \
+                LDFLAGS="-Wl,-rpath,/usr/local/lib -Wl,-rpath,/usr/local/openssl/lib" \
+                2>/dev/null
+              make -j$(nproc) 2>/dev/null && make install 2>/dev/null
+              PYTHON=/usr/local/bin/python3.11
+
+              echo "=== Installing pip packages ==="
+              $PYTHON -m pip install --upgrade pip --quiet
+              $PYTHON -m pip install -r /workspace/agent-gui/requirements.txt pyinstaller --quiet
+
+              echo "=== Building with PyInstaller ==="
+              cd /workspace/agent-gui
+              $PYTHON -m PyInstaller agent.spec --noconfirm
+              mv dist/NOCKO-Agent /workspace/${{ env.RELEASE_DIR }}/nocko-agent-'"${NOCKO_AGENT_VERSION}"'-amd64-linux-rpm
+              chmod +x /workspace/${{ env.RELEASE_DIR }}/nocko-agent-'"${NOCKO_AGENT_VERSION}"'-amd64-linux-rpm
+            '
 
       - name: Show glibc requirement
         run: objdump -p ${{ env.RELEASE_DIR }}/nocko-agent-${{ inputs.version }}-amd64-linux-rpm | grep GLIBC || true
