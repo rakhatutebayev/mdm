@@ -111,6 +111,9 @@ async def browser_ws(
         _browser_connections.pop(device_id, None)
         return
 
+    # Notify browser that agent PTY is ready
+    await websocket.send_text(json.dumps({"type": "ready"}))
+
     try:
         while True:
             try:

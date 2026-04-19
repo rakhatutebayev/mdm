@@ -74,13 +74,13 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
           const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
           const wsUrl = `${proto}//${window.location.host}/ws/terminal/${deviceId}?t=${encodeURIComponent(token)}`;
 
-          term.writeln('\x1b[1;32mConnecting to remote terminal...\x1b[0m');
+          term.writeln('\x1b[90mConnecting to server...\x1b[0m');
 
           const ws = new WebSocket(wsUrl);
           ws.binaryType = 'arraybuffer';
           wsRef.current = ws;
 
-          ws.onopen = () => term.writeln('\x1b[1;32mConnected.\x1b[0m\r\n');
+          ws.onopen = () => term.writeln('\x1b[90mWaiting for agent...\x1b[0m');
 
           ws.onmessage = (evt) => {
             if (evt.data instanceof ArrayBuffer) {
@@ -88,12 +88,21 @@ export default function PtyTerminal({ deviceId, token }: PtyTerminalProps) {
             } else if (typeof evt.data === 'string') {
               try {
                 const msg = JSON.parse(evt.data);
-                if (msg.type === 'error') term.writeln(`\r\n\x1b[1;31mError: ${msg.message}\x1b[0m`);
+                if (msg.type === 'ready') {
+                  term.writeln('\x1b[1;32mConnected.\x1b[0m\r\n');
+                } else if (msg.type === 'error') {
+                  term.writeln(`\r\n\x1b[1;31m✖ ${msg.message}\x1b[0m`);
+                  term.writeln('\x1b[90mPress Reconnect to try again.\x1b[0m');
+                }
               } catch { term.write(evt.data); }
             }
           };
 
-          ws.onclose = (evt) => term.writeln(`\r\n\x1b[1;33mConnection closed (${evt.code}).\x1b[0m`);
+          ws.onclose = (evt) => {
+            if (evt.code !== 1000) {
+              term.writeln(`\r\n\x1b[1;33mConnection closed (${evt.code}).\x1b[0m`);
+            }
+          };
           ws.onerror = () => term.writeln('\r\n\x1b[1;31mWebSocket error.\x1b[0m');
 
           // Ctrl+C → copy if text selected, otherwise send SIGINT
